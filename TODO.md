@@ -84,10 +84,10 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
   - [x] Add environment badge
   - [x] Add read-only badge
   - [x] Add error toast surface
-- [ ] Verify shell
-  - [ ] App opens on macOS
-  - [ ] Shell visually displays as Nexum
-  - [ ] Routes work inside renderer
+- [x] Verify shell
+  - [x] App opens on macOS
+  - [x] Shell visually displays as Nexum
+  - [x] Routes work inside renderer
 
 ## Phase 3 — Core Architecture
 
