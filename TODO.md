@@ -29,12 +29,12 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
 
 ## Phase 1 — Monorepo Bootstrap
 
-- [ ] Create pnpm workspace
-  - [ ] Add root `package.json`
-  - [ ] Add `pnpm-workspace.yaml`
-  - [ ] Add `turbo.json`
-  - [ ] Add root `.gitignore`
-  - [ ] Add root TypeScript config
+- [x] Create pnpm workspace
+  - [x] Add root `package.json`
+  - [x] Add `pnpm-workspace.yaml`
+  - [x] Add `turbo.json`
+  - [x] Add root `.gitignore`
+  - [x] Add root TypeScript config
 - [ ] Create desktop app package
   - [ ] Add `apps/desktop/package.json`
   - [ ] Add `electron.vite.config.ts`
