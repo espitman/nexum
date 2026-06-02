@@ -491,6 +491,10 @@ button {
   scrollbar-gutter: stable;
 }
 
+.workspace-tabs-empty {
+  min-height: 52px;
+}
+
 .workspace-tab {
   color: #5c6676;
   flex: 0 0 auto;
@@ -597,6 +601,44 @@ button {
   grid-template-rows: 54px minmax(0, 1fr);
   min-height: 0;
   overflow: hidden;
+}
+
+.workspace-empty-state {
+  align-items: center;
+  display: flex;
+  grid-row: 3 / 6;
+  justify-content: center;
+  min-height: 0;
+  padding: 48px;
+}
+
+.workspace-empty-state > div {
+  align-items: center;
+  color: #5e6877;
+  display: grid;
+  justify-items: center;
+  max-width: 360px;
+  text-align: center;
+}
+
+.workspace-empty-state .icon {
+  color: #00717d;
+  height: 34px;
+  margin-bottom: 18px;
+  width: 34px;
+}
+
+.workspace-empty-state h1 {
+  color: #263142;
+  font-size: 20px;
+  line-height: 1.2;
+  margin: 0 0 8px;
+}
+
+.workspace-empty-state p {
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0 0 22px;
 }
 
 .results-header {

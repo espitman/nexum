@@ -70,11 +70,11 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
 
 ## Phase 2 — App Shell
 
-- [ ] Build desktop shell layout
-  - [ ] Add top bar
-  - [ ] Add left sidebar
-  - [ ] Add main workspace region
-  - [ ] Add empty state
+- [x] Build desktop shell layout
+  - [x] Add top bar
+  - [x] Add left sidebar
+  - [x] Add main workspace region
+  - [x] Add empty state
 - [ ] Add app providers
   - [ ] Add TanStack Query client
   - [ ] Add TanStack Router
