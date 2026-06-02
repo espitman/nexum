@@ -3,33 +3,30 @@ import { createRoot } from "react-dom/client";
 import "./styles.css";
 
 type HealthState =
-  | { status: "idle" | "loading" }
+  | { status: "loading" }
   | { status: "ready"; timestamp: string }
   | { status: "error"; message: string };
 
 const App = () => {
-  const [health, setHealth] = useState<HealthState>({ status: "idle" });
+  const [health, setHealth] = useState<HealthState>({ status: "loading" });
 
   useEffect(() => {
-    setHealth({ status: "loading" });
+    const checkHealth = async () => {
+      if (!window.nexum) {
+        throw new Error("Preload API is unavailable");
+      }
 
-    if (!window.nexum) {
-      setHealth({
-        status: "error",
-        message: "Preload API is unavailable"
-      });
-      return;
-    }
+      return window.nexum.health.ping();
+    };
 
-    window.nexum.health
-      .ping()
+    checkHealth()
       .then((result) => {
         setHealth({ status: "ready", timestamp: result.timestamp });
       })
       .catch((error: unknown) => {
         setHealth({
           status: "error",
-          message: error instanceof Error ? error.message : "Unknown error"
+          message: error instanceof Error ? error.message : "Unknown error",
         });
       });
   }, []);
@@ -78,7 +75,7 @@ const App = () => {
                 ? `ready at ${new Date(health.timestamp).toLocaleTimeString()}`
                 : health.status === "error"
                   ? health.message
-                : health.status}
+                  : health.status}
             </p>
           </div>
 
@@ -101,5 +98,5 @@ const App = () => {
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <App />
-  </React.StrictMode>
+  </React.StrictMode>,
 );

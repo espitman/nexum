@@ -9,5 +9,5 @@ export const badgeToneClassName: Record<BadgeTone, string> = {
   neutral: "nexum-badge-neutral",
   success: "nexum-badge-success",
   warning: "nexum-badge-warning",
-  danger: "nexum-badge-danger"
+  danger: "nexum-badge-danger",
 };

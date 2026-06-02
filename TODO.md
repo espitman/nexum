@@ -47,12 +47,12 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
   - [x] Add `packages/ui`
   - [x] Add `packages/mongodb-plugin`
   - [x] Add `packages/shared`
-- [ ] Add baseline tooling
-  - [ ] Add TypeScript scripts
-  - [ ] Add lint script
-  - [ ] Add format script
-  - [ ] Add typecheck script
-  - [ ] Add development script
+- [x] Add baseline tooling
+  - [x] Add TypeScript scripts
+  - [x] Add lint script
+  - [x] Add format script
+  - [x] Add typecheck script
+  - [x] Add development script
 - [ ] Verify bootstrap
   - [ ] Install dependencies with `pnpm`
   - [ ] Run typecheck

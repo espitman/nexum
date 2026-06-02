@@ -1,4 +1,8 @@
-export type ConnectionEnvironment = "local" | "development" | "staging" | "production";
+export type ConnectionEnvironment =
+  | "local"
+  | "development"
+  | "staging"
+  | "production";
 
 export type ConnectionProfile = {
   id: string;

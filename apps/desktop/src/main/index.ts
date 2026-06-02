@@ -19,8 +19,8 @@ const createMainWindow = () => {
       preload: path.join(currentDir, "../preload/index.mjs"),
       nodeIntegration: false,
       contextIsolation: true,
-      sandbox: true
-    }
+      sandbox: true,
+    },
   });
 
   mainWindow.once("ready-to-show", () => {
@@ -38,7 +38,7 @@ app.whenReady().then(() => {
   ipcMain.handle("nexum:health:ping", () => ({
     ok: true,
     appName: "Nexum",
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
   }));
 
   createMainWindow();

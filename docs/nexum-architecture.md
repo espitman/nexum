@@ -378,7 +378,7 @@ export const mongodbCapabilities: PluginCapabilities = {
   aggregationBuilder: true,
   documentEditing: true,
   schemaInference: true,
-  readOnlyMode: true
+  readOnlyMode: true,
 };
 ```
 
@@ -484,8 +484,8 @@ new BrowserWindow({
     preload: path.join(__dirname, "preload.js"),
     nodeIntegration: false,
     contextIsolation: true,
-    sandbox: true
-  }
+    sandbox: true,
+  },
 });
 ```
 
@@ -520,7 +520,10 @@ export type NexumDesktopApi = {
   connections: {
     list(): Promise<ConnectionProfile[]>;
     create(input: CreateConnectionInput): Promise<ConnectionProfile>;
-    update(id: string, input: UpdateConnectionInput): Promise<ConnectionProfile>;
+    update(
+      id: string,
+      input: UpdateConnectionInput,
+    ): Promise<ConnectionProfile>;
     delete(id: string): Promise<void>;
     test(input: TestConnectionInput): Promise<ConnectionTestResult>;
     connect(id: string): Promise<void>;
@@ -535,9 +538,15 @@ export type NexumDesktopApi = {
 
   mongodb: {
     listDatabases(connectionId: string): Promise<MongoDatabaseInfo[]>;
-    listCollections(input: MongoListCollectionsInput): Promise<MongoCollectionInfo[]>;
-    findDocuments(input: MongoFindDocumentsInput): Promise<MongoFindDocumentsOutput>;
-    updateDocument(input: MongoUpdateDocumentInput): Promise<MongoUpdateDocumentOutput>;
+    listCollections(
+      input: MongoListCollectionsInput,
+    ): Promise<MongoCollectionInfo[]>;
+    findDocuments(
+      input: MongoFindDocumentsInput,
+    ): Promise<MongoFindDocumentsOutput>;
+    updateDocument(
+      input: MongoUpdateDocumentInput,
+    ): Promise<MongoUpdateDocumentOutput>;
     inferFields(input: MongoInferFieldsInput): Promise<MongoInferFieldsOutput>;
     aggregate(input: MongoAggregateInput): Promise<MongoAggregateOutput>;
   };
@@ -625,7 +634,8 @@ export type MongoCollectionInfo = {
 Default query:
 
 ```js
-{}
+{
+}
 ```
 
 Default options:
@@ -732,10 +742,7 @@ if (!deepEqual(originalDoc._id, editedDoc._id)) {
   throw new AppError("DOCUMENT_ID_CHANGED", "_id cannot be changed");
 }
 
-await collection.replaceOne(
-  { _id: originalDoc._id },
-  editedDoc
-);
+await collection.replaceOne({ _id: originalDoc._id }, editedDoc);
 ```
 
 Response:
@@ -908,11 +915,13 @@ export type AggregationStage = {
 Pipeline builder:
 
 ```ts
-export function buildPipeline(stages: AggregationStage[]): Record<string, unknown>[] {
+export function buildPipeline(
+  stages: AggregationStage[],
+): Record<string, unknown>[] {
   return stages
     .filter((stage) => stage.enabled)
     .map((stage) => ({
-      [stage.type]: stage.value
+      [stage.type]: stage.value,
     }));
 }
 ```
@@ -928,22 +937,19 @@ const ALLOWED_STAGES = new Set([
   "$skip",
   "$count",
   "$group",
-  "$unwind"
+  "$unwind",
 ]);
 
-const BLOCKED_STAGES = new Set([
-  "$out",
-  "$merge",
-  "$function",
-  "$accumulator"
-]);
+const BLOCKED_STAGES = new Set(["$out", "$merge", "$function", "$accumulator"]);
 
 export function validatePipeline(pipeline: Record<string, unknown>[]) {
   for (const stage of pipeline) {
     const keys = Object.keys(stage);
 
     if (keys.length !== 1) {
-      throw new Error("Each aggregation stage must contain exactly one operator");
+      throw new Error(
+        "Each aggregation stage must contain exactly one operator",
+      );
     }
 
     const stageName = keys[0];
@@ -985,7 +991,7 @@ Execution:
 ```ts
 collection.aggregate(pipeline, {
   maxTimeMS: 30_000,
-  allowDiskUse: false
+  allowDiskUse: false,
 });
 ```
 
@@ -1184,10 +1190,10 @@ class MongoService {
 
     return {
       documents: documents.map((document) =>
-        EJSON.stringify(document, { relaxed: false })
+        EJSON.stringify(document, { relaxed: false }),
       ),
       executionTimeMs: Date.now() - startedAt,
-      hasMore: documents.length === (input.limit ?? 50)
+      hasMore: documents.length === (input.limit ?? 50),
     };
   }
 }

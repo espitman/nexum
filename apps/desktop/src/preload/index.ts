@@ -14,8 +14,8 @@ export type NexumDesktopApi = {
 
 const api: NexumDesktopApi = {
   health: {
-    ping: () => ipcRenderer.invoke("nexum:health:ping")
-  }
+    ping: () => ipcRenderer.invoke("nexum:health:ping"),
+  },
 };
 
 contextBridge.exposeInMainWorld("nexum", api);

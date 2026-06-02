@@ -4,16 +4,17 @@ export type Result<TValue, TError = Error> =
 
 export const ok = <TValue>(value: TValue): Result<TValue, never> => ({
   ok: true,
-  value
+  value,
 });
 
 export const err = <TError>(error: TError): Result<never, TError> => ({
   ok: false,
-  error
+  error,
 });
 
 export const createId = (prefix: string): string => {
-  const random = globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2);
+  const random =
+    globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2);
   return `${prefix}_${random}`;
 };
 

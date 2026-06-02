@@ -10,7 +10,7 @@ export const mongodbCapabilities = {
   aggregationBuilder: true,
   documentEditing: true,
   schemaInference: true,
-  readOnlyMode: true
+  readOnlyMode: true,
 } satisfies PluginCapabilities;
 
 export type MongoCollectionType = "collection" | "view";
