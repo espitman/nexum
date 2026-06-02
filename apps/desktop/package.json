@@ -10,7 +10,8 @@
     "preview": "electron-vite preview",
     "lint": "eslint .",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "verify:connections": "node scripts/verify-connection-manager.mjs"
   },
   "dependencies": {
     "@nexum/shared": "workspace:*",

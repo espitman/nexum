@@ -157,9 +157,10 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
   - [x] Add read-only toggle
   - [x] Add test connection action
 - [ ] Verify connection manager
+  - [x] Add repeatable verification command
   - [ ] Test local MongoDB connection
   - [ ] Test MongoDB Atlas connection
-  - [ ] Confirm URI is not stored in plain JSON
+  - [x] Confirm URI is not stored in plain JSON
 
 ## Phase 6 — MongoDB Explorer
 

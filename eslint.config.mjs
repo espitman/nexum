@@ -43,6 +43,7 @@ export default tseslint.config(
     files: [
       "apps/desktop/src/main/**/*.ts",
       "apps/desktop/src/preload/**/*.ts",
+      "apps/desktop/scripts/**/*.mjs",
     ],
     languageOptions: {
       globals: {
