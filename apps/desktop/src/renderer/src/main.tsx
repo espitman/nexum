@@ -188,6 +188,8 @@ const Icon = ({ name }: { name: string }) => (
 
 const App = () => {
   const [health, setHealth] = useState<HealthState>({ status: "loading" });
+  const [isConnectionRailOpen, setIsConnectionRailOpen] = useState(true);
+  const [isInspectorOpen, setIsInspectorOpen] = useState(true);
 
   useEffect(() => {
     const checkHealth = async () => {
@@ -216,62 +218,87 @@ const App = () => {
       : health.status === "error"
         ? "offline"
         : "checking";
+  const shellClassName = [
+    "app-shell",
+    isConnectionRailOpen ? "" : "is-connections-closed",
+    isInspectorOpen ? "" : "is-inspector-closed",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
-    <main className="app-shell">
-      <aside className="connection-rail">
-        <section className="rail-section rail-connections">
-          <div className="rail-heading">
-            <span>Connections</span>
+    <main className={shellClassName}>
+      {isConnectionRailOpen ? (
+        <aside className="connection-rail">
+          <section className="rail-section rail-connections">
+            <div className="rail-heading">
+              <span>Connections</span>
+              <div className="rail-heading-actions">
+                <button
+                  className="ghost-icon"
+                  type="button"
+                  aria-label="Add connection"
+                >
+                  +
+                </button>
+              </div>
+            </div>
             <button
-              className="ghost-icon"
+              className="close-rail"
               type="button"
-              aria-label="Add connection"
+              aria-label="Close connections panel"
+              onClick={() => setIsConnectionRailOpen(false)}
             >
-              +
+              <span className="panel-arrow panel-arrow-left" />
             </button>
+            {connections.map((connection) => (
+              <button
+                className={`connection-row ${connection.active ? "is-active" : ""}`}
+                key={connection.label}
+                type="button"
+              >
+                <Icon name={connection.icon} />
+                <span>{connection.label}</span>
+                {connection.more ? <span className="row-more">...</span> : null}
+              </button>
+            ))}
+          </section>
+
+          <nav className="primary-nav" aria-label="Nexum sections">
+            {navItems.map(([icon, label], index) => (
+              <button
+                className={`nav-row ${index === 0 ? "is-active" : ""}`}
+                key={label}
+                type="button"
+              >
+                <Icon name={icon} />
+                <span>{label}</span>
+              </button>
+            ))}
+          </nav>
+
+          <div className="version-mark">
+            <strong>NEXUM</strong>
+            <span>v0.8.0</span>
           </div>
-          {connections.map((connection) => (
-            <button
-              className={`connection-row ${connection.active ? "is-active" : ""}`}
-              key={connection.label}
-              type="button"
-            >
-              <Icon name={connection.icon} />
-              <span>{connection.label}</span>
-              {connection.more ? <span className="row-more">...</span> : null}
-            </button>
-          ))}
-        </section>
-
-        <nav className="primary-nav" aria-label="Nexum sections">
-          {navItems.map(([icon, label], index) => (
-            <button
-              className={`nav-row ${index === 0 ? "is-active" : ""}`}
-              key={label}
-              type="button"
-            >
-              <Icon name={icon} />
-              <span>{label}</span>
-            </button>
-          ))}
-        </nav>
-
-        <div className="version-mark">
-          <strong>NEXUM</strong>
-          <span>v0.8.0</span>
-        </div>
-      </aside>
+        </aside>
+      ) : (
+        <button
+          className="panel-restore panel-restore-left"
+          type="button"
+          aria-label="Open connections panel"
+          onClick={() => setIsConnectionRailOpen(true)}
+        >
+          <span className="panel-arrow panel-arrow-right" />
+        </button>
+      )}
 
       <header className="app-topbar">
         <div className="brand-lockup">
-          <span className="brand-orbit" />
           <strong>Nexum</strong>
-          <span className="chevron">⌄</span>
         </div>
 
         <div className="breadcrumb">
-          <span className="mongo-dot" />
           <span>MongoDB 7.0.11</span>
           <span className="crumb-separator">›</span>
           <span>cluster0.us-east-1.mongodb.net:27017</span>
@@ -287,7 +314,7 @@ const App = () => {
             Run
           </button>
           <button className="run-caret" type="button" aria-label="Run options">
-            ⌄
+            <span className="run-caret-icon" />
           </button>
           <button className="plain-icon" type="button" aria-label="More">
             ...
@@ -296,6 +323,7 @@ const App = () => {
             className="layout-icon"
             type="button"
             aria-label="Toggle panel"
+            onClick={() => setIsInspectorOpen((isOpen) => !isOpen)}
           >
             ◧
           </button>
@@ -458,23 +486,24 @@ const App = () => {
         <footer className="workspace-footer">
           <div className="pager-group">
             <button
-              className="plain-icon muted"
+              className="page-icon muted"
               type="button"
               aria-label="First page"
             >
-              ≪
+              <span className="pagination-icon pagination-first" />
             </button>
             <span>Page</span>
             <input value="1" readOnly />
             <span>of 10</span>
-            <button className="plain-icon" type="button" aria-label="Next page">
-              ›
+            <button className="page-icon" type="button" aria-label="Next page">
+              <span className="pagination-icon pagination-next" />
             </button>
-            <button className="plain-icon" type="button" aria-label="Last page">
-              ≫
+            <button className="page-icon" type="button" aria-label="Last page">
+              <span className="pagination-icon pagination-last" />
             </button>
             <button className="page-size" type="button">
-              50 / page⌄
+              <span>50 / page</span>
+              <span className="select-caret" />
             </button>
           </div>
           <div className="range-status">
@@ -485,57 +514,69 @@ const App = () => {
         </footer>
       </section>
 
-      <aside className="inspector-panel">
-        <div className="inspector-tabs">
-          <button className="is-active" type="button">
-            Document
-          </button>
-          <button type="button">Schema</button>
-          <button type="button">Indexes</button>
-          <button
-            className="close-inspector"
-            type="button"
-            aria-label="Close inspector"
-          >
-            ×
-          </button>
-        </div>
+      {isInspectorOpen ? (
+        <aside className="inspector-panel">
+          <div className="inspector-tabs">
+            <button className="is-active" type="button">
+              Document
+            </button>
+            <button type="button">Schema</button>
+            <button type="button">Indexes</button>
+            <button
+              className="close-inspector"
+              type="button"
+              aria-label="Close inspector"
+              onClick={() => setIsInspectorOpen(false)}
+            >
+              ×
+            </button>
+          </div>
 
-        <div className="view-row">
-          <span>View</span>
-          <button type="button">Extended JSON⌄</button>
-          <button
-            className="plain-icon"
-            type="button"
-            aria-label="Copy document"
-          >
-            ⧉
-          </button>
-          <button
-            className="plain-icon"
-            type="button"
-            aria-label="Expand document"
-          >
-            ⛶
-          </button>
-          <button
-            className="plain-icon"
-            type="button"
-            aria-label="Document options"
-          >
-            ▣
-          </button>
-        </div>
+          <div className="view-row">
+            <span>View</span>
+            <button type="button">Extended JSON⌄</button>
+            <button
+              className="plain-icon"
+              type="button"
+              aria-label="Copy document"
+            >
+              ⧉
+            </button>
+            <button
+              className="plain-icon"
+              type="button"
+              aria-label="Expand document"
+            >
+              ⛶
+            </button>
+            <button
+              className="plain-icon"
+              type="button"
+              aria-label="Document options"
+            >
+              ▣
+            </button>
+          </div>
 
-        <pre className="json-viewer" aria-label="Selected document JSON">
-          {inspectorLines.map(([line, tone], index) => (
-            <span className="json-line" key={`${index}-${line}`}>
-              <span className="line-number">{index + 1}</span>
-              <code className={`json-${tone}`}>{line}</code>
-            </span>
-          ))}
-        </pre>
-      </aside>
+          <pre className="json-viewer" aria-label="Selected document JSON">
+            {inspectorLines.map(([line, tone], index) => (
+              <span className="json-line" key={`${index}-${line}`}>
+                <span className="line-number">{index + 1}</span>
+                <code className={`json-${tone}`}>{line}</code>
+              </span>
+            ))}
+          </pre>
+        </aside>
+      ) : (
+        <button
+          className="panel-restore panel-restore-right"
+          type="button"
+          aria-label="Open document inspector"
+          onClick={() => setIsInspectorOpen(true)}
+        >
+          <span className="panel-arrow panel-arrow-left" />
+        </button>
+      )}
     </main>
   );
 };
