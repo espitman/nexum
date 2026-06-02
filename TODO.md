@@ -35,13 +35,13 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
   - [x] Add `turbo.json`
   - [x] Add root `.gitignore`
   - [x] Add root TypeScript config
-- [ ] Create desktop app package
-  - [ ] Add `apps/desktop/package.json`
-  - [ ] Add `electron.vite.config.ts`
-  - [ ] Add Electron main entry
-  - [ ] Add Electron preload entry
-  - [ ] Add React renderer entry
-  - [ ] Add Vite HTML entry
+- [x] Create desktop app package
+  - [x] Add `apps/desktop/package.json`
+  - [x] Add `electron.vite.config.ts`
+  - [x] Add Electron main entry
+  - [x] Add Electron preload entry
+  - [x] Add React renderer entry
+  - [x] Add Vite HTML entry
 - [ ] Create shared packages
   - [ ] Add `packages/core`
   - [ ] Add `packages/ui`
