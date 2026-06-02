@@ -134,15 +134,15 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
 
 ## Phase 5 — MongoDB Connection Manager
 
-- [ ] Add MongoDB connection schema
-  - [ ] Validate name
-  - [ ] Validate URI
-  - [ ] Validate environment
-  - [ ] Validate read-only mode
-- [ ] Implement connection storage
-  - [ ] Store metadata in `electron-store`
-  - [ ] Store URI in Keychain with `keytar`
-  - [ ] Prevent secret leakage in logs and errors
+- [x] Add MongoDB connection schema
+  - [x] Validate name
+  - [x] Validate URI
+  - [x] Validate environment
+  - [x] Validate read-only mode
+- [x] Implement connection storage
+  - [x] Store metadata in `electron-store`
+  - [x] Store URI in Keychain with `keytar`
+  - [x] Prevent secret leakage in logs and errors
 - [ ] Implement connection lifecycle
   - [ ] Create profile
   - [ ] Update profile

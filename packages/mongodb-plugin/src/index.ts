@@ -1,5 +1,8 @@
 import type { NexumPlugin, PluginCapabilities } from "@nexum/core";
 import { err } from "@nexum/shared";
+import { validateMongoConnectionInput } from "./connectionSchema";
+
+export * from "./connectionSchema";
 
 export const mongodbPluginId = "mongodb";
 
@@ -39,8 +42,8 @@ export const mongodbPlugin = {
   capabilities: mongodbCapabilities,
   connection: {
     type: "mongodb",
-    async validateInput() {
-      return notImplemented();
+    async validateInput(input) {
+      return validateMongoConnectionInput(input);
     },
     async test() {
       return notImplemented();
