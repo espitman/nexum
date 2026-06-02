@@ -75,10 +75,10 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
   - [x] Add left sidebar
   - [x] Add main workspace region
   - [x] Add empty state
-- [ ] Add app providers
-  - [ ] Add TanStack Query client
-  - [ ] Add TanStack Router
-  - [ ] Add theme provider
+- [x] Add app providers
+  - [x] Add TanStack Query client
+  - [x] Add TanStack Router
+  - [x] Add theme provider
 - [ ] Add core UI states
   - [ ] Add connection status indicator
   - [ ] Add environment badge
