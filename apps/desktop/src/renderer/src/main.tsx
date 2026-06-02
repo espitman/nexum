@@ -13,6 +13,14 @@ const App = () => {
   useEffect(() => {
     setHealth({ status: "loading" });
 
+    if (!window.nexum) {
+      setHealth({
+        status: "error",
+        message: "Preload API is unavailable"
+      });
+      return;
+    }
+
     window.nexum.health
       .ping()
       .then((result) => {
@@ -68,6 +76,8 @@ const App = () => {
             <p className={`health health-${health.status}`}>
               {health.status === "ready"
                 ? `ready at ${new Date(health.timestamp).toLocaleTimeString()}`
+                : health.status === "error"
+                  ? health.message
                 : health.status}
             </p>
           </div>
