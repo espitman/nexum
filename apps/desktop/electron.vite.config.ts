@@ -4,10 +4,18 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin()],
+    plugins: [externalizeDepsPlugin({ exclude: ["@nexum/shared"] })],
   },
   preload: {
-    plugins: [externalizeDepsPlugin()],
+    build: {
+      rollupOptions: {
+        output: {
+          entryFileNames: "[name].cjs",
+          format: "cjs",
+        },
+      },
+    },
+    plugins: [externalizeDepsPlugin({ exclude: ["@nexum/shared"] })],
   },
   renderer: {
     root: "src/renderer",

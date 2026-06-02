@@ -112,25 +112,25 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
 
 ## Phase 4 — Secure IPC and Preload API
 
-- [ ] Configure secure Electron window
-  - [ ] Disable `nodeIntegration`
-  - [ ] Enable `contextIsolation`
-  - [ ] Enable sandbox
-  - [ ] Use preload script
-- [ ] Create typed preload API
-  - [ ] Add health check API
-  - [ ] Add connection API contract
-  - [ ] Add explorer API contract
-  - [ ] Add MongoDB API contract
-  - [ ] Add audit API contract
-- [ ] Create IPC router
-  - [ ] Add typed IPC wrapper
-  - [ ] Validate inputs with Zod
-  - [ ] Sanitize errors before returning to renderer
-- [ ] Verify IPC
-  - [ ] Renderer can call health check
-  - [ ] Invalid input is rejected safely
-  - [ ] Renderer has no direct database or Node access
+- [x] Configure secure Electron window
+  - [x] Disable `nodeIntegration`
+  - [x] Enable `contextIsolation`
+  - [x] Enable sandbox
+  - [x] Use preload script
+- [x] Create typed preload API
+  - [x] Add health check API
+  - [x] Add connection API contract
+  - [x] Add explorer API contract
+  - [x] Add MongoDB API contract
+  - [x] Add audit API contract
+- [x] Create IPC router
+  - [x] Add typed IPC wrapper
+  - [x] Validate inputs with Zod
+  - [x] Sanitize errors before returning to renderer
+- [x] Verify IPC
+  - [x] Renderer can call health check
+  - [x] Invalid input is rejected safely
+  - [x] Renderer has no direct database or Node access
 
 ## Phase 5 — MongoDB Connection Manager
 

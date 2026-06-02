@@ -37,6 +37,9 @@ importers:
 
   apps/desktop:
     dependencies:
+      "@nexum/shared":
+        specifier: workspace:*
+        version: link:../../packages/shared
       "@tanstack/react-query":
         specifier: ^5.100.14
         version: 5.100.14(react@19.2.6)
@@ -49,6 +52,9 @@ importers:
       react-dom:
         specifier: ^19.2.3
         version: 19.2.6(react@19.2.6)
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
     devDependencies:
       "@types/node":
         specifier: ^24.10.2
