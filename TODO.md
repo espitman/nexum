@@ -53,11 +53,11 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
   - [x] Add format script
   - [x] Add typecheck script
   - [x] Add development script
-- [ ] Verify bootstrap
-  - [ ] Install dependencies with `pnpm`
-  - [ ] Run typecheck
-  - [ ] Start desktop app locally
-  - [ ] Confirm renderer can call main through typed preload API
+- [x] Verify bootstrap
+  - [x] Install dependencies with `pnpm`
+  - [x] Run typecheck
+  - [x] Start desktop app locally
+  - [x] Confirm renderer can call main through typed preload API
 
 ## Phase 2 — App Shell
 
