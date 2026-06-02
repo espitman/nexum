@@ -55,6 +55,9 @@ importers:
       mongodb:
         specifier: ^7.2.0
         version: 7.2.0
+      mongodb-connection-string-url:
+        specifier: ^7.0.1
+        version: 7.0.1
       react:
         specifier: ^19.2.3
         version: 19.2.6
@@ -101,6 +104,9 @@ importers:
       "@nexum/shared":
         specifier: workspace:*
         version: link:../shared
+      mongodb-connection-string-url:
+        specifier: ^7.0.1
+        version: 7.0.1
 
   packages/shared: {}
 

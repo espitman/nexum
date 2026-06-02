@@ -119,7 +119,7 @@ describe("registerIpcHandlers connection lifecycle", () => {
         environment: "local",
         name: "Local MongoDB",
         readOnly: true,
-        uri: "mongodb://localhost:27017/admin",
+        uri: "mongodb://user:password@mongo-stg-a.alibaba.local:27017,mongo-stg-b.alibaba.local:27017,mongo-stg-c.alibaba.local:27017/merchandising-db?replicaSet=rs0&authSource=admin",
       }),
     ).resolves.toMatchObject({ ok: true });
     await expect(
@@ -132,7 +132,7 @@ describe("registerIpcHandlers connection lifecycle", () => {
         environment: "local",
         name: "Local MongoDB",
         readOnly: true,
-        uri: "mongodb://localhost:27017/admin",
+        uri: "mongodb://user:password@mongo-stg-a.alibaba.local:27017,mongo-stg-b.alibaba.local:27017,mongo-stg-c.alibaba.local:27017/merchandising-db?replicaSet=rs0&authSource=admin",
       }),
     ).resolves.toMatchObject({ ok: true });
     await expect(

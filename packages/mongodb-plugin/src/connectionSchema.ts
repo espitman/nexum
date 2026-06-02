@@ -1,5 +1,6 @@
 import type { ConnectionEnvironment } from "@nexum/core";
 import { AppError, err, ok, type Result } from "@nexum/shared";
+import ConnectionString from "mongodb-connection-string-url";
 
 export type MongoConnectionInput = {
   environment: ConnectionEnvironment;
@@ -43,11 +44,11 @@ const validateMongoUri = (value: unknown): boolean => {
   }
 
   try {
-    const parsedUri = new URL(trimmedValue);
+    const parsedUri = new ConnectionString(trimmedValue);
     return (
       (parsedUri.protocol === "mongodb:" ||
         parsedUri.protocol === "mongodb+srv:") &&
-      parsedUri.hostname.length > 0
+      parsedUri.hosts.length > 0
     );
   } catch {
     return false;

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import ConnectionString from "mongodb-connection-string-url";
 
 export const voidPayloadSchema = z.undefined();
 
@@ -17,11 +18,11 @@ const mongoConnectionUriSchema = z
   .min(1)
   .refine((value) => {
     try {
-      const parsedUri = new URL(value);
+      const parsedUri = new ConnectionString(value);
       return (
         (parsedUri.protocol === "mongodb:" ||
           parsedUri.protocol === "mongodb+srv:") &&
-        parsedUri.hostname.length > 0
+        parsedUri.hosts.length > 0
       );
     } catch {
       return false;

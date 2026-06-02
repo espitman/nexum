@@ -22,6 +22,20 @@ describe("validateMongoConnectionInput", () => {
     });
   });
 
+  it("accepts replica set URIs with multiple hosts", () => {
+    const result = validateMongoConnectionInput({
+      ...validInput,
+      uri: "mongodb://user:password@mongo-stg-a.alibaba.local:27017,mongo-stg-b.alibaba.local:27017,mongo-stg-c.alibaba.local:27017/merchandising-db?replicaSet=rs0&authSource=admin",
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        uri: expect.stringContaining("replicaSet=rs0"),
+      },
+    });
+  });
+
   it("validates connection name", () => {
     const result = validateMongoConnectionInput({ ...validInput, name: " " });
 

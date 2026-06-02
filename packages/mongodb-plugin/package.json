@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@nexum/core": "workspace:*",
-    "@nexum/shared": "workspace:*"
+    "@nexum/shared": "workspace:*",
+    "mongodb-connection-string-url": "^7.0.1"
   }
 }
