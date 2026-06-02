@@ -163,6 +163,7 @@ button {
 
 .app-topbar {
   -webkit-app-region: drag;
+  align-items: center;
   background: #fbfcfe;
   border-width: 0 0 1px;
   display: flex;
@@ -173,7 +174,7 @@ button {
 
 .brand-lockup {
   border-right: 1px solid #e3e8ef;
-  flex: 0 0 226px;
+  flex: 0 0 218px;
   gap: 10px;
   height: 100%;
 }
