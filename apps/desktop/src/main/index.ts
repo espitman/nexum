@@ -6,10 +6,10 @@ const currentDir = path.dirname(fileURLToPath(import.meta.url));
 
 const createMainWindow = () => {
   const mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 820,
-    minWidth: 1024,
-    minHeight: 700,
+    width: 1728,
+    height: 986,
+    minWidth: 1280,
+    minHeight: 760,
     title: "Nexum",
     titleBarStyle: "hiddenInset",
     trafficLightPosition: { x: 16, y: 18 },

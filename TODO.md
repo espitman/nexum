@@ -59,6 +59,15 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
   - [x] Start desktop app locally
   - [x] Confirm renderer can call main through typed preload API
 
+## Phase 1.5 — Visual Prototype
+
+- [x] Match desktop app to concept design
+  - [x] Add mock connection data
+  - [x] Add mock database tree
+  - [x] Add mock document table
+  - [x] Add mock document inspector
+  - [x] Align shell spacing, colors, and layout with `docs/design`
+
 ## Phase 2 — App Shell
 
 - [ ] Build desktop shell layout
