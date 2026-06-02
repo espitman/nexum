@@ -11,6 +11,8 @@ const createMainWindow = () => {
     minWidth: 1024,
     minHeight: 700,
     title: "Nexum",
+    titleBarStyle: "hiddenInset",
+    trafficLightPosition: { x: 16, y: 18 },
     backgroundColor: "#f8fafc",
     show: false,
     webPreferences: {

@@ -15,6 +15,7 @@ body {
 }
 
 button {
+  -webkit-app-region: no-drag;
   border: 1px solid #0f766e;
   border-radius: 8px;
   background: #0f766e;
@@ -32,9 +33,10 @@ button {
 }
 
 .sidebar {
+  -webkit-app-region: drag;
   border-right: 1px solid #dbe3ef;
   background: #ffffff;
-  padding: 20px;
+  padding: 44px 20px 20px;
 }
 
 .brand {
@@ -79,6 +81,7 @@ button {
 }
 
 .connection {
+  -webkit-app-region: no-drag;
   align-items: center;
   background: #f0fdfa;
   border-color: #99f6e4;
@@ -97,7 +100,7 @@ button {
 }
 
 .workspace {
-  padding: 22px;
+  padding: 18px 22px 22px;
 }
 
 .top-bar,
@@ -107,7 +110,13 @@ button {
   justify-content: space-between;
 }
 
+.top-bar {
+  -webkit-app-region: drag;
+  min-height: 44px;
+}
+
 .top-bar-actions {
+  -webkit-app-region: no-drag;
   align-items: center;
   display: flex;
   gap: 8px;
