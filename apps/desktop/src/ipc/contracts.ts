@@ -9,6 +9,7 @@ export const ipcChannels = {
   connectionGet: "nexum:connections:get",
   connectionList: "nexum:connections:list",
   connectionTest: "nexum:connections:test",
+  connectionTestInput: "nexum:connections:test-input",
   connectionUpdate: "nexum:connections:update",
   explorerListChildren: "nexum:explorer:list-children",
   explorerListRootNodes: "nexum:explorer:list-root-nodes",

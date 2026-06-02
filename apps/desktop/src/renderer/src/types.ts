@@ -3,9 +3,15 @@ export type HealthState =
   | { status: "ready"; timestamp: string }
   | { status: "error"; message: string };
 
+export type ConnectionRuntimeStatus =
+  | "checking"
+  | "connected"
+  | "disconnected"
+  | "error";
+
 export type ConnectionStatus = "checking" | "connected" | "offline";
 
-export type EnvironmentName = "dev" | "staging" | "prod";
+export type EnvironmentName = "dev" | "local" | "production" | "staging";
 
 export type CoreUiState = {
   connectionStatus: ConnectionStatus;
@@ -25,6 +31,15 @@ export type Connection = {
   label: string;
   active?: boolean;
   more?: boolean;
+};
+
+export type ConnectionProfile = {
+  environment: "development" | "local" | "production" | "staging";
+  id: string;
+  name: string;
+  pluginId: string;
+  readOnly: boolean;
+  status: ConnectionRuntimeStatus;
 };
 
 export type DatabaseNode = {

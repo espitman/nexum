@@ -231,6 +231,26 @@ export class ConnectionLifecycleService {
     }
   }
 
+  async testInput(
+    input: CreateStoredConnectionInput,
+  ): Promise<Result<StoredConnectionTestResult, AppError>> {
+    const startedAt = performance.now();
+
+    try {
+      await this.#driver.ping(input.uri);
+      return ok({
+        latencyMs: Math.round(performance.now() - startedAt),
+        message: "MongoDB ping succeeded",
+        ok: true,
+      });
+    } catch (error) {
+      return ok({
+        message: sanitizeError(error).message,
+        ok: false,
+      });
+    }
+  }
+
   async update(
     connectionId: string,
     patch: UpdateStoredConnectionInput,

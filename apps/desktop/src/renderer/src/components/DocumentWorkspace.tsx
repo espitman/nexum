@@ -5,14 +5,22 @@ import {
   type WorkspaceTabLabel,
 } from "../mockData";
 import type { HealthState } from "../types";
+import type { ConnectionProfile } from "../types";
+import { ConnectionManager } from "./ConnectionManager";
 import { Icon } from "./Icon";
 
 type DocumentWorkspaceProps = {
   activeSection: NavItemLabel;
   activeWorkspaceTab: WorkspaceTabLabel;
+  connections: ConnectionProfile[];
   health: HealthState;
   healthLabel: string;
+  isConnectionsLoading: boolean;
+  selectedConnectionId: string | null;
   selectedCollectionName: string | null;
+  onConnectionError: (title: string, message: string) => void;
+  onConnectionsChanged: () => Promise<void>;
+  onSelectedConnectionChange: (connectionId: string | null) => void;
   onCollectionClose: () => void;
   onCollectionOpen: () => void;
   onSectionChange: (section: NavItemLabel) => void;
@@ -22,9 +30,15 @@ type DocumentWorkspaceProps = {
 export const DocumentWorkspace = ({
   activeSection,
   activeWorkspaceTab,
+  connections,
   health,
   healthLabel,
+  isConnectionsLoading,
+  selectedConnectionId,
   selectedCollectionName,
+  onConnectionError,
+  onConnectionsChanged,
+  onSelectedConnectionChange,
   onCollectionClose,
   onCollectionOpen,
   onSectionChange,
@@ -32,6 +46,8 @@ export const DocumentWorkspace = ({
 }: DocumentWorkspaceProps) => {
   const isCollectionWorkspace =
     activeSection === "Connections" && selectedCollectionName !== null;
+  const isConnectionManager =
+    activeSection === "Connections" && selectedCollectionName === null;
   const emptyWorkspaceTitle =
     activeSection === "Connections" ? "No collection selected" : activeSection;
   const emptyWorkspaceLabel =
@@ -62,6 +78,15 @@ export const DocumentWorkspace = ({
           <ResultsSection />
           <WorkspaceFooter health={health} healthLabel={healthLabel} />
         </>
+      ) : isConnectionManager ? (
+        <ConnectionManager
+          connections={connections}
+          isLoading={isConnectionsLoading}
+          selectedConnectionId={selectedConnectionId}
+          onConnectionsChanged={onConnectionsChanged}
+          onError={onConnectionError}
+          onSelectedConnectionChange={onSelectedConnectionChange}
+        />
       ) : (
         <WorkspaceEmptyState
           label={emptyWorkspaceLabel}

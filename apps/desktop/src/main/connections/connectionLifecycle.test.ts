@@ -50,8 +50,10 @@ class InMemoryMetadataStore implements ConnectionMetadataRepository {
 
 class InMemorySecretStore implements ConnectionSecretRepository {
   readonly secrets = new Map<string, string>();
+  getCount = 0;
 
   async getUri(connectionId: string): Promise<Result<string, AppError>> {
+    this.getCount += 1;
     const uri = this.secrets.get(connectionId);
 
     if (!uri) {
@@ -168,6 +170,28 @@ describe("ConnectionLifecycleService", () => {
       ok: true,
       value: { status: "disconnected" },
     });
+  });
+
+  it("tests draft input without reading or writing saved secrets", async () => {
+    const { driver, lifecycle, secretStore } = createLifecycle();
+
+    const result = await lifecycle.testInput({
+      environment: "local",
+      name: "Draft MongoDB",
+      readOnly: true,
+      uri: mongoUri,
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        message: "MongoDB ping succeeded",
+        ok: true,
+      },
+    });
+    expect(driver.pingedUris).toEqual([mongoUri]);
+    expect(secretStore.getCount).toBe(0);
+    expect(secretStore.secrets.size).toBe(0);
   });
 
   it("sanitizes failed ping results and marks the profile as errored", async () => {

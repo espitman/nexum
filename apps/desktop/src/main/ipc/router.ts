@@ -181,6 +181,14 @@ export const registerIpcHandlers = (
   );
 
   registerValidatedHandler(
+    ipcChannels.connectionTestInput,
+    connectionCreatePayloadSchema,
+    async (payload): Promise<StoredConnectionTestResult> =>
+      unwrapResult(await services.connections.testInput(payload)),
+    ipc,
+  );
+
+  registerValidatedHandler(
     ipcChannels.connectionConnect,
     connectionIdPayloadSchema,
     async ({ connectionId }): Promise<StoredConnectionSummary> =>

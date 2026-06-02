@@ -68,6 +68,7 @@ export type NexumDesktopApi = {
     get(payload: ConnectionIdPayload): Promise<ConnectionSummary>;
     list(): Promise<ConnectionSummary[]>;
     test(payload: ConnectionIdPayload): Promise<ConnectionTestResult>;
+    testInput(payload: ConnectionCreatePayload): Promise<ConnectionTestResult>;
     update(payload: ConnectionUpdatePayload): Promise<ConnectionSummary>;
   };
   explorer: {
@@ -96,6 +97,7 @@ const api: NexumDesktopApi = {
     get: (payload) => invoke(ipcChannels.connectionGet, payload),
     list: () => invoke(ipcChannels.connectionList),
     test: (payload) => invoke(ipcChannels.connectionTest, payload),
+    testInput: (payload) => invoke(ipcChannels.connectionTestInput, payload),
     update: (payload) => invoke(ipcChannels.connectionUpdate, payload),
   },
   explorer: {

@@ -1,5 +1,5 @@
 import { AppError, err, ok, type Result } from "@nexum/shared";
-import * as keytar from "keytar";
+import keytar from "keytar";
 
 export interface ConnectionSecretRepository {
   getUri(connectionId: string): Promise<Result<string, AppError>>;

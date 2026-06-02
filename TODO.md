@@ -150,12 +150,12 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
   - [x] Test connection with `ping`
   - [x] Connect profile
   - [x] Disconnect profile
-- [ ] Build connection UI
-  - [ ] Add connection list
-  - [ ] Add connection form
-  - [ ] Add environment selector
-  - [ ] Add read-only toggle
-  - [ ] Add test connection action
+- [x] Build connection UI
+  - [x] Add connection list
+  - [x] Add connection form
+  - [x] Add environment selector
+  - [x] Add read-only toggle
+  - [x] Add test connection action
 - [ ] Verify connection manager
   - [ ] Test local MongoDB connection
   - [ ] Test MongoDB Atlas connection

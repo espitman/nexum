@@ -1,4 +1,6 @@
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import type { ConnectionSummary } from "../../ipc/contracts";
 import { ConnectionRail } from "./components/ConnectionRail";
 import { DatabasePanel } from "./components/DatabasePanel";
 import { DocumentWorkspace } from "./components/DocumentWorkspace";
@@ -12,17 +14,20 @@ import type {
   WorkspaceTabLabel,
 } from "./mockData";
 import type {
+  ConnectionProfile,
   ConnectionStatus,
   CoreUiState,
+  EnvironmentName,
   HealthState,
   ToastMessage,
 } from "./types";
 
 export const App = () => {
+  const queryClient = useQueryClient();
   const [health, setHealth] = useState<HealthState>({ status: "loading" });
   const [coreUiState] = useState<CoreUiState>({
     connectionStatus: "checking",
-    environment: "prod",
+    environment: "production",
     isReadOnly: true,
   });
   const [isConnectionRailOpen, setIsConnectionRailOpen] = useState(true);
@@ -37,6 +42,24 @@ export const App = () => {
     useState<WorkspaceTabLabel>("Documents");
   const [activeInspectorTab, setActiveInspectorTab] =
     useState<InspectorTabLabel>("Document");
+  const [selectedConnectionId, setSelectedConnectionId] = useState<
+    string | null
+  >(null);
+
+  const connectionsQuery = useQuery({
+    queryKey: ["connections"],
+    queryFn: async () => {
+      if (!window.nexum) {
+        throw new Error("Preload API is unavailable");
+      }
+
+      return window.nexum.connections.list();
+    },
+  });
+  const connections = (connectionsQuery.data ?? []) as ConnectionProfile[];
+  const selectedConnection =
+    connections.find((connection) => connection.id === selectedConnectionId) ??
+    null;
 
   useEffect(() => {
     const checkHealth = async () => {
@@ -68,8 +91,9 @@ export const App = () => {
       });
   }, []);
 
-  const connectionStatus: ConnectionStatus =
-    health.status === "ready"
+  const connectionStatus: ConnectionStatus = selectedConnection
+    ? mapConnectionStatus(selectedConnection.status)
+    : health.status === "ready"
       ? "connected"
       : health.status === "error"
         ? "offline"
@@ -82,10 +106,20 @@ export const App = () => {
         : "checking";
   const connectionStatusLabel =
     connectionStatus === "connected"
-      ? "Connected"
+      ? selectedConnection?.status === "connected"
+        ? "Connected"
+        : "Ready"
       : connectionStatus === "offline"
-        ? "Offline"
+        ? selectedConnection?.status === "error"
+          ? "Error"
+          : "Offline"
         : "Checking";
+  const activeEnvironment = selectedConnection
+    ? mapEnvironment(selectedConnection.environment)
+    : coreUiState.environment;
+  const activeReadOnly = selectedConnection
+    ? selectedConnection.readOnly
+    : coreUiState.isReadOnly;
   const shellClassName = [
     "app-shell",
     isConnectionRailOpen ? "" : "is-connections-closed",
@@ -93,14 +127,37 @@ export const App = () => {
   ]
     .filter(Boolean)
     .join(" ");
+  const connectionListToast: ToastMessage | null = connectionsQuery.error
+    ? {
+        id: "connection-list-failed",
+        tone: "error",
+        title: "Load connections failed",
+        message:
+          connectionsQuery.error instanceof Error
+            ? connectionsQuery.error.message
+            : "Unknown error",
+      }
+    : null;
 
   return (
     <main className={shellClassName}>
       {isConnectionRailOpen ? (
         <ConnectionRail
           activeSection={activeSection}
+          connections={connections}
           onClose={() => setIsConnectionRailOpen(false)}
+          onConnectionAdd={() => {
+            setActiveSection("Connections");
+            setSelectedConnectionId(null);
+            setSelectedCollectionName(null);
+          }}
+          onConnectionSelect={(connectionId) => {
+            setActiveSection("Connections");
+            setSelectedConnectionId(connectionId);
+            setSelectedCollectionName(null);
+          }}
           onSectionChange={setActiveSection}
+          selectedConnectionId={selectedConnectionId}
         />
       ) : (
         <PanelRestoreButton
@@ -113,8 +170,8 @@ export const App = () => {
       <TopBar
         connectionStatus={connectionStatus}
         connectionStatusLabel={connectionStatusLabel}
-        environment={coreUiState.environment}
-        isReadOnly={coreUiState.isReadOnly}
+        environment={activeEnvironment}
+        isReadOnly={activeReadOnly}
         onToggleInspector={() => setIsInspectorOpen((isOpen) => !isOpen)}
       />
 
@@ -127,9 +184,24 @@ export const App = () => {
       <DocumentWorkspace
         activeSection={activeSection}
         activeWorkspaceTab={activeWorkspaceTab}
+        connections={connections}
+        isConnectionsLoading={connectionsQuery.isLoading}
         health={health}
         healthLabel={healthLabel}
+        selectedConnectionId={selectedConnectionId}
         selectedCollectionName={selectedCollectionName}
+        onConnectionError={(title, message) => {
+          setToast({
+            id: `${title}-${Date.now()}`,
+            tone: "error",
+            title,
+            message,
+          });
+        }}
+        onConnectionsChanged={() =>
+          queryClient.invalidateQueries({ queryKey: ["connections"] })
+        }
+        onSelectedConnectionChange={setSelectedConnectionId}
         onCollectionClose={() => setSelectedCollectionName(null)}
         onCollectionOpen={() => setSelectedCollectionName("users")}
         onSectionChange={setActiveSection}
@@ -150,7 +222,28 @@ export const App = () => {
         />
       )}
 
-      <ErrorToastSurface toast={toast} onDismiss={() => setToast(null)} />
+      <ErrorToastSurface
+        toast={toast ?? connectionListToast}
+        onDismiss={() => {
+          setToast(null);
+          if (connectionListToast) {
+            void connectionsQuery.refetch();
+          }
+        }}
+      />
     </main>
   );
 };
+
+const mapConnectionStatus = (
+  status: ConnectionSummary["status"],
+): ConnectionStatus =>
+  status === "connected"
+    ? "connected"
+    : status === "checking"
+      ? "checking"
+      : "offline";
+
+const mapEnvironment = (
+  environment: ConnectionSummary["environment"],
+): EnvironmentName => (environment === "development" ? "dev" : environment);

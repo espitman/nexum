@@ -35,7 +35,9 @@ export const TopBar = ({
         <span className="connection-status-dot" />
         {connectionStatusLabel}
       </span>
-      <span className={`env-pill env-${environment}`}>{environment}</span>
+      <span className={`env-pill env-${environment}`}>
+        {environmentLabel[environment]}
+      </span>
       {isReadOnly ? <span className="readonly-pill">READ-ONLY</span> : null}
       <button className="run-button" type="button">
         <span className="play-icon" />
@@ -58,3 +60,10 @@ export const TopBar = ({
     </div>
   </header>
 );
+
+const environmentLabel: Record<EnvironmentName, string> = {
+  dev: "dev",
+  local: "local",
+  production: "prod",
+  staging: "staging",
+};

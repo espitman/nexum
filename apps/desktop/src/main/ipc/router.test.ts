@@ -1,7 +1,9 @@
+import { ok, type AppError, type Result } from "@nexum/shared";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { ipcChannels } from "../../ipc/contracts";
-import { createValidatedIpcHandler } from "./router";
+import { ipcChannels, type ConnectionSummary } from "../../ipc/contracts";
+import type { StoredConnectionTestResult } from "../connections";
+import { createValidatedIpcHandler, registerIpcHandlers } from "./router";
 
 describe("createValidatedIpcHandler", () => {
   it("returns sanitized validation errors for invalid payloads", async () => {
@@ -37,5 +39,106 @@ describe("createValidatedIpcHandler", () => {
         ok: true,
       },
     });
+  });
+});
+
+describe("registerIpcHandlers connection lifecycle", () => {
+  it("accepts create, test, and delete payloads from the preload API", async () => {
+    const handlers = new Map<
+      string,
+      (_event: unknown, payload: unknown) => Promise<unknown>
+    >();
+    const ipc = {
+      handle(channel: string, handler: never) {
+        handlers.set(channel, handler);
+      },
+    };
+    const profiles = new Map<string, ConnectionSummary>();
+    const services = {
+      connections: {
+        async connect(): Promise<Result<ConnectionSummary, AppError>> {
+          throw new Error("unused");
+        },
+        async create(): Promise<Result<ConnectionSummary, AppError>> {
+          const profile: ConnectionSummary = {
+            environment: "local",
+            id: "conn_test",
+            name: "Local MongoDB",
+            pluginId: "mongodb",
+            readOnly: true,
+            status: "disconnected",
+          };
+          profiles.set(profile.id, profile);
+          return ok(profile);
+        },
+        async delete(): Promise<Result<ConnectionSummary, AppError>> {
+          const profile = profiles.get("conn_test");
+
+          if (!profile) {
+            throw new Error("missing profile");
+          }
+
+          profiles.delete(profile.id);
+          return ok(profile);
+        },
+        async disconnect(): Promise<Result<ConnectionSummary, AppError>> {
+          throw new Error("unused");
+        },
+        get(): Result<ConnectionSummary, AppError> {
+          throw new Error("unused");
+        },
+        list(): ConnectionSummary[] {
+          return [...profiles.values()];
+        },
+        async test(): Promise<Result<StoredConnectionTestResult, AppError>> {
+          return ok({
+            latencyMs: 1,
+            message: "MongoDB ping succeeded",
+            ok: true,
+          });
+        },
+        async testInput(): Promise<
+          Result<StoredConnectionTestResult, AppError>
+        > {
+          return ok({
+            latencyMs: 1,
+            message: "MongoDB ping succeeded",
+            ok: true,
+          });
+        },
+        async update(): Promise<Result<ConnectionSummary, AppError>> {
+          throw new Error("unused");
+        },
+      },
+    };
+
+    registerIpcHandlers(ipc as never, services as never);
+
+    await expect(
+      handlers.get(ipcChannels.connectionCreate)?.(undefined, {
+        environment: "local",
+        name: "Local MongoDB",
+        readOnly: true,
+        uri: "mongodb://localhost:27017/admin",
+      }),
+    ).resolves.toMatchObject({ ok: true });
+    await expect(
+      handlers.get(ipcChannels.connectionTest)?.(undefined, {
+        connectionId: "conn_test",
+      }),
+    ).resolves.toMatchObject({ ok: true });
+    await expect(
+      handlers.get(ipcChannels.connectionTestInput)?.(undefined, {
+        environment: "local",
+        name: "Local MongoDB",
+        readOnly: true,
+        uri: "mongodb://localhost:27017/admin",
+      }),
+    ).resolves.toMatchObject({ ok: true });
+    await expect(
+      handlers.get(ipcChannels.connectionDelete)?.(undefined, {
+        connectionId: "conn_test",
+      }),
+    ).resolves.toMatchObject({ ok: true });
   });
 });
