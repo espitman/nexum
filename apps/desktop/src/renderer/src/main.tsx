@@ -55,6 +55,12 @@ const workspaceTabs = [
   ["explain", "Explain"],
 ] as const;
 
+type WorkspaceTabLabel = (typeof workspaceTabs)[number][1];
+
+const inspectorTabs = ["Document", "Schema", "Indexes"] as const;
+
+type InspectorTabLabel = (typeof inspectorTabs)[number];
+
 const databaseNodes: DatabaseNode[] = [
   { name: "admin", type: "database", depth: 0 },
   { name: "app", type: "database", depth: 0, open: true },
@@ -182,6 +188,25 @@ const inspectorLines = [
   ["}", "plain"],
 ] as const;
 
+const schemaFields = [
+  ["_id", "ObjectId", "Required"],
+  ["email", "String", "Unique"],
+  ["status", "String", "Indexed"],
+  ["profile.firstName", "String", "Optional"],
+  ["profile.lastName", "String", "Optional"],
+  ["addresses", "Array", "Nested"],
+  ["preferences.newsletter", "Boolean", "Optional"],
+  ["total", "Decimal128", "Optional"],
+  ["createdAt", "Date", "Indexed"],
+] as const;
+
+const indexRows = [
+  ["_id_", "{ _id: 1 }", "Unique"],
+  ["email_1", "{ email: 1 }", "Unique"],
+  ["status_1_createdAt_-1", "{ status: 1, createdAt: -1 }", "Compound"],
+  ["createdAt_-1", "{ createdAt: -1 }", "TTL-ready"],
+] as const;
+
 const Icon = ({ name }: { name: string }) => (
   <span className={`icon icon-${name}`} />
 );
@@ -190,6 +215,10 @@ const App = () => {
   const [health, setHealth] = useState<HealthState>({ status: "loading" });
   const [isConnectionRailOpen, setIsConnectionRailOpen] = useState(true);
   const [isInspectorOpen, setIsInspectorOpen] = useState(true);
+  const [activeWorkspaceTab, setActiveWorkspaceTab] =
+    useState<WorkspaceTabLabel>("Documents");
+  const [activeInspectorTab, setActiveInspectorTab] =
+    useState<InspectorTabLabel>("Document");
 
   useEffect(() => {
     const checkHealth = async () => {
@@ -376,11 +405,18 @@ const App = () => {
           </button>
         </div>
 
-        <div className="workspace-tabs">
-          {workspaceTabs.map(([icon, label], index) => (
+        <div
+          className="workspace-tabs"
+          role="tablist"
+          aria-label="Collection views"
+        >
+          {workspaceTabs.map(([icon, label]) => (
             <button
-              className={`workspace-tab ${index === 0 ? "is-active" : ""}`}
+              aria-selected={activeWorkspaceTab === label}
+              className={`workspace-tab ${activeWorkspaceTab === label ? "is-active" : ""}`}
               key={label}
+              onClick={() => setActiveWorkspaceTab(label)}
+              role="tab"
               type="button"
             >
               <Icon name={icon} />
@@ -424,7 +460,8 @@ const App = () => {
               Run
             </button>
             <button className="options-button" type="button">
-              Options⌄
+              <span>Options</span>
+              <span className="select-caret" />
             </button>
           </div>
         </section>
@@ -516,12 +553,23 @@ const App = () => {
 
       {isInspectorOpen ? (
         <aside className="inspector-panel">
-          <div className="inspector-tabs">
-            <button className="is-active" type="button">
-              Document
-            </button>
-            <button type="button">Schema</button>
-            <button type="button">Indexes</button>
+          <div
+            className="inspector-tabs"
+            role="tablist"
+            aria-label="Inspector views"
+          >
+            {inspectorTabs.map((tab) => (
+              <button
+                aria-selected={activeInspectorTab === tab}
+                className={activeInspectorTab === tab ? "is-active" : ""}
+                key={tab}
+                onClick={() => setActiveInspectorTab(tab)}
+                role="tab"
+                type="button"
+              >
+                {tab}
+              </button>
+            ))}
             <button
               className="close-inspector"
               type="button"
@@ -534,7 +582,10 @@ const App = () => {
 
           <div className="view-row">
             <span>View</span>
-            <button type="button">Extended JSON⌄</button>
+            <button type="button">
+              <span>Extended JSON</span>
+              <span className="select-caret" />
+            </button>
             <button
               className="plain-icon"
               type="button"
@@ -558,14 +609,28 @@ const App = () => {
             </button>
           </div>
 
-          <pre className="json-viewer" aria-label="Selected document JSON">
-            {inspectorLines.map(([line, tone], index) => (
-              <span className="json-line" key={`${index}-${line}`}>
-                <span className="line-number">{index + 1}</span>
-                <code className={`json-${tone}`}>{line}</code>
-              </span>
-            ))}
-          </pre>
+          {activeInspectorTab === "Document" ? (
+            <pre className="json-viewer" aria-label="Selected document JSON">
+              {inspectorLines.map(([line, tone], index) => (
+                <span className="json-line" key={`${index}-${line}`}>
+                  <span className="line-number">{index + 1}</span>
+                  <code className={`json-${tone}`}>{line}</code>
+                </span>
+              ))}
+            </pre>
+          ) : (
+            <div className="inspector-list" role="tabpanel">
+              {(activeInspectorTab === "Schema" ? schemaFields : indexRows).map(
+                ([name, value, meta]) => (
+                  <div className="inspector-list-row" key={name}>
+                    <strong>{name}</strong>
+                    <code>{value}</code>
+                    <span>{meta}</span>
+                  </div>
+                ),
+              )}
+            </div>
+          )}
         </aside>
       ) : (
         <button

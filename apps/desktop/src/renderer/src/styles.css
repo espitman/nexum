@@ -583,7 +583,10 @@ button {
 }
 
 .options-button {
+  align-items: center;
   color: #3f4856;
+  display: inline-flex;
+  gap: 8px;
   height: 36px;
   margin-left: auto;
   padding: 0 14px;
@@ -806,10 +809,11 @@ button {
 .select-caret {
   border-bottom: 1.8px solid currentColor;
   border-right: 1.8px solid currentColor;
-  height: 6px;
-  margin-top: -3px;
-  transform: rotate(45deg);
-  width: 6px;
+  display: block;
+  flex: 0 0 auto;
+  height: 7px;
+  transform: translateY(-2px) rotate(45deg);
+  width: 7px;
 }
 
 .muted {
@@ -885,13 +889,51 @@ button {
 }
 
 .view-row > button:first-of-type {
+  align-items: center;
   border: 1px solid #dbe2eb;
   border-radius: 6px;
   color: #344052;
+  display: inline-flex;
   flex: 1;
+  gap: 8px;
   height: 36px;
   justify-content: space-between;
   padding: 0 12px;
+}
+
+.inspector-list {
+  display: grid;
+  gap: 8px;
+  overflow: auto;
+  padding: 14px;
+}
+
+.inspector-list-row {
+  border: 1px solid #e1e7ef;
+  border-radius: 7px;
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+}
+
+.inspector-list-row strong {
+  color: #263142;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.inspector-list-row code {
+  color: #00717d;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inspector-list-row span {
+  color: #6a7484;
+  font-size: 12px;
 }
 
 .json-viewer {
