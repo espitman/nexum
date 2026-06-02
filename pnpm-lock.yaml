@@ -49,6 +49,33 @@ importers:
         specifier: ^7.2.7
         version: 7.3.3(@types/node@24.12.4)
 
+  packages/core:
+    dependencies:
+      '@nexum/shared':
+        specifier: workspace:*
+        version: link:../shared
+
+  packages/mongodb-plugin:
+    dependencies:
+      '@nexum/core':
+        specifier: workspace:*
+        version: link:../core
+      '@nexum/shared':
+        specifier: workspace:*
+        version: link:../shared
+
+  packages/shared: {}
+
+  packages/ui:
+    dependencies:
+      react:
+        specifier: ^19.2.3
+        version: 19.2.6
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.7
+        version: 19.2.15
+
 packages:
 
   '@babel/code-frame@7.29.7':

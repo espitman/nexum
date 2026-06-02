@@ -42,11 +42,11 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
   - [x] Add Electron preload entry
   - [x] Add React renderer entry
   - [x] Add Vite HTML entry
-- [ ] Create shared packages
-  - [ ] Add `packages/core`
-  - [ ] Add `packages/ui`
-  - [ ] Add `packages/mongodb-plugin`
-  - [ ] Add `packages/shared`
+- [x] Create shared packages
+  - [x] Add `packages/core`
+  - [x] Add `packages/ui`
+  - [x] Add `packages/mongodb-plugin`
+  - [x] Add `packages/shared`
 - [ ] Add baseline tooling
   - [ ] Add TypeScript scripts
   - [ ] Add lint script
