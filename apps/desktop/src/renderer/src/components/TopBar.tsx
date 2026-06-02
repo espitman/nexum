@@ -1,8 +1,20 @@
+import type { ConnectionStatus, EnvironmentName } from "../types";
+
 type TopBarProps = {
+  connectionStatus: ConnectionStatus;
+  connectionStatusLabel: string;
+  environment: EnvironmentName;
+  isReadOnly: boolean;
   onToggleInspector: () => void;
 };
 
-export const TopBar = ({ onToggleInspector }: TopBarProps) => (
+export const TopBar = ({
+  connectionStatus,
+  connectionStatusLabel,
+  environment,
+  isReadOnly,
+  onToggleInspector,
+}: TopBarProps) => (
   <header className="app-topbar">
     <div className="brand-lockup">
       <strong>Nexum</strong>
@@ -17,8 +29,14 @@ export const TopBar = ({ onToggleInspector }: TopBarProps) => (
     </div>
 
     <div className="top-actions">
-      <span className="env-pill">prod</span>
-      <span className="readonly-pill">READ-ONLY</span>
+      <span
+        className={`connection-status-pill connection-status-${connectionStatus}`}
+      >
+        <span className="connection-status-dot" />
+        {connectionStatusLabel}
+      </span>
+      <span className={`env-pill env-${environment}`}>{environment}</span>
+      {isReadOnly ? <span className="readonly-pill">READ-ONLY</span> : null}
       <button className="run-button" type="button">
         <span className="play-icon" />
         Run

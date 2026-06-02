@@ -79,11 +79,11 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
   - [x] Add TanStack Query client
   - [x] Add TanStack Router
   - [x] Add theme provider
-- [ ] Add core UI states
-  - [ ] Add connection status indicator
-  - [ ] Add environment badge
-  - [ ] Add read-only badge
-  - [ ] Add error toast surface
+- [x] Add core UI states
+  - [x] Add connection status indicator
+  - [x] Add environment badge
+  - [x] Add read-only badge
+  - [x] Add error toast surface
 - [ ] Verify shell
   - [ ] App opens on macOS
   - [ ] Shell visually displays as Nexum

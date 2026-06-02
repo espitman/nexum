@@ -3,6 +3,23 @@ export type HealthState =
   | { status: "ready"; timestamp: string }
   | { status: "error"; message: string };
 
+export type ConnectionStatus = "checking" | "connected" | "offline";
+
+export type EnvironmentName = "dev" | "staging" | "prod";
+
+export type CoreUiState = {
+  connectionStatus: ConnectionStatus;
+  environment: EnvironmentName;
+  isReadOnly: boolean;
+};
+
+export type ToastMessage = {
+  id: string;
+  tone: "error";
+  title: string;
+  message: string;
+};
+
 export type Connection = {
   icon: string;
   label: string;
