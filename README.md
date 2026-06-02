@@ -85,4 +85,4 @@ Read the full architecture document:
 
 ## License
 
-License is not set yet.
+MIT

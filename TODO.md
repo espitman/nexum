@@ -1,0 +1,310 @@
+# Nexum TODO
+
+This file tracks project phases, tasks, and subtasks. When a task is completed, mark it with `[x]`.
+
+## Phase 0 — Project Foundation
+
+- [x] Create initial architecture document
+  - [x] Define product vision
+  - [x] Define plugin-based architecture
+  - [x] Define MongoDB phase scope
+  - [x] Define recommended tech stack
+  - [x] Add TanStack usage to architecture
+- [x] Create GitHub repository
+  - [x] Initialize local Git repository
+  - [x] Create GitHub repository
+  - [x] Make repository public
+- [x] Create project README
+  - [x] Add product summary
+  - [x] Add architecture principles
+  - [x] Add planned tech stack
+  - [x] Link architecture documentation
+- [x] Create agent rules
+  - [x] Require explicit user request before Git write operations
+  - [x] Require `pnpm` as package manager
+- [x] Choose project license
+  - [x] Pick license type
+  - [x] Add `LICENSE`
+  - [x] Update README license section
+
+## Phase 1 — Monorepo Bootstrap
+
+- [ ] Create pnpm workspace
+  - [ ] Add root `package.json`
+  - [ ] Add `pnpm-workspace.yaml`
+  - [ ] Add `turbo.json`
+  - [ ] Add root `.gitignore`
+  - [ ] Add root TypeScript config
+- [ ] Create desktop app package
+  - [ ] Add `apps/desktop/package.json`
+  - [ ] Add `electron.vite.config.ts`
+  - [ ] Add Electron main entry
+  - [ ] Add Electron preload entry
+  - [ ] Add React renderer entry
+  - [ ] Add Vite HTML entry
+- [ ] Create shared packages
+  - [ ] Add `packages/core`
+  - [ ] Add `packages/ui`
+  - [ ] Add `packages/mongodb-plugin`
+  - [ ] Add `packages/shared`
+- [ ] Add baseline tooling
+  - [ ] Add TypeScript scripts
+  - [ ] Add lint script
+  - [ ] Add format script
+  - [ ] Add typecheck script
+  - [ ] Add development script
+- [ ] Verify bootstrap
+  - [ ] Install dependencies with `pnpm`
+  - [ ] Run typecheck
+  - [ ] Start desktop app locally
+  - [ ] Confirm renderer can call main through typed preload API
+
+## Phase 2 — App Shell
+
+- [ ] Build desktop shell layout
+  - [ ] Add top bar
+  - [ ] Add left sidebar
+  - [ ] Add main workspace region
+  - [ ] Add empty state
+- [ ] Add app providers
+  - [ ] Add TanStack Query client
+  - [ ] Add TanStack Router
+  - [ ] Add theme provider
+- [ ] Add core UI states
+  - [ ] Add connection status indicator
+  - [ ] Add environment badge
+  - [ ] Add read-only badge
+  - [ ] Add error toast surface
+- [ ] Verify shell
+  - [ ] App opens on macOS
+  - [ ] Shell visually displays as Nexum
+  - [ ] Routes work inside renderer
+
+## Phase 3 — Core Architecture
+
+- [ ] Define shared result and error primitives
+  - [ ] Add `Result` helpers
+  - [ ] Add `AppError` model
+  - [ ] Add error sanitizer
+- [ ] Define plugin contracts
+  - [ ] Add `NexumPlugin` type
+  - [ ] Add `PluginCapabilities` type
+  - [ ] Add explorer node model
+  - [ ] Add connection profile model
+- [ ] Implement registries and stores
+  - [ ] Add plugin registry
+  - [ ] Add connection registry
+  - [ ] Add connection metadata store
+  - [ ] Add secret store wrapper
+  - [ ] Add audit log service
+- [ ] Verify core architecture
+  - [ ] Add basic unit tests for core utilities
+  - [ ] Run typecheck
+
+## Phase 4 — Secure IPC and Preload API
+
+- [ ] Configure secure Electron window
+  - [ ] Disable `nodeIntegration`
+  - [ ] Enable `contextIsolation`
+  - [ ] Enable sandbox
+  - [ ] Use preload script
+- [ ] Create typed preload API
+  - [ ] Add health check API
+  - [ ] Add connection API contract
+  - [ ] Add explorer API contract
+  - [ ] Add MongoDB API contract
+  - [ ] Add audit API contract
+- [ ] Create IPC router
+  - [ ] Add typed IPC wrapper
+  - [ ] Validate inputs with Zod
+  - [ ] Sanitize errors before returning to renderer
+- [ ] Verify IPC
+  - [ ] Renderer can call health check
+  - [ ] Invalid input is rejected safely
+  - [ ] Renderer has no direct database or Node access
+
+## Phase 5 — MongoDB Connection Manager
+
+- [ ] Add MongoDB connection schema
+  - [ ] Validate name
+  - [ ] Validate URI
+  - [ ] Validate environment
+  - [ ] Validate read-only mode
+- [ ] Implement connection storage
+  - [ ] Store metadata in `electron-store`
+  - [ ] Store URI in Keychain with `keytar`
+  - [ ] Prevent secret leakage in logs and errors
+- [ ] Implement connection lifecycle
+  - [ ] Create profile
+  - [ ] Update profile
+  - [ ] Delete profile
+  - [ ] Test connection with `ping`
+  - [ ] Connect profile
+  - [ ] Disconnect profile
+- [ ] Build connection UI
+  - [ ] Add connection list
+  - [ ] Add connection form
+  - [ ] Add environment selector
+  - [ ] Add read-only toggle
+  - [ ] Add test connection action
+- [ ] Verify connection manager
+  - [ ] Test local MongoDB connection
+  - [ ] Test MongoDB Atlas connection
+  - [ ] Confirm URI is not stored in plain JSON
+
+## Phase 6 — MongoDB Explorer
+
+- [ ] Implement explorer backend
+  - [ ] List databases
+  - [ ] List collections
+  - [ ] Distinguish collections and views
+  - [ ] Return typed explorer nodes
+- [ ] Build explorer UI
+  - [ ] Render connection root nodes
+  - [ ] Render database nodes
+  - [ ] Render collection nodes
+  - [ ] Add loading state
+  - [ ] Add empty state
+  - [ ] Add error state
+- [ ] Verify explorer
+  - [ ] Browse databases
+  - [ ] Browse collections
+  - [ ] Select collection into workspace
+
+## Phase 7 — Document Viewer
+
+- [ ] Implement find API
+  - [ ] Default filter to `{}`
+  - [ ] Default limit to `50`
+  - [ ] Support skip
+  - [ ] Support sort
+  - [ ] Support projection
+  - [ ] Add 30 second max query time
+  - [ ] Serialize documents with EJSON
+- [ ] Build document views
+  - [ ] Add documents tab
+  - [ ] Add raw filter preview
+  - [ ] Add run action
+  - [ ] Add limit control
+  - [ ] Add skip control
+  - [ ] Add TanStack Table view
+  - [ ] Add JSON view
+  - [ ] Add TanStack Virtual for large result sets
+- [ ] Verify document viewer
+  - [ ] View first 50 documents
+  - [ ] Switch table and JSON modes
+  - [ ] Show execution time
+  - [ ] Preserve BSON types through EJSON
+
+## Phase 8 — Safe Document Editor
+
+- [ ] Implement update API
+  - [ ] Parse original document with EJSON
+  - [ ] Parse edited document with EJSON
+  - [ ] Block `_id` changes
+  - [ ] Save with `replaceOne`
+  - [ ] Return matched and modified counts
+- [ ] Add safety protections
+  - [ ] Block writes on read-only connections
+  - [ ] Require confirmation for production writes
+  - [ ] Audit write attempts
+- [ ] Build editor UI
+  - [ ] Open single-document editor
+  - [ ] Edit EJSON in Monaco
+  - [ ] Show validation errors
+  - [ ] Add save confirmation
+- [ ] Verify editor
+  - [ ] Save one document safely
+  - [ ] Confirm `_id` changes are rejected
+  - [ ] Confirm read-only mode blocks writes
+
+## Phase 9 — Visual Query Builder
+
+- [ ] Implement query builder model
+  - [ ] Add condition model
+  - [ ] Add group model
+  - [ ] Support AND/OR combinators
+- [ ] Implement supported operators
+  - [ ] Equals
+  - [ ] Not equals
+  - [ ] Greater than
+  - [ ] Greater than or equal
+  - [ ] Less than
+  - [ ] Less than or equal
+  - [ ] Contains
+  - [ ] Exists
+  - [ ] In
+  - [ ] Not in
+  - [ ] Regex
+- [ ] Implement field inference
+  - [ ] Sample up to 100 documents by default
+  - [ ] Infer nested paths with dot notation
+  - [ ] Return detected types
+  - [ ] Return occurrence counts
+- [ ] Build query builder UI
+  - [ ] Add condition rows
+  - [ ] Add group rows
+  - [ ] Add field input
+  - [ ] Add operator select
+  - [ ] Add value input
+  - [ ] Add raw JSON preview
+  - [ ] Add run query action
+- [ ] Verify query builder
+  - [ ] Generate valid MongoDB filters
+  - [ ] Run generated query
+  - [ ] Show result preview
+
+## Phase 10 — Aggregation Builder
+
+- [ ] Implement pipeline model
+  - [ ] Add stage model
+  - [ ] Support enable/disable
+  - [ ] Support reordering
+  - [ ] Generate raw pipeline
+- [ ] Support MVP stages
+  - [ ] `$match`
+  - [ ] `$project`
+  - [ ] `$sort`
+  - [ ] `$limit`
+  - [ ] `$skip`
+  - [ ] `$count`
+  - [ ] `$group`
+  - [ ] `$unwind`
+- [ ] Block dangerous stages
+  - [ ] `$out`
+  - [ ] `$merge`
+  - [ ] `$function`
+  - [ ] `$accumulator`
+- [ ] Build aggregation UI
+  - [ ] Add stage list
+  - [ ] Add stage editor
+  - [ ] Add raw pipeline preview
+  - [ ] Add run action
+  - [ ] Add result preview
+- [ ] Verify aggregation builder
+  - [ ] Run allowed pipeline
+  - [ ] Reject blocked stages
+  - [ ] Show execution time
+
+## Phase 11 — Audit, Safety, and Polish
+
+- [ ] Implement local audit log
+  - [ ] Log connection events
+  - [ ] Log query events
+  - [ ] Log aggregation events
+  - [ ] Log document update events
+  - [ ] Exclude secrets
+- [ ] Add production safety UX
+  - [ ] Show production badge
+  - [ ] Default production connections to read-only
+  - [ ] Require explicit write confirmation
+- [ ] Polish errors and empty states
+  - [ ] Add user-readable messages
+  - [ ] Hide unsafe details
+  - [ ] Add retry actions where useful
+- [ ] Final MVP verification
+  - [ ] Run lint
+  - [ ] Run typecheck
+  - [ ] Run tests
+  - [ ] Run desktop app
+  - [ ] Verify primary MongoDB workflow end to end
