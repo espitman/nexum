@@ -4,22 +4,7 @@ Database Workspace for Engineers.
 
 Nexum is a modern desktop database workspace for engineering teams. It starts with MongoDB support, but it is designed as a plugin-based app so future database engines can be added without turning the product into a single-database client.
 
-## Status
-
-Nexum is in early planning and bootstrap stage.
-
-The current repository contains the architecture and MVP definition. Implementation will begin with the desktop shell, core plugin contracts, secure preload API, and the MongoDB plugin.
-
 ## Vision
-
-Phase 1:
-
-```txt
-Nexum Desktop
-└── MongoDB Plugin
-```
-
-Future:
 
 ```txt
 Nexum Desktop
@@ -32,22 +17,6 @@ Nexum Desktop
 ```
 
 MongoDB is the first supported data source, not the whole identity of the product.
-
-## Phase 1 Scope
-
-- Connect to local MongoDB
-- Connect to remote MongoDB servers
-- Connect to MongoDB Atlas
-- Manage connection profiles
-- Browse databases and collections
-- View documents in table and JSON modes
-- Edit single documents safely
-- Build `find` queries visually
-- Build and test aggregation pipelines
-- Support read-only connections
-- Add production safety protections
-- Store secrets securely
-- Keep local audit logs
 
 ## Tech Stack
 
@@ -107,17 +76,6 @@ nexum/
 
   docs/
 ```
-
-## MVP Milestones
-
-1. Monorepo bootstrap
-2. Nexum app shell
-3. Connection manager
-4. MongoDB explorer
-5. MongoDB document viewer
-6. Safe single-document editor
-7. Visual query builder
-8. Aggregation pipeline builder
 
 ## Documentation
 
