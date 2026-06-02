@@ -91,24 +91,24 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
 
 ## Phase 3 — Core Architecture
 
-- [ ] Define shared result and error primitives
-  - [ ] Add `Result` helpers
-  - [ ] Add `AppError` model
-  - [ ] Add error sanitizer
-- [ ] Define plugin contracts
-  - [ ] Add `NexumPlugin` type
-  - [ ] Add `PluginCapabilities` type
-  - [ ] Add explorer node model
-  - [ ] Add connection profile model
-- [ ] Implement registries and stores
-  - [ ] Add plugin registry
-  - [ ] Add connection registry
-  - [ ] Add connection metadata store
-  - [ ] Add secret store wrapper
-  - [ ] Add audit log service
-- [ ] Verify core architecture
-  - [ ] Add basic unit tests for core utilities
-  - [ ] Run typecheck
+- [x] Define shared result and error primitives
+  - [x] Add `Result` helpers
+  - [x] Add `AppError` model
+  - [x] Add error sanitizer
+- [x] Define plugin contracts
+  - [x] Add `NexumPlugin` type
+  - [x] Add `PluginCapabilities` type
+  - [x] Add explorer node model
+  - [x] Add connection profile model
+- [x] Implement registries and stores
+  - [x] Add plugin registry
+  - [x] Add connection registry
+  - [x] Add connection metadata store
+  - [x] Add secret store wrapper
+  - [x] Add audit log service
+- [x] Verify core architecture
+  - [x] Add basic unit tests for core utilities
+  - [x] Run typecheck
 
 ## Phase 4 — Secure IPC and Preload API
 

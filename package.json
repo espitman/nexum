@@ -13,6 +13,7 @@
     "dev": "turbo dev",
     "build": "turbo build",
     "lint": "eslint .",
+    "test": "turbo test",
     "typecheck": "turbo typecheck",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
@@ -25,7 +26,8 @@
     "prettier": "^3.3.3",
     "turbo": "^2.5.4",
     "typescript": "^5.8.3",
-    "typescript-eslint": "^8.60.0"
+    "typescript-eslint": "^8.60.0",
+    "vitest": "^4.1.7"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
