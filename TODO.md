@@ -143,13 +143,13 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
   - [x] Store metadata in `electron-store`
   - [x] Store URI in Keychain with `keytar`
   - [x] Prevent secret leakage in logs and errors
-- [ ] Implement connection lifecycle
-  - [ ] Create profile
-  - [ ] Update profile
-  - [ ] Delete profile
-  - [ ] Test connection with `ping`
-  - [ ] Connect profile
-  - [ ] Disconnect profile
+- [x] Implement connection lifecycle
+  - [x] Create profile
+  - [x] Update profile
+  - [x] Delete profile
+  - [x] Test connection with `ping`
+  - [x] Connect profile
+  - [x] Disconnect profile
 - [ ] Build connection UI
   - [ ] Add connection list
   - [ ] Add connection form

@@ -7,6 +7,12 @@ export const connectionEnvironments = [
 
 export type ConnectionEnvironment = (typeof connectionEnvironments)[number];
 
+export type ConnectionRuntimeStatus =
+  | "checking"
+  | "connected"
+  | "disconnected"
+  | "error";
+
 export type StoredConnectionMetadata = {
   createdAt: string;
   environment: ConnectionEnvironment;
@@ -30,12 +36,22 @@ export type CreateStoredConnectionInput = {
 
 export type UpdateStoredConnectionInput = {
   environment?: ConnectionEnvironment;
-  lastConnectedAt?: string;
-  lastErrorMessage?: string;
+  lastConnectedAt?: null | string;
+  lastErrorMessage?: null | string;
   name?: string;
   pluginId?: string;
   readOnly?: boolean;
   uri?: string;
+};
+
+export type StoredConnectionSummary = StoredConnectionMetadata & {
+  status: ConnectionRuntimeStatus;
+};
+
+export type StoredConnectionTestResult = {
+  latencyMs?: number;
+  message: string;
+  ok: boolean;
 };
 
 export type ConnectionStorageState = {

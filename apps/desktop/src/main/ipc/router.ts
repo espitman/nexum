@@ -1,10 +1,20 @@
 import { ipcMain, type IpcMain } from "electron";
 import { AppError, sanitizeError } from "@nexum/shared";
 import type { z } from "zod";
+import {
+  ConnectionLifecycleService,
+  ConnectionStorageService,
+  ElectronConnectionMetadataStore,
+  KeychainConnectionSecretStore,
+  type StoredConnectionSummary,
+  type StoredConnectionTestResult,
+} from "../connections";
 import { ipcChannels, type IpcResponse } from "../../ipc/contracts";
 import {
   auditListPayloadSchema,
+  connectionCreatePayloadSchema,
   connectionIdPayloadSchema,
+  connectionUpdatePayloadSchema,
   explorerChildrenPayloadSchema,
   mongodbFindDocumentsPayloadSchema,
   voidPayloadSchema,
@@ -12,7 +22,6 @@ import {
 import {
   findMockDocuments,
   mockAuditLogs,
-  mockConnections,
   mockExplorerChildren,
   mockExplorerRoots,
 } from "./mockData";
@@ -73,7 +82,33 @@ const registerValidatedHandler = <TSchema extends z.ZodType, TResult>(
   ipc.handle(channel, (_event, payload: unknown) => validatedHandler(payload));
 };
 
-export const registerIpcHandlers = (ipc: IpcMain = ipcMain) => {
+export type IpcServices = {
+  connections: ConnectionLifecycleService;
+};
+
+const createDefaultIpcServices = (): IpcServices => ({
+  connections: new ConnectionLifecycleService(
+    new ConnectionStorageService(
+      new ElectronConnectionMetadataStore(),
+      new KeychainConnectionSecretStore(),
+    ),
+  ),
+});
+
+const unwrapResult = <TValue>(
+  result: { ok: true; value: TValue } | { ok: false; error: AppError },
+): TValue => {
+  if (!result.ok) {
+    throw result.error;
+  }
+
+  return result.value;
+};
+
+export const registerIpcHandlers = (
+  ipc: IpcMain = ipcMain,
+  services: IpcServices = createDefaultIpcServices(),
+) => {
   registerValidatedHandler(
     ipcChannels.healthPing,
     voidPayloadSchema,
@@ -88,28 +123,76 @@ export const registerIpcHandlers = (ipc: IpcMain = ipcMain) => {
   registerValidatedHandler(
     ipcChannels.connectionList,
     voidPayloadSchema,
-    () => mockConnections,
+    (): StoredConnectionSummary[] => services.connections.list(),
     ipc,
   );
 
   registerValidatedHandler(
     ipcChannels.connectionGet,
     connectionIdPayloadSchema,
-    ({ connectionId }) => {
-      const connection = mockConnections.find(
-        (item) => item.id === connectionId,
-      );
+    ({ connectionId }): StoredConnectionSummary =>
+      unwrapResult(services.connections.get(connectionId)),
+    ipc,
+  );
 
-      if (!connection) {
-        throw new AppError(
-          "CONNECTION_NOT_FOUND",
-          `Connection "${connectionId}" was not found`,
-          { details: { connectionId } },
-        );
-      }
+  registerValidatedHandler(
+    ipcChannels.connectionCreate,
+    connectionCreatePayloadSchema,
+    async (payload): Promise<StoredConnectionSummary> =>
+      unwrapResult(await services.connections.create(payload)),
+    ipc,
+  );
 
-      return connection;
-    },
+  registerValidatedHandler(
+    ipcChannels.connectionUpdate,
+    connectionUpdatePayloadSchema,
+    async ({
+      connectionId,
+      environment,
+      name,
+      readOnly,
+      uri,
+    }): Promise<StoredConnectionSummary> =>
+      unwrapResult(
+        await services.connections.update(connectionId, {
+          ...(environment !== undefined ? { environment } : {}),
+          ...(name !== undefined ? { name } : {}),
+          ...(readOnly !== undefined ? { readOnly } : {}),
+          ...(uri !== undefined ? { uri } : {}),
+        }),
+      ),
+    ipc,
+  );
+
+  registerValidatedHandler(
+    ipcChannels.connectionDelete,
+    connectionIdPayloadSchema,
+    async ({ connectionId }): Promise<StoredConnectionSummary> =>
+      unwrapResult(await services.connections.delete(connectionId)),
+    ipc,
+  );
+
+  registerValidatedHandler(
+    ipcChannels.connectionTest,
+    connectionIdPayloadSchema,
+    async ({ connectionId }): Promise<StoredConnectionTestResult> =>
+      unwrapResult(await services.connections.test(connectionId)),
+    ipc,
+  );
+
+  registerValidatedHandler(
+    ipcChannels.connectionConnect,
+    connectionIdPayloadSchema,
+    async ({ connectionId }): Promise<StoredConnectionSummary> =>
+      unwrapResult(await services.connections.connect(connectionId)),
+    ipc,
+  );
+
+  registerValidatedHandler(
+    ipcChannels.connectionDisconnect,
+    connectionIdPayloadSchema,
+    async ({ connectionId }): Promise<StoredConnectionSummary> =>
+      unwrapResult(await services.connections.disconnect(connectionId)),
     ipc,
   );
 

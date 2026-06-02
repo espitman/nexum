@@ -2,8 +2,14 @@ import type { SerializedAppError } from "@nexum/shared";
 
 export const ipcChannels = {
   auditList: "nexum:audit:list",
+  connectionConnect: "nexum:connections:connect",
+  connectionCreate: "nexum:connections:create",
+  connectionDelete: "nexum:connections:delete",
+  connectionDisconnect: "nexum:connections:disconnect",
   connectionGet: "nexum:connections:get",
   connectionList: "nexum:connections:list",
+  connectionTest: "nexum:connections:test",
+  connectionUpdate: "nexum:connections:update",
   explorerListChildren: "nexum:explorer:list-children",
   explorerListRootNodes: "nexum:explorer:list-root-nodes",
   healthPing: "nexum:health:ping",
@@ -29,6 +35,12 @@ export type ConnectionSummary = {
   environment: "local" | "development" | "staging" | "production";
   readOnly: boolean;
   status: "connected" | "disconnected" | "checking" | "error";
+};
+
+export type ConnectionTestResult = {
+  latencyMs?: number;
+  message: string;
+  ok: boolean;
 };
 
 export type ExplorerNodeDto = {

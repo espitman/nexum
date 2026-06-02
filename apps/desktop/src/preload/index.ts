@@ -3,6 +3,7 @@ import {
   ipcChannels,
   type AuditLogDto,
   type ConnectionSummary,
+  type ConnectionTestResult,
   type DocumentQueryResult,
   type ExplorerNodeDto,
   type HealthCheckResult,
@@ -11,7 +12,9 @@ import {
 } from "../ipc/contracts";
 import type {
   AuditListPayload,
+  ConnectionCreatePayload,
   ConnectionIdPayload,
+  ConnectionUpdatePayload,
   ExplorerChildrenPayload,
   MongodbFindDocumentsPayload,
 } from "../ipc/validation";
@@ -58,8 +61,14 @@ export type NexumDesktopApi = {
     list(payload?: AuditListPayload): Promise<AuditLogDto[]>;
   };
   connections: {
+    connect(payload: ConnectionIdPayload): Promise<ConnectionSummary>;
+    create(payload: ConnectionCreatePayload): Promise<ConnectionSummary>;
+    delete(payload: ConnectionIdPayload): Promise<ConnectionSummary>;
+    disconnect(payload: ConnectionIdPayload): Promise<ConnectionSummary>;
     get(payload: ConnectionIdPayload): Promise<ConnectionSummary>;
     list(): Promise<ConnectionSummary[]>;
+    test(payload: ConnectionIdPayload): Promise<ConnectionTestResult>;
+    update(payload: ConnectionUpdatePayload): Promise<ConnectionSummary>;
   };
   explorer: {
     listChildren(payload: ExplorerChildrenPayload): Promise<ExplorerNodeDto[]>;
@@ -80,8 +89,14 @@ const api: NexumDesktopApi = {
     list: (payload) => invoke(ipcChannels.auditList, payload),
   },
   connections: {
+    connect: (payload) => invoke(ipcChannels.connectionConnect, payload),
+    create: (payload) => invoke(ipcChannels.connectionCreate, payload),
+    delete: (payload) => invoke(ipcChannels.connectionDelete, payload),
+    disconnect: (payload) => invoke(ipcChannels.connectionDisconnect, payload),
     get: (payload) => invoke(ipcChannels.connectionGet, payload),
     list: () => invoke(ipcChannels.connectionList),
+    test: (payload) => invoke(ipcChannels.connectionTest, payload),
+    update: (payload) => invoke(ipcChannels.connectionUpdate, payload),
   },
   explorer: {
     listChildren: (payload) =>

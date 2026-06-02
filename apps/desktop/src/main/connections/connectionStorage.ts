@@ -35,6 +35,17 @@ export class ConnectionStorageService {
       readOnly: input.readOnly,
       updatedAt: timestamp,
     };
+    const existing = this.#metadataStore.get(metadata.id);
+
+    if (existing.ok) {
+      return err(
+        new AppError(
+          "CONNECTION_ALREADY_EXISTS",
+          `Connection "${metadata.id}" already exists`,
+          { details: { connectionId: metadata.id } },
+        ),
+      );
+    }
 
     const secretResult = await this.#secretStore.setUri(metadata.id, input.uri);
 
@@ -135,11 +146,19 @@ const updateMetadata = (
   }
 
   if (patch.lastConnectedAt !== undefined) {
-    metadata.lastConnectedAt = patch.lastConnectedAt;
+    if (patch.lastConnectedAt === null) {
+      delete metadata.lastConnectedAt;
+    } else {
+      metadata.lastConnectedAt = patch.lastConnectedAt;
+    }
   }
 
   if (patch.lastErrorMessage !== undefined) {
-    metadata.lastErrorMessage = patch.lastErrorMessage;
+    if (patch.lastErrorMessage === null) {
+      delete metadata.lastErrorMessage;
+    } else {
+      metadata.lastErrorMessage = patch.lastErrorMessage;
+    }
   }
 
   if (patch.name !== undefined) {
