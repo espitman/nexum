@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   flexRender,
@@ -252,6 +259,22 @@ export const DocumentWorkspace = ({
     }));
   };
 
+  const applyCellFilter = ({ operation, path, value }: CellFilterRequest) => {
+    const parsedFilter = parseJsonObject(filterInput, "Filter");
+    const baseFilter = parsedFilter.ok ? parsedFilter.value : queryState.filter;
+    const filterCondition = buildCellFilterCondition(path, value, operation);
+    const nextFilter = mergeMongoFilters(baseFilter, filterCondition);
+
+    setQueryInputError(null);
+    setFilterInput(JSON.stringify(nextFilter));
+    setSkipInput("0");
+    setQueryState((currentState) => ({
+      ...currentState,
+      filter: nextFilter,
+      skip: 0,
+    }));
+  };
+
   useEffect(() => {
     onSchemaChange(isCollectionWorkspace ? schemaFields : []);
   }, [isCollectionWorkspace, onSchemaChange, schemaFields]);
@@ -360,6 +383,7 @@ export const DocumentWorkspace = ({
                 hasMore={documentsQuery.data?.hasMore ?? false}
                 isFetching={documentsQuery.isFetching}
                 isInitialLoading={documentsQuery.isLoading}
+                onCellFilter={applyCellFilter}
                 onRefresh={() => void documentsQuery.refetch()}
                 onTablePathChange={handleTablePathChange}
                 tablePath={tablePath}
@@ -1189,6 +1213,7 @@ type ResultsSectionProps = {
   hasMore: boolean;
   isFetching: boolean;
   isInitialLoading: boolean;
+  onCellFilter: (request: CellFilterRequest) => void;
   onRefresh: () => void;
   onTablePathChange: (path: string[]) => void;
   tablePath: string[];
@@ -1203,6 +1228,7 @@ const ResultsSection = ({
   hasMore,
   isFetching,
   isInitialLoading,
+  onCellFilter,
   onRefresh,
   onTablePathChange,
   tablePath,
@@ -1241,7 +1267,9 @@ const ResultsSection = ({
         <DocumentTable
           key={`${tablePath.join(".")}:${tableDocuments[0]?.id ?? "empty"}:${tableDocuments.length}`}
           documents={tableDocuments}
+          onCellFilter={onCellFilter}
           onObjectOpen={handleObjectOpen}
+          tablePath={tablePath}
         />
       )}
     </section>
@@ -1359,7 +1387,9 @@ const DocumentBreadcrumbs = ({
 
 type DocumentTableProps = {
   documents: ParsedDocument[];
+  onCellFilter: (request: CellFilterRequest) => void;
   onObjectOpen: (field: string) => void;
+  tablePath: string[];
 };
 
 type ObjectPreviewState = {
@@ -1373,10 +1403,46 @@ type SelectedDocumentCell = {
   rowId: string;
 };
 
-const DocumentTable = ({ documents, onObjectOpen }: DocumentTableProps) => {
+type CellContextMenuState = {
+  fieldPath: string;
+  left: number;
+  top: number;
+  value: unknown;
+};
+
+type CellFilterOperation =
+  | "contains"
+  | "endsWith"
+  | "eq"
+  | "exists"
+  | "gt"
+  | "gte"
+  | "lt"
+  | "lte"
+  | "ne"
+  | "notContains"
+  | "notEndsWith"
+  | "notExists"
+  | "notStartsWith"
+  | "startsWith";
+
+type CellFilterRequest = {
+  operation: CellFilterOperation;
+  path: string;
+  value: unknown;
+};
+
+const DocumentTable = ({
+  documents,
+  onCellFilter,
+  onObjectOpen,
+  tablePath,
+}: DocumentTableProps) => {
   const parentRef = useRef<HTMLDivElement | null>(null);
   const objectPreviewHideTimer = useRef<number | null>(null);
   const objectPreviewShowTimer = useRef<number | null>(null);
+  const [cellContextMenu, setCellContextMenu] =
+    useState<CellContextMenuState | null>(null);
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
   const [objectPreview, setObjectPreview] = useState<ObjectPreviewState | null>(
     null,
@@ -1404,6 +1470,32 @@ const DocumentTable = ({ documents, onObjectOpen }: DocumentTableProps) => {
       objectPreviewHideTimer.current = null;
     }, 180);
   }, [cancelObjectPreviewHide, cancelObjectPreviewShow]);
+  const closeCellContextMenu = useCallback(() => {
+    setCellContextMenu(null);
+  }, []);
+  const handleCellContextMenu = useCallback(
+    (
+      event: ReactMouseEvent<HTMLDivElement>,
+      cellId: string,
+      rowId: string,
+      fieldKey: string,
+      value: unknown,
+    ) => {
+      event.preventDefault();
+      event.stopPropagation();
+      cancelObjectPreviewShow();
+      cancelObjectPreviewHide();
+      setObjectPreview(null);
+      setSelectedCell({ cellId, rowId });
+      setCellContextMenu({
+        fieldPath: getCellFilterPath(tablePath, fieldKey),
+        left: getContextMenuLeft(event.clientX),
+        top: getContextMenuTop(event.clientY),
+        value,
+      });
+    },
+    [cancelObjectPreviewHide, cancelObjectPreviewShow, tablePath],
+  );
   const columns = useMemo<ColumnDef<ParsedDocument>[]>(
     () =>
       createDocumentColumns(
@@ -1469,6 +1561,33 @@ const DocumentTable = ({ documents, onObjectOpen }: DocumentTableProps) => {
     getScrollElement: () => parentRef.current,
     overscan: 8,
   });
+
+  useEffect(() => {
+    if (!cellContextMenu) {
+      return undefined;
+    }
+
+    const handleWindowClick = () => closeCellContextMenu();
+    const handleWindowKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeCellContextMenu();
+      }
+    };
+
+    window.addEventListener("click", handleWindowClick);
+    window.addEventListener("contextmenu", handleWindowClick);
+    window.addEventListener("keydown", handleWindowKeyDown);
+    window.addEventListener("resize", handleWindowClick);
+    window.addEventListener("scroll", handleWindowClick, true);
+
+    return () => {
+      window.removeEventListener("click", handleWindowClick);
+      window.removeEventListener("contextmenu", handleWindowClick);
+      window.removeEventListener("keydown", handleWindowKeyDown);
+      window.removeEventListener("resize", handleWindowClick);
+      window.removeEventListener("scroll", handleWindowClick, true);
+    };
+  }, [cellContextMenu, closeCellContextMenu]);
 
   if (documents.length === 0) {
     return (
@@ -1570,6 +1689,15 @@ const DocumentTable = ({ documents, onObjectOpen }: DocumentTableProps) => {
                         rowId: row.id,
                       });
                     }}
+                    onContextMenu={(event) =>
+                      handleCellContextMenu(
+                        event,
+                        cell.id,
+                        row.id,
+                        cell.column.id,
+                        cell.getValue(),
+                      )
+                    }
                   >
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </div>
@@ -1592,6 +1720,76 @@ const DocumentTable = ({ documents, onObjectOpen }: DocumentTableProps) => {
           <pre>{objectPreview.content}</pre>
         </div>
       ) : null}
+      {cellContextMenu ? (
+        <CellContextMenu
+          menu={cellContextMenu}
+          onApplyFilter={(request) => {
+            onCellFilter(request);
+            closeCellContextMenu();
+          }}
+          onClose={closeCellContextMenu}
+        />
+      ) : null}
+    </div>
+  );
+};
+
+type CellContextMenuProps = {
+  menu: CellContextMenuState;
+  onApplyFilter: (request: CellFilterRequest) => void;
+  onClose: () => void;
+};
+
+const CellContextMenu = ({
+  menu,
+  onApplyFilter,
+  onClose,
+}: CellContextMenuProps) => {
+  const items = getCellFilterMenuItems(menu.fieldPath, menu.value);
+
+  return (
+    <div
+      className="cell-context-menu"
+      onClick={(event) => event.stopPropagation()}
+      onContextMenu={(event) => event.preventDefault()}
+      style={{
+        left: `${menu.left}px`,
+        top: `${menu.top}px`,
+      }}
+    >
+      {items.length > 0 ? (
+        <div className="cell-context-submenu-item">
+          <button type="button">
+            <span>Filter by &quot;{menu.fieldPath}&quot;</span>
+            <span aria-hidden="true">›</span>
+          </button>
+          <div className="cell-context-submenu">
+            {items.map((item) => (
+              <button
+                key={item.operation}
+                type="button"
+                onClick={() =>
+                  onApplyFilter({
+                    operation: item.operation,
+                    path: menu.fieldPath,
+                    value: menu.value,
+                  })
+                }
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <button disabled type="button">
+          Filter unavailable for nested value
+        </button>
+      )}
+      <span className="cell-context-menu-separator" />
+      <button type="button" onClick={onClose}>
+        Close
+      </button>
     </div>
   );
 };
@@ -1904,6 +2102,229 @@ const getProjectedTableValue = (
     value,
   };
 };
+
+const contextMenuWidth = 300;
+const contextMenuEstimatedHeight = 366;
+
+const getContextMenuLeft = (clientX: number): number =>
+  Math.max(10, Math.min(clientX, window.innerWidth - contextMenuWidth - 10));
+
+const getContextMenuTop = (clientY: number): number =>
+  Math.max(
+    10,
+    Math.min(clientY, window.innerHeight - contextMenuEstimatedHeight - 10),
+  );
+
+const getCellFilterPath = (tablePath: string[], fieldKey: string): string => {
+  if (fieldKey === documentIdColumn) {
+    return "_id";
+  }
+
+  if (fieldKey === "document") {
+    return tablePath.join(".");
+  }
+
+  return [...tablePath, fieldKey].filter(Boolean).join(".");
+};
+
+const getCellFilterMenuItems = (
+  fieldPath: string,
+  value: unknown,
+): { label: string; operation: CellFilterOperation }[] => {
+  const filterValue = getCellFilterValue(value);
+
+  if (!fieldPath || !isFilterableScalarValue(filterValue)) {
+    return [];
+  }
+
+  const valueLabel = formatFilterValueLabel(filterValue);
+  const items: { label: string; operation: CellFilterOperation }[] = [
+    { label: `"${fieldPath}" = ${valueLabel}`, operation: "eq" },
+    { label: `"${fieldPath}" <> ${valueLabel}`, operation: "ne" },
+  ];
+
+  if (typeof filterValue === "string" && filterValue.length > 0) {
+    items.push(
+      { label: `"${fieldPath}" contains ${valueLabel}`, operation: "contains" },
+      {
+        label: `"${fieldPath}" not contains ${valueLabel}`,
+        operation: "notContains",
+      },
+      {
+        label: `"${fieldPath}" starts with ${valueLabel}`,
+        operation: "startsWith",
+      },
+      {
+        label: `"${fieldPath}" not starts with ${valueLabel}`,
+        operation: "notStartsWith",
+      },
+      {
+        label: `"${fieldPath}" ends with ${valueLabel}`,
+        operation: "endsWith",
+      },
+      {
+        label: `"${fieldPath}" not ends with ${valueLabel}`,
+        operation: "notEndsWith",
+      },
+    );
+  }
+
+  if (
+    typeof filterValue === "number" ||
+    typeof filterValue === "string" ||
+    filterValue instanceof Date
+  ) {
+    items.push(
+      { label: `"${fieldPath}" > ${valueLabel}`, operation: "gt" },
+      { label: `"${fieldPath}" >= ${valueLabel}`, operation: "gte" },
+      { label: `"${fieldPath}" < ${valueLabel}`, operation: "lt" },
+      { label: `"${fieldPath}" <= ${valueLabel}`, operation: "lte" },
+    );
+  }
+
+  items.push(
+    { label: `"${fieldPath}" exists`, operation: "exists" },
+    { label: `"${fieldPath}" not exists`, operation: "notExists" },
+  );
+
+  return items;
+};
+
+const buildCellFilterCondition = (
+  fieldPath: string,
+  value: unknown,
+  operation: CellFilterOperation,
+): Record<string, unknown> => {
+  const filterValue = getCellFilterValue(value);
+
+  switch (operation) {
+    case "eq":
+      return { [fieldPath]: filterValue };
+    case "ne":
+      return { [fieldPath]: { $ne: filterValue } };
+    case "contains":
+      return {
+        [fieldPath]: {
+          $options: "i",
+          $regex: escapeRegex(String(filterValue)),
+        },
+      };
+    case "notContains":
+      return {
+        [fieldPath]: {
+          $not: { $options: "i", $regex: escapeRegex(String(filterValue)) },
+        },
+      };
+    case "startsWith":
+      return {
+        [fieldPath]: {
+          $options: "i",
+          $regex: `^${escapeRegex(String(filterValue))}`,
+        },
+      };
+    case "notStartsWith":
+      return {
+        [fieldPath]: {
+          $not: {
+            $options: "i",
+            $regex: `^${escapeRegex(String(filterValue))}`,
+          },
+        },
+      };
+    case "endsWith":
+      return {
+        [fieldPath]: {
+          $options: "i",
+          $regex: `${escapeRegex(String(filterValue))}$`,
+        },
+      };
+    case "notEndsWith":
+      return {
+        [fieldPath]: {
+          $not: {
+            $options: "i",
+            $regex: `${escapeRegex(String(filterValue))}$`,
+          },
+        },
+      };
+    case "gt":
+      return { [fieldPath]: { $gt: filterValue } };
+    case "gte":
+      return { [fieldPath]: { $gte: filterValue } };
+    case "lt":
+      return { [fieldPath]: { $lt: filterValue } };
+    case "lte":
+      return { [fieldPath]: { $lte: filterValue } };
+    case "exists":
+      return { [fieldPath]: { $exists: true } };
+    case "notExists":
+      return { [fieldPath]: { $exists: false } };
+  }
+};
+
+const mergeMongoFilters = (
+  baseFilter: Record<string, unknown>,
+  filterCondition: Record<string, unknown>,
+): Record<string, unknown> => {
+  if (Object.keys(baseFilter).length === 0) {
+    return filterCondition;
+  }
+
+  if (Array.isArray(baseFilter.$and)) {
+    return {
+      ...baseFilter,
+      $and: [...baseFilter.$and, filterCondition],
+    };
+  }
+
+  return { $and: [baseFilter, filterCondition] };
+};
+
+const getCellFilterValue = (value: unknown): unknown => {
+  if (!isRecord(value)) {
+    return unwrapEjsonValue(value);
+  }
+
+  if ("$numberInt" in value) {
+    return Number(value.$numberInt);
+  }
+
+  if ("$numberDouble" in value) {
+    return Number(value.$numberDouble);
+  }
+
+  if ("$numberLong" in value) {
+    return Number(value.$numberLong);
+  }
+
+  if ("$numberDecimal" in value) {
+    return Number(value.$numberDecimal);
+  }
+
+  return unwrapEjsonValue(value);
+};
+
+const isFilterableScalarValue = (value: unknown): boolean =>
+  value === null ||
+  typeof value === "string" ||
+  typeof value === "number" ||
+  typeof value === "boolean" ||
+  value instanceof Date;
+
+const formatFilterValueLabel = (value: unknown): string => {
+  if (typeof value === "string") {
+    return `"${value}"`;
+  }
+
+  if (value === null) {
+    return "null";
+  }
+
+  return String(value);
+};
+
+const escapeRegex = (value: string): string =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const getObjectPreviewLeft = (rect: DOMRect): number => {
   return Math.max(

@@ -2081,6 +2081,84 @@ input:disabled {
   white-space: pre;
 }
 
+.cell-context-menu {
+  background: #121416;
+  border: 1px solid #3a3f46;
+  border-radius: 7px;
+  box-shadow: 0 14px 34px rgb(15 23 42 / 24%);
+  display: grid;
+  min-width: 250px;
+  overflow: visible;
+  padding: 4px;
+  position: fixed;
+  z-index: 220;
+}
+
+.cell-context-menu button {
+  border-radius: 4px;
+  color: #e5e7eb;
+  display: flex;
+  font-size: 12px;
+  font-weight: 700;
+  height: 27px;
+  justify-content: space-between;
+  padding: 0 8px;
+  text-align: left;
+  white-space: nowrap;
+  width: 100%;
+}
+
+.cell-context-menu button > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cell-context-menu button > span + span {
+  flex: 0 0 auto;
+  font-size: 17px;
+  line-height: 1;
+  margin-left: 14px;
+}
+
+.cell-context-menu button:hover:not(:disabled) {
+  background: #0b6fd3;
+  color: #ffffff;
+}
+
+.cell-context-menu button:disabled {
+  color: #858b96;
+  cursor: default;
+}
+
+.cell-context-menu-separator {
+  background: #31363d;
+  height: 1px;
+  margin: 4px 3px;
+}
+
+.cell-context-submenu-item {
+  position: relative;
+}
+
+.cell-context-submenu {
+  background: #121416;
+  border: 1px solid #3a3f46;
+  border-radius: 7px;
+  box-shadow: 0 14px 34px rgb(15 23 42 / 24%);
+  display: none;
+  left: calc(100% + 5px);
+  min-width: 286px;
+  padding: 4px;
+  position: absolute;
+  top: -4px;
+  z-index: 221;
+}
+
+.cell-context-submenu-item:hover .cell-context-submenu,
+.cell-context-submenu-item:focus-within .cell-context-submenu {
+  display: grid;
+}
+
 .json-results {
   border-top: 1px solid #e1e6ee;
   min-height: 0;
