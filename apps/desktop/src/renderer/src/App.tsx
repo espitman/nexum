@@ -37,7 +37,7 @@ export const App = () => {
     useState<NavItemLabel>("Connections");
   const [selectedCollectionName, setSelectedCollectionName] = useState<
     string | null
-  >("users");
+  >(null);
   const [activeWorkspaceTab, setActiveWorkspaceTab] =
     useState<WorkspaceTabLabel>("Documents");
   const [activeInspectorTab, setActiveInspectorTab] =
@@ -120,10 +120,15 @@ export const App = () => {
   const activeReadOnly = selectedConnection
     ? selectedConnection.readOnly
     : coreUiState.isReadOnly;
+  const isDatabaseConnected = selectedConnection?.status === "connected";
+  const visibleSelectedCollectionName = isDatabaseConnected
+    ? selectedCollectionName
+    : null;
   const shellClassName = [
     "app-shell",
     isConnectionRailOpen ? "" : "is-connections-closed",
     isInspectorOpen ? "" : "is-inspector-closed",
+    isDatabaseConnected ? "" : "is-database-hidden",
   ]
     .filter(Boolean)
     .join(" ");
@@ -175,11 +180,13 @@ export const App = () => {
         onToggleInspector={() => setIsInspectorOpen((isOpen) => !isOpen)}
       />
 
-      <DatabasePanel
-        selectedCollectionName={selectedCollectionName}
-        onCollectionSelect={setSelectedCollectionName}
-        onSectionChange={setActiveSection}
-      />
+      {isDatabaseConnected ? (
+        <DatabasePanel
+          selectedCollectionName={visibleSelectedCollectionName}
+          onCollectionSelect={setSelectedCollectionName}
+          onSectionChange={setActiveSection}
+        />
+      ) : null}
 
       <DocumentWorkspace
         activeSection={activeSection}
@@ -189,7 +196,7 @@ export const App = () => {
         health={health}
         healthLabel={healthLabel}
         selectedConnectionId={selectedConnectionId}
-        selectedCollectionName={selectedCollectionName}
+        selectedCollectionName={visibleSelectedCollectionName}
         onConnectionError={(title, message) => {
           setToast({
             id: `${title}-${Date.now()}`,
@@ -203,7 +210,11 @@ export const App = () => {
         }
         onSelectedConnectionChange={setSelectedConnectionId}
         onCollectionClose={() => setSelectedCollectionName(null)}
-        onCollectionOpen={() => setSelectedCollectionName("users")}
+        onCollectionOpen={() => {
+          if (isDatabaseConnected) {
+            setSelectedCollectionName("users");
+          }
+        }}
         onSectionChange={setActiveSection}
         onWorkspaceTabChange={setActiveWorkspaceTab}
       />

@@ -63,6 +63,22 @@ button {
   grid-template-columns: 0 236px minmax(520px, 1fr) 0;
 }
 
+.app-shell.is-database-hidden {
+  grid-template-columns: 150px 0 minmax(756px, 1fr) minmax(320px, 420px);
+}
+
+.app-shell.is-connections-closed.is-database-hidden {
+  grid-template-columns: 0 0 minmax(756px, 1fr) minmax(320px, 420px);
+}
+
+.app-shell.is-inspector-closed.is-database-hidden {
+  grid-template-columns: 150px 0 minmax(756px, 1fr) 0;
+}
+
+.app-shell.is-connections-closed.is-inspector-closed.is-database-hidden {
+  grid-template-columns: 0 0 minmax(756px, 1fr) 0;
+}
+
 .connection-rail,
 .app-topbar,
 .database-panel,

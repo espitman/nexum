@@ -220,6 +220,14 @@ export const ConnectionManager = ({
       return;
     }
 
+    const isConfirmed = window.confirm(
+      `Delete "${selectedConnection.name}"? This removes the saved profile and its secret from this device.`,
+    );
+
+    if (!isConfirmed) {
+      return;
+    }
+
     await runAction("Delete failed", async () => {
       await window.nexum.connections.delete({
         connectionId: selectedConnection.id,
