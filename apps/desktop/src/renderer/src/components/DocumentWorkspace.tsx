@@ -834,7 +834,7 @@ const createDocumentColumns = (
 ): ColumnDef<ParsedDocument>[] => {
   const keys = orderDocumentColumnKeys([
     ...new Set(documents.flatMap((document) => Object.keys(document.value))),
-  ]).slice(0, 24);
+  ]);
   const visibleKeys = keys.length > 0 ? keys : ["document"];
 
   return [
