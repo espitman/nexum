@@ -206,29 +206,7 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
   - [x] Show execution time
   - [x] Preserve BSON types through EJSON
 
-## Phase 8 — Safe Document Editor
-
-- [ ] Implement update API
-  - [ ] Parse original document with EJSON
-  - [ ] Parse edited document with EJSON
-  - [ ] Block `_id` changes
-  - [ ] Save with `replaceOne`
-  - [ ] Return matched and modified counts
-- [ ] Add safety protections
-  - [ ] Block writes on read-only connections
-  - [ ] Require confirmation for production writes
-  - [ ] Audit write attempts
-- [ ] Build editor UI
-  - [ ] Open single-document editor
-  - [ ] Edit EJSON in Monaco
-  - [ ] Show validation errors
-  - [ ] Add save confirmation
-- [ ] Verify editor
-  - [ ] Save one document safely
-  - [ ] Confirm `_id` changes are rejected
-  - [ ] Confirm read-only mode blocks writes
-
-## Phase 9 — Visual Query Builder
+## Phase 8 — Visual Query Builder
 
 - [ ] Implement query builder model
   - [ ] Add condition model
@@ -263,6 +241,28 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
   - [ ] Generate valid MongoDB filters
   - [ ] Run generated query
   - [ ] Show result preview
+
+## Phase 9 — Safe Document Editor
+
+- [ ] Implement update API
+  - [ ] Parse original document with EJSON
+  - [ ] Parse edited document with EJSON
+  - [ ] Block `_id` changes
+  - [ ] Save with `replaceOne`
+  - [ ] Return matched and modified counts
+- [ ] Add safety protections
+  - [ ] Block writes on read-only connections
+  - [ ] Require confirmation for production writes
+  - [ ] Audit write attempts
+- [ ] Build editor UI
+  - [ ] Open single-document editor
+  - [ ] Edit EJSON in Monaco
+  - [ ] Show validation errors
+  - [ ] Add save confirmation
+- [ ] Verify editor
+  - [ ] Save one document safely
+  - [ ] Confirm `_id` changes are rejected
+  - [ ] Confirm read-only mode blocks writes
 
 ## Phase 10 — Aggregation Builder
 
