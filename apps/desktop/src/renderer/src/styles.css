@@ -2140,13 +2140,22 @@ input:disabled {
   position: relative;
 }
 
+.cell-context-submenu-item::after {
+  content: "";
+  height: 100%;
+  left: 100%;
+  position: absolute;
+  top: 0;
+  width: 8px;
+}
+
 .cell-context-submenu {
   background: #121416;
   border: 1px solid #3a3f46;
   border-radius: 7px;
   box-shadow: 0 14px 34px rgb(15 23 42 / 24%);
   display: none;
-  left: calc(100% + 5px);
+  left: calc(100% - 1px);
   min-width: 286px;
   padding: 4px;
   position: absolute;
