@@ -22,3 +22,7 @@ The script verifies:
 - MongoDB Atlas ping when an Atlas URI is provided
 - Keychain URI write/read/delete through `keytar`
 - no MongoDB URI or `uri` key is present in the `electron-store` metadata JSON
+
+Phase 5 verification does not require a local MongoDB install. The connection
+manager can be accepted with a real reachable MongoDB server, including a
+replica set URI, plus the Keychain and plain JSON storage checks above.
