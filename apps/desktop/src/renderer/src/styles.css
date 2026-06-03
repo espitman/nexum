@@ -810,10 +810,8 @@ button {
   border-bottom: 1px solid #dfe5ed;
   display: grid;
   gap: 20px;
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: visible;
   padding: 22px 18px 18px;
-  scrollbar-gutter: stable;
 }
 
 .query-line {
@@ -822,7 +820,7 @@ button {
   border-radius: 6px;
   display: flex;
   gap: 12px;
-  min-width: 980px;
+  min-width: 0;
   min-height: 50px;
   padding: 0 12px 0 16px;
 }
@@ -853,6 +851,76 @@ button {
   outline: 0;
 }
 
+.query-autocomplete {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  position: relative;
+}
+
+.query-autocomplete input {
+  width: 100%;
+}
+
+.query-autocomplete-menu {
+  background: #263142;
+  border: 1px solid #111827;
+  border-radius: 4px;
+  box-shadow: 0 14px 30px rgb(17 24 39 / 18%);
+  display: grid;
+  left: 0;
+  max-height: 280px;
+  min-width: min(520px, 100%);
+  overflow: auto;
+  padding: 3px;
+  position: absolute;
+  top: calc(100% + 7px);
+  z-index: 130;
+}
+
+.query-autocomplete-menu button {
+  border-radius: 3px;
+  color: #e5e7eb;
+  display: grid;
+  font-weight: 600;
+  gap: 8px;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  height: 30px;
+  justify-content: stretch;
+  padding: 0 7px;
+  text-align: left;
+}
+
+.query-autocomplete-menu button.is-active,
+.query-autocomplete-menu button:hover {
+  background: #4b5563;
+}
+
+.query-autocomplete-menu button span:nth-child(2) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.query-autocomplete-menu small {
+  color: #9ca3af;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.field-kind-icon {
+  align-items: center;
+  border: 1px solid #9ca3af;
+  border-radius: 2px;
+  color: #e5e7eb;
+  display: inline-flex;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 13px;
+  height: 20px;
+  justify-content: center;
+  width: 18px;
+}
+
 .raw-toggle {
   border-right: 1px solid #e0e6ee;
   color: #455061;
@@ -865,14 +933,16 @@ button {
   align-items: center;
   display: flex;
   gap: 16px;
-  min-width: 1040px;
+  min-width: 0;
 }
 
 .query-controls label {
   align-items: center;
   color: #3f4856;
   display: flex;
+  flex: 0 0 auto;
   gap: 9px;
+  min-width: 0;
 }
 
 .query-controls input,
@@ -888,15 +958,41 @@ button {
 
 .query-controls .sort-control input,
 .query-controls .projection-control input {
-  width: 180px;
+  width: 160px;
 }
 
 .query-controls .projection-control {
-  flex: 1 1 320px;
-  min-width: 260px;
+  flex: 1 1 280px;
+  min-width: 220px;
 }
 
 .query-controls .projection-control input {
+  flex: 1;
+  width: auto;
+}
+
+.query-controls .projection-control .query-autocomplete {
+  flex: 1;
+}
+
+.query-controls .run-button {
+  flex: 0 0 auto;
+}
+
+.document-workspace.is-query-builder .query-controls {
+  flex-wrap: wrap;
+}
+
+.document-workspace.is-query-builder .query-controls .projection-control {
+  flex-basis: 100%;
+  min-width: 0;
+}
+
+.document-workspace.is-query-builder .query-controls .sort-control {
+  flex: 1 1 180px;
+}
+
+.document-workspace.is-query-builder .query-controls .sort-control input {
   flex: 1;
   width: auto;
 }
@@ -2183,6 +2279,8 @@ input:disabled {
   color: #3d4654;
   font-size: 13px;
   justify-content: space-between;
+  min-width: 0;
+  overflow: hidden;
   padding: 0 18px;
 }
 
@@ -2191,18 +2289,49 @@ input:disabled {
   align-items: center;
   display: flex;
   gap: 12px;
+  min-width: 0;
 }
 
 .range-status {
   color: #293241;
+  flex: 0 1 auto;
   font-weight: 600;
+  justify-content: flex-end;
+  overflow: hidden;
 }
 
 .status-metric {
   align-items: center;
   display: inline-flex;
+  flex: 0 0 auto;
   gap: 6px;
   white-space: nowrap;
+}
+
+.document-workspace.is-query-builder .workspace-footer {
+  gap: 8px;
+  padding: 0 12px;
+}
+
+.document-workspace.is-query-builder .pager-group,
+.document-workspace.is-query-builder .range-status {
+  gap: 8px;
+}
+
+.document-workspace.is-query-builder .page-icon {
+  width: 24px;
+}
+
+.document-workspace.is-query-builder .workspace-footer input {
+  width: 50px;
+}
+
+.document-workspace.is-query-builder .page-size-select {
+  width: 118px;
+}
+
+.document-workspace.is-query-builder .status-metric {
+  font-size: 12px;
 }
 
 .status-label {

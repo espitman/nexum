@@ -346,6 +346,7 @@ export const DocumentWorkspace = ({
                 onSortInputChange={setSortInput}
                 projectionInput={projectionInput}
                 queryInputError={queryInputError}
+                schemaFields={schemaFields}
                 skipInput={skipInput}
                 sortInput={sortInput}
               />
@@ -515,6 +516,7 @@ type QuerySectionProps = {
   onSortInputChange: (value: string) => void;
   projectionInput: string;
   queryInputError: string | null;
+  schemaFields: SchemaFieldSummary[];
   skipInput: string;
   sortInput: string;
 };
@@ -531,71 +533,232 @@ const QuerySection = ({
   onSortInputChange,
   projectionInput,
   queryInputError,
+  schemaFields,
   skipInput,
   sortInput,
-}: QuerySectionProps) => (
-  <section className="query-section">
-    <label className="query-line">
-      <span className="query-label">Filter</span>
-      <input
-        aria-label="MongoDB filter"
-        value={filterInput}
-        onChange={(event) => onFilterInputChange(event.target.value)}
-      />
-      <button className="plain-icon" type="button" aria-label="Copy query">
-        ⧉
-      </button>
-    </label>
+}: QuerySectionProps) => {
+  const fieldSuggestions = schemaFields;
 
-    <div className="query-controls">
-      <label className="projection-control">
-        <span>Projection</span>
-        <input
-          aria-label="Projection"
-          placeholder='{ "email": 1 }'
-          value={projectionInput}
-          onChange={(event) => onProjectionInputChange(event.target.value)}
+  return (
+    <section className="query-section">
+      <label className="query-line">
+        <span className="query-label">Filter</span>
+        <QueryFieldAutocompleteInput
+          aria-label="MongoDB filter"
+          fields={fieldSuggestions}
+          mode="filter"
+          value={filterInput}
+          onChange={onFilterInputChange}
         />
+        <button className="plain-icon" type="button" aria-label="Copy query">
+          ⧉
+        </button>
       </label>
-      <label>
-        <span>Limit</span>
-        <input
-          aria-label="Limit"
-          inputMode="numeric"
-          value={limitInput}
-          onChange={(event) => onLimitInputChange(event.target.value)}
-        />
-      </label>
-      <label>
-        <span>Skip</span>
-        <input
-          aria-label="Skip"
-          inputMode="numeric"
-          value={skipInput}
-          onChange={(event) => onSkipInputChange(event.target.value)}
-        />
-      </label>
-      <label className="sort-control">
-        <span>Sort</span>
-        <input
-          aria-label="Sort"
-          value={sortInput}
-          onChange={(event) => onSortInputChange(event.target.value)}
-        />
-      </label>
-      <button
-        className="run-button compact"
-        type="button"
-        disabled={isFetching}
-        onClick={onRunQuery}
-      >
-        <span className="play-icon" />
-        Run
-      </button>
-    </div>
-    {queryInputError ? <p className="query-error">{queryInputError}</p> : null}
-  </section>
-);
+
+      <div className="query-controls">
+        <label className="projection-control">
+          <span>Projection</span>
+          <QueryFieldAutocompleteInput
+            aria-label="Projection"
+            fields={fieldSuggestions}
+            mode="projection"
+            placeholder='{ "email": 1 }'
+            value={projectionInput}
+            onChange={onProjectionInputChange}
+          />
+        </label>
+        <label>
+          <span>Limit</span>
+          <input
+            aria-label="Limit"
+            inputMode="numeric"
+            value={limitInput}
+            onChange={(event) => onLimitInputChange(event.target.value)}
+          />
+        </label>
+        <label>
+          <span>Skip</span>
+          <input
+            aria-label="Skip"
+            inputMode="numeric"
+            value={skipInput}
+            onChange={(event) => onSkipInputChange(event.target.value)}
+          />
+        </label>
+        <label className="sort-control">
+          <span>Sort</span>
+          <input
+            aria-label="Sort"
+            value={sortInput}
+            onChange={(event) => onSortInputChange(event.target.value)}
+          />
+        </label>
+        <button
+          className="run-button compact"
+          type="button"
+          disabled={isFetching}
+          onClick={onRunQuery}
+        >
+          <span className="play-icon" />
+          Run
+        </button>
+      </div>
+      {queryInputError ? (
+        <p className="query-error">{queryInputError}</p>
+      ) : null}
+    </section>
+  );
+};
+
+type QueryFieldAutocompleteInputProps = {
+  "aria-label": string;
+  fields: SchemaFieldSummary[];
+  mode: "filter" | "projection";
+  placeholder?: string;
+  value: string;
+  onChange: (value: string) => void;
+};
+
+const QueryFieldAutocompleteInput = ({
+  "aria-label": ariaLabel,
+  fields,
+  mode,
+  placeholder,
+  value,
+  onChange,
+}: QueryFieldAutocompleteInputProps) => {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [caretIndex, setCaretIndex] = useState(value.length);
+  const [isFocused, setIsFocused] = useState(false);
+  const context = useMemo(
+    () => getQueryFieldSuggestionContext(value, caretIndex),
+    [caretIndex, value],
+  );
+  const suggestions = useMemo(
+    () => (context ? getQueryFieldSuggestions(fields, context.fragment) : []),
+    [context, fields],
+  );
+  const shouldShowSuggestions = isFocused && suggestions.length > 0;
+
+  const syncCaret = () => {
+    const input = inputRef.current;
+
+    if (!input) {
+      return;
+    }
+
+    setCaretIndex(input.selectionStart ?? value.length);
+  };
+
+  const applySuggestion = (suggestion: QueryFieldSuggestion) => {
+    if (!context) {
+      return;
+    }
+
+    const nextValue = insertQueryFieldSuggestion({
+      context,
+      mode,
+      path: suggestion.path,
+      value,
+    });
+
+    onChange(nextValue);
+    window.requestAnimationFrame(() => {
+      const input = inputRef.current;
+
+      if (!input) {
+        return;
+      }
+
+      const nextCaret = Math.min(
+        nextValue.length,
+        context.start +
+          (context.hasOpeningQuote
+            ? suggestion.path.length
+            : `"${suggestion.path}"`.length),
+      );
+      input.focus();
+      input.setSelectionRange(nextCaret, nextCaret);
+      setCaretIndex(nextCaret);
+    });
+  };
+
+  return (
+    <span className="query-autocomplete">
+      <input
+        aria-label={ariaLabel}
+        autoComplete="off"
+        placeholder={placeholder}
+        ref={inputRef}
+        value={value}
+        onBlur={() => window.setTimeout(() => setIsFocused(false), 140)}
+        onChange={(event) => {
+          onChange(event.target.value);
+          setActiveIndex(0);
+          setCaretIndex(
+            event.target.selectionStart ?? event.target.value.length,
+          );
+        }}
+        onClick={syncCaret}
+        onFocus={() => {
+          setIsFocused(true);
+          syncCaret();
+        }}
+        onKeyDown={(event) => {
+          if (!shouldShowSuggestions) {
+            return;
+          }
+
+          if (event.key === "ArrowDown") {
+            event.preventDefault();
+            setActiveIndex((currentIndex) =>
+              Math.min(currentIndex + 1, suggestions.length - 1),
+            );
+            return;
+          }
+
+          if (event.key === "ArrowUp") {
+            event.preventDefault();
+            setActiveIndex((currentIndex) => Math.max(currentIndex - 1, 0));
+            return;
+          }
+
+          if (event.key === "Enter" || event.key === "Tab") {
+            event.preventDefault();
+            const activeSuggestion =
+              suggestions[Math.min(activeIndex, suggestions.length - 1)];
+
+            if (activeSuggestion) {
+              applySuggestion(activeSuggestion);
+            }
+          }
+        }}
+        onSelect={syncCaret}
+      />
+      {shouldShowSuggestions ? (
+        <div className="query-autocomplete-menu" role="listbox">
+          {suggestions.map((suggestion, index) => (
+            <button
+              className={index === activeIndex ? "is-active" : ""}
+              key={suggestion.path}
+              onMouseDown={(event) => {
+                event.preventDefault();
+                applySuggestion(suggestion);
+              }}
+              role="option"
+              type="button"
+            >
+              <span className="field-kind-icon">f</span>
+              <span>{suggestion.label}</span>
+              <small>{suggestion.type}</small>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </span>
+  );
+};
 
 type MetadataWorkspaceProps = {
   activeWorkspaceTab: WorkspaceTabLabel;
@@ -1840,6 +2003,113 @@ const parseDocumentQueryInputs = ({
   };
 };
 
+type QueryFieldSuggestionContext = {
+  fragment: string;
+  hasOpeningQuote: boolean;
+  start: number;
+};
+
+type QueryFieldSuggestion = {
+  label: string;
+  path: string;
+  type: string;
+};
+
+const getQueryFieldSuggestionContext = (
+  value: string,
+  caretIndex: number,
+): QueryFieldSuggestionContext | null => {
+  const prefix = value.slice(0, caretIndex);
+  const match = /(?:^|[,{]\s*)"?([\w.$-]+\.?)$/.exec(prefix);
+
+  if (!match) {
+    return null;
+  }
+
+  const fragment = match[1] ?? "";
+
+  return {
+    fragment,
+    hasOpeningQuote: prefix[prefix.length - fragment.length - 1] === '"',
+    start: prefix.length - fragment.length,
+  };
+};
+
+const getQueryFieldSuggestions = (
+  fields: SchemaFieldSummary[],
+  fragment: string,
+): QueryFieldSuggestion[] => {
+  const normalizedFragment = fragment.trim();
+  const fragmentParts = normalizedFragment.split(".");
+  const parentParts =
+    normalizedFragment.endsWith(".") || fragmentParts.length > 1
+      ? fragmentParts.slice(0, -1)
+      : [];
+  const typedSegment = normalizedFragment.endsWith(".")
+    ? ""
+    : (fragmentParts.at(-1) ?? "");
+  const parentPath = parentParts.join(".");
+  const suggestions = new Map<string, QueryFieldSuggestion>();
+
+  for (const field of fields) {
+    const parts = field.name.split(".");
+
+    if (parentParts.some((part, index) => parts[index] !== part)) {
+      continue;
+    }
+
+    const child = parts[parentParts.length];
+
+    if (!child || !child.toLowerCase().startsWith(typedSegment.toLowerCase())) {
+      continue;
+    }
+
+    const path = parentPath ? `${parentPath}.${child}` : child;
+    const exactField = fields.find((item) => item.name === path);
+
+    suggestions.set(path, {
+      label: child,
+      path,
+      type: exactField?.type ?? "Object",
+    });
+  }
+
+  return [...suggestions.values()].sort((left, right) =>
+    left.label.localeCompare(right.label),
+  );
+};
+
+const insertQueryFieldSuggestion = ({
+  context,
+  mode,
+  path,
+  value,
+}: {
+  context: QueryFieldSuggestionContext;
+  mode: "filter" | "projection";
+  path: string;
+  value: string;
+}): string => {
+  const trimmedValue = value.trim();
+
+  if (!trimmedValue || trimmedValue === "{}") {
+    return `{ "${path}": ${mode === "filter" ? '""' : "1"} }`;
+  }
+
+  const before = value.slice(0, context.start);
+  const after = value.slice(context.start + context.fragment.length);
+  const nextAfter = after.trimStart();
+  const formattedKey = context.hasOpeningQuote ? path : `"${path}"`;
+  const valueSuffix =
+    nextAfter.startsWith(":") || nextAfter.startsWith('"')
+      ? ""
+      : mode === "filter"
+        ? ': ""'
+        : ": 1";
+
+  return `${before}${formattedKey}${valueSuffix}${after}`;
+};
+
 const parseJsonObject = (
   value: string,
   label: string,
@@ -1847,7 +2117,7 @@ const parseJsonObject = (
   | { ok: true; value: Record<string, unknown> }
   | { message: string; ok: false } => {
   try {
-    const parsed = JSON.parse(value.trim() || "{}") as unknown;
+    const parsed = JSON.parse(normalizeMongoJsonInput(value)) as unknown;
 
     if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") {
       return { message: `${label} must be a JSON object.`, ok: false };
@@ -1857,6 +2127,18 @@ const parseJsonObject = (
   } catch {
     return { message: `${label} must be valid JSON.`, ok: false };
   }
+};
+
+const normalizeMongoJsonInput = (value: string): string => {
+  const trimmedValue = value.trim();
+
+  if (!trimmedValue) {
+    return "{}";
+  }
+
+  return trimmedValue
+    .replace(/([{,]\s*)([A-Za-z_$][\w$.-]*)(\s*:)/g, '$1"$2"$3')
+    .replace(/,\s*([}\]])/g, "$1");
 };
 
 const parseSortInput = (
