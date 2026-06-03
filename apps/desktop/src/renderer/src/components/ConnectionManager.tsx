@@ -49,6 +49,8 @@ export const ConnectionManager = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isTestingDraft, setIsTestingDraft] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [deleteCandidate, setDeleteCandidate] =
+    useState<ConnectionProfile | null>(null);
   const selectedConnection = useMemo(
     () =>
       connections.find(
@@ -64,16 +66,16 @@ export const ConnectionManager = ({
   const canTestDraft = normalizedName.length > 0 && normalizedUri.length > 0;
 
   useEffect(() => {
-    if (connections.length === 0) {
+    if (connections.length === 0 && selectedConnectionId !== null) {
       onSelectedConnectionChange(null);
       return;
     }
 
     if (
-      selectedConnectionId === null ||
+      selectedConnectionId !== null &&
       !connections.some((connection) => connection.id === selectedConnectionId)
     ) {
-      onSelectedConnectionChange(connections[0]?.id ?? null);
+      onSelectedConnectionChange(null);
     }
   }, [connections, onSelectedConnectionChange, selectedConnectionId]);
 
@@ -81,6 +83,16 @@ export const ConnectionManager = ({
     setFormMode("create");
     setForm(defaultFormState);
     setNotice(null);
+  };
+
+  const startNewConnection = () => {
+    onSelectedConnectionChange(null);
+    resetForm();
+  };
+
+  const selectConnection = (connectionId: string) => {
+    onSelectedConnectionChange(connectionId);
+    resetForm();
   };
 
   const editSelectedConnection = () => {
@@ -144,6 +156,7 @@ export const ConnectionManager = ({
           ...(normalizedUri ? { uri: normalizedUri } : {}),
         };
         await window.nexum.connections.update(patch);
+        resetForm();
         return "Connection updated";
       },
     );
@@ -216,22 +229,15 @@ export const ConnectionManager = ({
   };
 
   const deleteSelectedConnection = async () => {
-    if (!selectedConnection) {
-      return;
-    }
-
-    const isConfirmed = window.confirm(
-      `Delete "${selectedConnection.name}"? This removes the saved profile and its secret from this device.`,
-    );
-
-    if (!isConfirmed) {
+    if (!deleteCandidate) {
       return;
     }
 
     await runAction("Delete failed", async () => {
       await window.nexum.connections.delete({
-        connectionId: selectedConnection.id,
+        connectionId: deleteCandidate.id,
       });
+      setDeleteCandidate(null);
       onSelectedConnectionChange(null);
       resetForm();
       return "Connection deleted";
@@ -246,7 +252,7 @@ export const ConnectionManager = ({
           <button
             className="run-button compact"
             type="button"
-            onClick={resetForm}
+            onClick={startNewConnection}
           >
             New
           </button>
@@ -264,7 +270,7 @@ export const ConnectionManager = ({
                   connection.id === selectedConnectionId ? "is-active" : ""
                 }`}
                 key={connection.id}
-                onClick={() => onSelectedConnectionChange(connection.id)}
+                onClick={() => selectConnection(connection.id)}
                 type="button"
               >
                 <span
@@ -283,23 +289,13 @@ export const ConnectionManager = ({
         </div>
       </div>
 
-      <form
-        className="connection-form"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void submitForm();
-        }}
-      >
-        <header className="connection-form-header">
-          <div>
-            <span>
-              {formMode === "create" ? "New profile" : "Edit profile"}
-            </span>
-            <strong>
-              {formMode === "create" ? "MongoDB" : selectedConnection?.name}
-            </strong>
-          </div>
-          {selectedConnection ? (
+      {selectedConnection && formMode !== "edit" ? (
+        <article className="connection-form connection-detail-panel">
+          <header className="connection-form-header">
+            <div>
+              <span>Selected profile</span>
+              <strong>{selectedConnection.name}</strong>
+            </div>
             <div className="connection-form-actions">
               <button
                 className="plain-action"
@@ -311,102 +307,47 @@ export const ConnectionManager = ({
               <button
                 className="plain-action danger"
                 disabled={isSubmitting}
-                onClick={() => void deleteSelectedConnection()}
+                onClick={() => setDeleteCandidate(selectedConnection)}
                 type="button"
               >
                 Delete
               </button>
             </div>
-          ) : null}
-        </header>
+          </header>
 
-        <label className="field-row">
-          <span>Name</span>
-          <input
-            autoComplete="off"
-            onChange={(event) =>
-              setForm((current) => ({ ...current, name: event.target.value }))
-            }
-            placeholder="MongoDB Production"
-            required
-            value={form.name}
-          />
-        </label>
+          <dl className="connection-detail-grid">
+            <div>
+              <dt>Name</dt>
+              <dd>{selectedConnection.name}</dd>
+            </div>
+            <div>
+              <dt>URI</dt>
+              <dd>Saved securely in Keychain</dd>
+            </div>
+            <div>
+              <dt>Environment</dt>
+              <dd>{getEnvironmentLabel(selectedConnection.environment)}</dd>
+            </div>
+            <div>
+              <dt>Mode</dt>
+              <dd>{selectedConnection.readOnly ? "Read-only" : "Writable"}</dd>
+            </div>
+            <div>
+              <dt>Status</dt>
+              <dd>
+                <span
+                  className={`connection-detail-status status-${selectedConnection.status}`}
+                >
+                  {getStatusLabel(selectedConnection.status)}
+                </span>
+              </dd>
+            </div>
+            <div>
+              <dt>Plugin</dt>
+              <dd>{selectedConnection.pluginId}</dd>
+            </div>
+          </dl>
 
-        <label className="field-row">
-          <span>URI</span>
-          <input
-            autoComplete="off"
-            onChange={(event) =>
-              setForm((current) => ({ ...current, uri: event.target.value }))
-            }
-            placeholder={
-              formMode === "edit"
-                ? "Leave blank to keep saved URI"
-                : "mongodb://localhost:27017/admin"
-            }
-            required={formMode === "create"}
-            type="text"
-            value={form.uri}
-          />
-        </label>
-
-        <fieldset className="environment-selector">
-          <legend>Environment</legend>
-          <div>
-            {environments.map(([value, label]) => (
-              <button
-                aria-pressed={form.environment === value}
-                className={form.environment === value ? "is-active" : ""}
-                key={value}
-                onClick={() =>
-                  setForm((current) => ({ ...current, environment: value }))
-                }
-                type="button"
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </fieldset>
-
-        <label className="readonly-toggle">
-          <span>
-            <strong>Read-only</strong>
-            <small>{form.readOnly ? "Writes blocked" : "Writes allowed"}</small>
-          </span>
-          <input
-            checked={form.readOnly}
-            onChange={(event) =>
-              setForm((current) => ({
-                ...current,
-                readOnly: event.target.checked,
-              }))
-            }
-            type="checkbox"
-          />
-        </label>
-
-        <footer className="connection-form-footer">
-          <button
-            className="secondary-button"
-            disabled={isSubmitting || isTestingDraft || !canTestDraft}
-            onClick={() => void testDraftConnection()}
-            type="button"
-          >
-            <Icon name="indexes" />
-            Test
-          </button>
-          <button
-            className="run-button compact"
-            disabled={isSubmitting || !canSave}
-            type="submit"
-          >
-            Save
-          </button>
-        </footer>
-
-        {selectedConnection ? (
           <div className="connection-runtime-actions">
             <button
               className="secondary-button"
@@ -436,10 +377,204 @@ export const ConnectionManager = ({
               </button>
             )}
           </div>
-        ) : null}
 
-        {notice ? <p className="connection-notice">{notice}</p> : null}
-      </form>
+          {notice ? <p className="connection-notice">{notice}</p> : null}
+        </article>
+      ) : (
+        <form
+          className="connection-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submitForm();
+          }}
+        >
+          <header className="connection-form-header">
+            <div>
+              <span>
+                {formMode === "create" ? "New profile" : "Edit profile"}
+              </span>
+              <strong>
+                {formMode === "create" ? "MongoDB" : selectedConnection?.name}
+              </strong>
+            </div>
+            {selectedConnection ? (
+              <div className="connection-form-actions">
+                <button
+                  className="plain-action danger"
+                  disabled={isSubmitting}
+                  onClick={() => setDeleteCandidate(selectedConnection)}
+                  type="button"
+                >
+                  Delete
+                </button>
+              </div>
+            ) : null}
+          </header>
+
+          <label className="field-row">
+            <span>Name</span>
+            <input
+              autoComplete="off"
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  name: event.target.value,
+                }))
+              }
+              placeholder="MongoDB Production"
+              required
+              value={form.name}
+            />
+          </label>
+
+          <label className="field-row">
+            <span>URI</span>
+            <input
+              autoComplete="off"
+              onChange={(event) =>
+                setForm((current) => ({ ...current, uri: event.target.value }))
+              }
+              placeholder={
+                formMode === "edit"
+                  ? "Leave blank to keep saved URI"
+                  : "mongodb://localhost:27017/admin"
+              }
+              required={formMode === "create"}
+              type="text"
+              value={form.uri}
+            />
+          </label>
+
+          <fieldset className="environment-selector">
+            <legend>Environment</legend>
+            <div>
+              {environments.map(([value, label]) => (
+                <button
+                  aria-pressed={form.environment === value}
+                  className={form.environment === value ? "is-active" : ""}
+                  key={value}
+                  onClick={() =>
+                    setForm((current) => ({ ...current, environment: value }))
+                  }
+                  type="button"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+
+          <label className="readonly-toggle">
+            <span>
+              <strong>Read-only</strong>
+              <small>
+                {form.readOnly ? "Writes blocked" : "Writes allowed"}
+              </small>
+            </span>
+            <input
+              checked={form.readOnly}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  readOnly: event.target.checked,
+                }))
+              }
+              type="checkbox"
+            />
+          </label>
+
+          <footer className="connection-form-footer">
+            <button
+              className="secondary-button"
+              disabled={isSubmitting || isTestingDraft || !canTestDraft}
+              onClick={() => void testDraftConnection()}
+              type="button"
+            >
+              <Icon name="indexes" />
+              Test
+            </button>
+            <button
+              className="run-button compact"
+              disabled={isSubmitting || !canSave}
+              type="submit"
+            >
+              Save
+            </button>
+          </footer>
+
+          {selectedConnection ? (
+            <div className="connection-runtime-actions">
+              <button
+                className="secondary-button"
+                disabled={isSubmitting}
+                onClick={() => void testSelectedConnection()}
+                type="button"
+              >
+                Test saved
+              </button>
+              {selectedConnection.status === "connected" ? (
+                <button
+                  className="secondary-button"
+                  disabled={isSubmitting}
+                  onClick={() => void disconnectSelectedConnection()}
+                  type="button"
+                >
+                  Disconnect
+                </button>
+              ) : (
+                <button
+                  className="secondary-button"
+                  disabled={isSubmitting}
+                  onClick={() => void connectSelectedConnection()}
+                  type="button"
+                >
+                  Connect
+                </button>
+              )}
+            </div>
+          ) : null}
+
+          {notice ? <p className="connection-notice">{notice}</p> : null}
+        </form>
+      )}
+
+      {deleteCandidate ? (
+        <div
+          aria-labelledby="delete-connection-title"
+          aria-modal="true"
+          className="confirm-overlay"
+          role="dialog"
+        >
+          <div className="confirm-dialog">
+            <div>
+              <h2 id="delete-connection-title">
+                Delete "{deleteCandidate.name}"?
+              </h2>
+              <p>
+                This removes the saved profile and its secret from this device.
+              </p>
+            </div>
+            <div className="confirm-dialog-actions">
+              <button
+                className="confirm-button cancel"
+                disabled={isSubmitting}
+                onClick={() => setDeleteCandidate(null)}
+                type="button"
+              >
+                Cancel
+              </button>
+              <button
+                className="confirm-button ok"
+                disabled={isSubmitting}
+                onClick={() => void deleteSelectedConnection()}
+                type="button"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 };
@@ -461,3 +596,17 @@ const getApiErrorMessage = (error: unknown): string => {
 
   return issueMessages[0] ?? error.message;
 };
+
+const getEnvironmentLabel = (
+  environment: ConnectionProfile["environment"],
+): string =>
+  environments.find(([value]) => value === environment)?.[1] ?? environment;
+
+const getStatusLabel = (status: ConnectionProfile["status"]): string =>
+  status === "connected"
+    ? "Connected"
+    : status === "checking"
+      ? "Checking"
+      : status === "error"
+        ? "Error"
+        : "Disconnected";

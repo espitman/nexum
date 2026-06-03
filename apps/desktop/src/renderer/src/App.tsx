@@ -121,14 +121,16 @@ export const App = () => {
     ? selectedConnection.readOnly
     : coreUiState.isReadOnly;
   const isDatabaseConnected = selectedConnection?.status === "connected";
-  const visibleSelectedCollectionName = isDatabaseConnected
+  const isExploreSection = activeSection === "Explore";
+  const shouldShowDatabasePanel = isExploreSection && isDatabaseConnected;
+  const visibleSelectedCollectionName = shouldShowDatabasePanel
     ? selectedCollectionName
     : null;
   const shellClassName = [
     "app-shell",
     isConnectionRailOpen ? "" : "is-connections-closed",
     isInspectorOpen ? "" : "is-inspector-closed",
-    isDatabaseConnected ? "" : "is-database-hidden",
+    shouldShowDatabasePanel ? "" : "is-database-hidden",
   ]
     .filter(Boolean)
     .join(" ");
@@ -180,7 +182,7 @@ export const App = () => {
         onToggleInspector={() => setIsInspectorOpen((isOpen) => !isOpen)}
       />
 
-      {isDatabaseConnected ? (
+      {shouldShowDatabasePanel ? (
         <DatabasePanel
           selectedCollectionName={visibleSelectedCollectionName}
           onCollectionSelect={setSelectedCollectionName}
@@ -211,7 +213,7 @@ export const App = () => {
         onSelectedConnectionChange={setSelectedConnectionId}
         onCollectionClose={() => setSelectedCollectionName(null)}
         onCollectionOpen={() => {
-          if (isDatabaseConnected) {
+          if (shouldShowDatabasePanel) {
             setSelectedCollectionName("users");
           }
         }}

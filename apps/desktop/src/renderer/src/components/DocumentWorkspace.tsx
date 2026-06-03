@@ -45,13 +45,13 @@ export const DocumentWorkspace = ({
   onWorkspaceTabChange,
 }: DocumentWorkspaceProps) => {
   const isCollectionWorkspace =
-    activeSection === "Connections" && selectedCollectionName !== null;
+    activeSection === "Explore" && selectedCollectionName !== null;
   const isConnectionManager =
     activeSection === "Connections" && selectedCollectionName === null;
   const emptyWorkspaceTitle =
-    activeSection === "Connections" ? "No collection selected" : activeSection;
+    activeSection === "Explore" ? "No collection selected" : activeSection;
   const emptyWorkspaceLabel =
-    activeSection === "Connections"
+    activeSection === "Explore"
       ? "Select a collection from the database tree"
       : "This workspace is ready for the next shell route";
 
@@ -91,7 +91,7 @@ export const DocumentWorkspace = ({
         <WorkspaceEmptyState
           label={emptyWorkspaceLabel}
           onCollectionOpen={() => {
-            onSectionChange("Connections");
+            onSectionChange("Explore");
             onCollectionOpen();
           }}
           title={emptyWorkspaceTitle}

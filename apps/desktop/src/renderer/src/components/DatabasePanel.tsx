@@ -37,7 +37,7 @@ export const DatabasePanel = ({
           onClick={() => {
             if (node.type === "collection") {
               onCollectionSelect(node.name);
-              onSectionChange("Connections");
+              onSectionChange("Explore");
             }
           }}
           style={{ "--depth": node.depth } as React.CSSProperties}

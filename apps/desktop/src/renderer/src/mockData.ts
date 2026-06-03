@@ -9,6 +9,7 @@ export const connections: Connection[] = [
 
 export const navItems = [
   ["folder", "Connections"],
+  ["database", "Explore"],
   ["term", "Queries"],
   ["mark", "Bookmarks"],
   ["code", "Snippets"],
