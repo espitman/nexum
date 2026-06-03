@@ -20,7 +20,7 @@ import {
   mongodbFindDocumentsPayloadSchema,
   voidPayloadSchema,
 } from "../../ipc/validation";
-import { findMockDocuments, mockAuditLogs } from "./mockData";
+import { mockAuditLogs } from "./mockData";
 
 type IpcHandler<TPayload, TResult> = (
   payload: TPayload,
@@ -225,7 +225,10 @@ export const registerIpcHandlers = (
   registerValidatedHandler(
     ipcChannels.mongodbFindDocuments,
     mongodbFindDocumentsPayloadSchema,
-    findMockDocuments,
+    async (payload) =>
+      unwrapResult(
+        services.connections.findDocuments(payload.connectionId, payload),
+      ),
     ipc,
   );
 

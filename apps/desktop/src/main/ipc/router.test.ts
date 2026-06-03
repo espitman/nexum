@@ -4,6 +4,7 @@ import { z } from "zod";
 import {
   ipcChannels,
   type ConnectionSummary,
+  type DocumentQueryResult,
   type ExplorerNodeDto,
 } from "../../ipc/contracts";
 import type { StoredConnectionTestResult } from "../connections";
@@ -57,6 +58,7 @@ describe("registerIpcHandlers connection lifecycle", () => {
         handlers.set(channel, handler);
       },
     };
+    const findPayloads: unknown[] = [];
     const profiles = new Map<string, ConnectionSummary>();
     const services = {
       connections: {
@@ -93,6 +95,20 @@ describe("registerIpcHandlers connection lifecycle", () => {
         },
         list(): ConnectionSummary[] {
           return [...profiles.values()];
+        },
+        findDocuments(
+          _connectionId: string,
+          payload: unknown,
+        ): Result<Promise<DocumentQueryResult>, AppError> {
+          findPayloads.push(payload);
+
+          return ok(
+            Promise.resolve({
+              documents: ['{"_id":{"$oid":"6649f8c3e7b1d2a4f8c9a1b2"}}'],
+              executionTimeMs: 4,
+              hasMore: false,
+            }),
+          );
         },
         async test(): Promise<Result<StoredConnectionTestResult, AppError>> {
           return ok({
@@ -188,6 +204,41 @@ describe("registerIpcHandlers connection lifecycle", () => {
     ).resolves.toMatchObject({
       ok: true,
       value: [{ label: "users", type: "collection" }],
+    });
+    await expect(
+      handlers.get(ipcChannels.mongodbFindDocuments)?.(undefined, {
+        collection: "users",
+        connectionId: "conn_test",
+        database: "app",
+        filter: { status: "active" },
+        limit: 50,
+        projection: { email: 1 },
+        skip: 0,
+        sort: { createdAt: -1 },
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: {
+        documents: ['{"_id":{"$oid":"6649f8c3e7b1d2a4f8c9a1b2"}}'],
+        hasMore: false,
+      },
+    });
+    await expect(
+      handlers.get(ipcChannels.mongodbFindDocuments)?.(undefined, {
+        collection: "users",
+        connectionId: "conn_test",
+        database: "app",
+      }),
+    ).resolves.toMatchObject({ ok: true });
+    expect(findPayloads.at(-1)).toEqual({
+      collection: "users",
+      connectionId: "conn_test",
+      database: "app",
+      filter: {},
+      limit: 50,
+      projection: {},
+      skip: 0,
+      sort: {},
     });
   });
 });

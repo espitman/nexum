@@ -6,7 +6,13 @@ import {
   sanitizeError,
   type Result,
 } from "@nexum/shared";
-import { MongoClient } from "mongodb";
+import {
+  BSON,
+  MongoClient,
+  type Document,
+  type Filter,
+  type Sort,
+} from "mongodb";
 import type { ConnectionStorageService } from "./connectionStorage";
 import type {
   ConnectionRuntimeStatus,
@@ -24,8 +30,27 @@ export type MongoCollectionMetadata = {
   type: MongoCollectionKind;
 };
 
+export type MongoFindDocumentsInput = {
+  collection: string;
+  database: string;
+  filter: Record<string, unknown>;
+  limit: number;
+  projection: Record<string, unknown>;
+  skip: number;
+  sort: Record<string, 1 | -1>;
+};
+
+export type MongoFindDocumentsResult = {
+  documents: string[];
+  executionTimeMs: number;
+  hasMore: boolean;
+};
+
 export interface ActiveMongoConnection {
   close(): Promise<void>;
+  findDocuments(
+    input: MongoFindDocumentsInput,
+  ): Promise<MongoFindDocumentsResult>;
   listCollections(databaseName: string): Promise<MongoCollectionMetadata[]>;
   listDatabases(): Promise<string[]>;
   ping(): Promise<void>;
@@ -41,6 +66,8 @@ const mongoClientOptions = {
   serverSelectionTimeoutMS: 5000,
 };
 
+const mongoFindMaxTimeMs = 30_000;
+
 export class MongoDriverConnectionClient implements MongoConnectionDriver {
   async connect(uri: string): Promise<ActiveMongoConnection> {
     const client = new MongoClient(uri, mongoClientOptions);
@@ -49,6 +76,31 @@ export class MongoDriverConnectionClient implements MongoConnectionDriver {
 
     return {
       close: () => client.close(true),
+      async findDocuments(input) {
+        const startedAt = performance.now();
+        const documents = await client
+          .db(input.database)
+          .collection(input.collection)
+          .find(input.filter as Filter<Document>, {
+            maxTimeMS: mongoFindMaxTimeMs,
+            projection: input.projection,
+          })
+          .sort(input.sort as Sort)
+          .skip(input.skip)
+          .limit(input.limit + 1)
+          .toArray();
+        const hasMore = documents.length > input.limit;
+
+        return {
+          documents: documents
+            .slice(0, input.limit)
+            .map((document) =>
+              BSON.EJSON.stringify(document, { relaxed: false }),
+            ),
+          executionTimeMs: Math.round(performance.now() - startedAt),
+          hasMore,
+        };
+      },
       async listCollections(databaseName) {
         const collections = await client
           .db(databaseName)
@@ -206,6 +258,23 @@ export class ConnectionLifecycleService {
     }
 
     return ok(this.#toSummary(metadata.value));
+  }
+
+  findDocuments(
+    connectionId: string,
+    input: MongoFindDocumentsInput,
+  ): Result<Promise<MongoFindDocumentsResult>, AppError> {
+    const session = this.#sessions.get(connectionId);
+
+    if (!session) {
+      return err(
+        new AppError("CONNECTION_NOT_ACTIVE", "Connection is not active", {
+          details: { connectionId },
+        }),
+      );
+    }
+
+    return ok(session.findDocuments(input));
   }
 
   list(): StoredConnectionSummary[] {

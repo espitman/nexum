@@ -183,14 +183,14 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
 
 ## Phase 7 — Document Viewer
 
-- [ ] Implement find API
-  - [ ] Default filter to `{}`
-  - [ ] Default limit to `50`
-  - [ ] Support skip
-  - [ ] Support sort
-  - [ ] Support projection
-  - [ ] Add 30 second max query time
-  - [ ] Serialize documents with EJSON
+- [x] Implement find API
+  - [x] Default filter to `{}`
+  - [x] Default limit to `50`
+  - [x] Support skip
+  - [x] Support sort
+  - [x] Support projection
+  - [x] Add 30 second max query time
+  - [x] Serialize documents with EJSON
 - [ ] Build document views
   - [ ] Add documents tab
   - [ ] Add raw filter preview

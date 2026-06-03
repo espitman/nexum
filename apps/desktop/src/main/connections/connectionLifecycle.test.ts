@@ -90,10 +90,23 @@ class FakeActiveConnection implements ActiveMongoConnection {
     ],
   ]);
   databases = ["admin", "app"];
+  findInputs: unknown[] = [];
   pingCount = 0;
 
   async close(): Promise<void> {
     this.closed = true;
+  }
+
+  async findDocuments(
+    input: Parameters<ActiveMongoConnection["findDocuments"]>[0],
+  ) {
+    this.findInputs.push(input);
+
+    return {
+      documents: ['{"_id":{"$oid":"6649f8c3e7b1d2a4f8c9a1b2"}}'],
+      executionTimeMs: 3,
+      hasMore: false,
+    };
   }
 
   async listCollections(databaseName: string) {
@@ -279,6 +292,47 @@ describe("ConnectionLifecycleService", () => {
     ]);
   });
 
+  it("finds documents through active sessions", async () => {
+    const { driver, lifecycle } = createLifecycle();
+    await createStoredConnection(lifecycle);
+    await lifecycle.connect("conn_local");
+
+    const result = lifecycle.findDocuments("conn_local", {
+      collection: "users",
+      database: "app",
+      filter: { status: "active" },
+      limit: 50,
+      projection: { email: 1 },
+      skip: 0,
+      sort: { createdAt: -1 },
+    });
+
+    expect(result).toMatchObject({ ok: true });
+    await expect(
+      result.ok
+        ? result.value
+        : Promise.resolve({
+            documents: [],
+            executionTimeMs: 0,
+            hasMore: false,
+          }),
+    ).resolves.toMatchObject({
+      documents: ['{"_id":{"$oid":"6649f8c3e7b1d2a4f8c9a1b2"}}'],
+      hasMore: false,
+    });
+    expect(driver.activeConnections[0]?.findInputs).toEqual([
+      {
+        collection: "users",
+        database: "app",
+        filter: { status: "active" },
+        limit: 50,
+        projection: { email: 1 },
+        skip: 0,
+        sort: { createdAt: -1 },
+      },
+    ]);
+  });
+
   it("rejects explorer reads without an active session", async () => {
     const { lifecycle } = createLifecycle();
     await createStoredConnection(lifecycle);
@@ -288,6 +342,20 @@ describe("ConnectionLifecycleService", () => {
       error: { code: "CONNECTION_NOT_ACTIVE" },
     });
     expect(lifecycle.listCollections("conn_local", "app")).toMatchObject({
+      ok: false,
+      error: { code: "CONNECTION_NOT_ACTIVE" },
+    });
+    expect(
+      lifecycle.findDocuments("conn_local", {
+        collection: "users",
+        database: "app",
+        filter: {},
+        limit: 50,
+        projection: {},
+        skip: 0,
+        sort: {},
+      }),
+    ).toMatchObject({
       ok: false,
       error: { code: "CONNECTION_NOT_ACTIVE" },
     });

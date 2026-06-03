@@ -56,8 +56,9 @@ export type ExplorerNodeDto = {
 };
 
 export type DocumentQueryResult = {
-  documents: Record<string, unknown>[];
+  documents: string[];
   executionTimeMs: number;
+  hasMore: boolean;
 };
 
 export type AuditLogDto = {

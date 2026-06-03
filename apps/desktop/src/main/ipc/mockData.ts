@@ -96,6 +96,9 @@ const mockDocuments: Record<string, unknown>[] = [
 export const findMockDocuments = (
   payload: MongodbFindDocumentsPayload,
 ): DocumentQueryResult => ({
-  documents: mockDocuments.slice(payload.skip, payload.skip + payload.limit),
+  documents: mockDocuments
+    .slice(payload.skip, payload.skip + payload.limit)
+    .map((document) => JSON.stringify(document)),
   executionTimeMs: 12,
+  hasMore: mockDocuments.length > payload.skip + payload.limit,
 });

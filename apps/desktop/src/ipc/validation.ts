@@ -68,7 +68,11 @@ export const mongodbFindDocumentsPayloadSchema = z.object({
   database: z.string().min(1),
   filter: z.record(z.string(), z.unknown()).default({}),
   limit: z.number().int().min(1).max(500).default(50),
+  projection: z.record(z.string(), z.unknown()).default({}),
   skip: z.number().int().min(0).default(0),
+  sort: z
+    .record(z.string(), z.union([z.literal(1), z.literal(-1)]))
+    .default({}),
 });
 
 export const auditListPayloadSchema = z
