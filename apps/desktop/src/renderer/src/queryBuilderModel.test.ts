@@ -5,6 +5,7 @@ import {
   createDefaultQueryBuilderModel,
   createQueryBuilderCondition,
   createQueryBuilderGroup,
+  inferQueryBuilderFields,
   queryBuilderConditionOperators,
   removeQueryBuilderNode,
   updateQueryBuilderCondition,
@@ -236,4 +237,108 @@ describe("queryBuilderModel", () => {
       expect(buildMongoFilterFromQueryBuilder(root)).toEqual(expectedFilter);
     },
   );
+
+  it("infers nested field paths, detected types, and occurrence counts", () => {
+    const fields = inferQueryBuilderFields([
+      {
+        _id: { $oid: "6649f8c3e7b1d2a4f8c9a1b2" },
+        active: true,
+        metrics: {
+          bookings: { $numberInt: "12" },
+          score: 4.8,
+        },
+        tags: ["hotel", "featured"],
+      },
+      {
+        _id: { $oid: "6649f8c3e7b1d2a4f8c9a1b3" },
+        metrics: {
+          bookings: { $numberLong: "15" },
+        },
+        tags: [],
+      },
+    ]);
+
+    expect(fields).toEqual([
+      {
+        occurrenceCount: 2,
+        path: "_id",
+        sampleCount: 2,
+        types: ["ObjectId"],
+      },
+      {
+        occurrenceCount: 1,
+        path: "active",
+        sampleCount: 1,
+        types: ["Boolean"],
+      },
+      {
+        occurrenceCount: 2,
+        path: "metrics",
+        sampleCount: 2,
+        types: ["Object"],
+      },
+      {
+        occurrenceCount: 2,
+        path: "metrics.bookings",
+        sampleCount: 2,
+        types: ["Int32", "Long"],
+      },
+      {
+        occurrenceCount: 1,
+        path: "metrics.score",
+        sampleCount: 1,
+        types: ["Number"],
+      },
+      {
+        occurrenceCount: 2,
+        path: "tags",
+        sampleCount: 2,
+        types: ["Array", "Array<String>"],
+      },
+    ]);
+  });
+
+  it("infers field paths from objects inside arrays", () => {
+    const fields = inferQueryBuilderFields([
+      {
+        rooms: [
+          { capacity: { guests: { $numberInt: "2" }, rooms: 1 } },
+          { capacity: { guests: { $numberInt: "4" } } },
+        ],
+      },
+    ]);
+
+    expect(fields).toContainEqual({
+      occurrenceCount: 1,
+      path: "rooms.capacity.guests",
+      sampleCount: 2,
+      types: ["Int32"],
+    });
+    expect(fields).toContainEqual({
+      occurrenceCount: 1,
+      path: "rooms.capacity.rooms",
+      sampleCount: 1,
+      types: ["Number"],
+    });
+  });
+
+  it("samples the first 100 documents by default", () => {
+    const fields = inferQueryBuilderFields(
+      Array.from({ length: 101 }, (_, index) => ({
+        [`field${index}`]: index,
+      })),
+    );
+
+    expect(fields).toHaveLength(100);
+    expect(fields.some((field) => field.path === "field100")).toBe(false);
+  });
+
+  it("allows a custom inference sample size", () => {
+    const fields = inferQueryBuilderFields(
+      [{ first: true }, { second: true }, { third: true }],
+      { sampleSize: 2 },
+    );
+
+    expect(fields.map((field) => field.path)).toEqual(["first", "second"]);
+  });
 });

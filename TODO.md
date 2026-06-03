@@ -224,11 +224,11 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
   - [x] In
   - [x] Not in
   - [x] Regex
-- [ ] Implement field inference
-  - [ ] Sample up to 100 documents by default
-  - [ ] Infer nested paths with dot notation
-  - [ ] Return detected types
-  - [ ] Return occurrence counts
+- [x] Implement field inference
+  - [x] Sample up to 100 documents by default
+  - [x] Infer nested paths with dot notation
+  - [x] Return detected types
+  - [x] Return occurrence counts
 - [ ] Build query builder UI
   - [ ] Add condition rows
   - [ ] Add group rows
