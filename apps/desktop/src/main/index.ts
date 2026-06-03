@@ -30,10 +30,15 @@ const createMainWindow = () => {
 
   mainWindow.webContents.once("did-finish-load", () => {
     void mainWindow.webContents
-      .executeJavaScript("Boolean(window.nexum?.health?.ping)", true)
+      .executeJavaScript(
+        "Boolean(window.nexum?.health?.ping && window.nexum?.mongodb?.findDocuments && window.nexum?.mongodb?.listIndexes)",
+        true,
+      )
       .then((hasPreloadApi) => {
         if (!hasPreloadApi) {
-          console.error("Nexum preload API was not exposed to the renderer");
+          console.error(
+            "Nexum preload API is missing one or more required methods",
+          );
         }
       });
   });

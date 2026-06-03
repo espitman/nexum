@@ -46,6 +46,17 @@ export type MongoFindDocumentsResult = {
   hasMore: boolean;
 };
 
+export type MongoListIndexesInput = {
+  collection: string;
+  database: string;
+};
+
+export type MongoIndexMetadata = {
+  key: string;
+  meta: string;
+  name: string;
+};
+
 export interface ActiveMongoConnection {
   close(): Promise<void>;
   findDocuments(
@@ -53,6 +64,7 @@ export interface ActiveMongoConnection {
   ): Promise<MongoFindDocumentsResult>;
   listCollections(databaseName: string): Promise<MongoCollectionMetadata[]>;
   listDatabases(): Promise<string[]>;
+  listIndexes(input: MongoListIndexesInput): Promise<MongoIndexMetadata[]>;
   ping(): Promise<void>;
 }
 
@@ -125,6 +137,19 @@ export class MongoDriverConnectionClient implements MongoConnectionDriver {
         return result.databases
           .map((database) => database.name)
           .sort((left, right) => left.localeCompare(right));
+      },
+      async listIndexes(input) {
+        const indexes = await client
+          .db(input.database)
+          .collection(input.collection)
+          .listIndexes()
+          .toArray();
+
+        return indexes.map((index) => ({
+          key: BSON.EJSON.stringify(index.key ?? {}, { relaxed: false }),
+          meta: formatIndexMetadata(index),
+          name: index.name ?? "unnamed",
+        }));
       },
       async ping() {
         await pingClient(client);
@@ -314,6 +339,23 @@ export class ConnectionLifecycleService {
     return ok(session.listDatabases());
   }
 
+  listIndexes(
+    connectionId: string,
+    input: MongoListIndexesInput,
+  ): Result<Promise<MongoIndexMetadata[]>, AppError> {
+    const session = this.#sessions.get(connectionId);
+
+    if (!session) {
+      return err(
+        new AppError("CONNECTION_NOT_ACTIVE", "Connection is not active", {
+          details: { connectionId },
+        }),
+      );
+    }
+
+    return ok(session.listIndexes(input));
+  }
+
   async test(
     connectionId: string,
   ): Promise<Result<StoredConnectionTestResult, AppError>> {
@@ -469,4 +511,32 @@ export class ConnectionLifecycleService {
 
 const pingClient = async (client: MongoClient): Promise<void> => {
   await client.db("admin").command({ ping: 1 });
+};
+
+const formatIndexMetadata = (index: Document): string => {
+  const details: string[] = [];
+  const key = index.key;
+
+  if (index.unique === true) {
+    details.push("Unique");
+  }
+
+  if (index.sparse === true) {
+    details.push("Sparse");
+  }
+
+  if (typeof index.expireAfterSeconds === "number") {
+    details.push(`TTL ${index.expireAfterSeconds}s`);
+  }
+
+  if (
+    key &&
+    typeof key === "object" &&
+    !Array.isArray(key) &&
+    Object.keys(key).length > 1
+  ) {
+    details.push("Compound");
+  }
+
+  return details.length > 0 ? details.join(" · ") : "Standard";
 };

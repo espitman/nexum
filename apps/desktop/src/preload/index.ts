@@ -9,6 +9,7 @@ import {
   type HealthCheckResult,
   type IpcChannel,
   type IpcResponse,
+  type MongoIndexDto,
 } from "../ipc/contracts";
 import type {
   AuditListPayload,
@@ -16,6 +17,7 @@ import type {
   ConnectionIdPayload,
   ConnectionUpdatePayload,
   ExplorerChildrenPayload,
+  MongodbCollectionPayload,
   MongodbFindDocumentsPayload,
 } from "../ipc/validation";
 
@@ -82,6 +84,7 @@ export type NexumDesktopApi = {
     findDocuments(
       payload: MongodbFindDocumentsPayload,
     ): Promise<DocumentQueryResult>;
+    listIndexes(payload: MongodbCollectionPayload): Promise<MongoIndexDto[]>;
   };
 };
 
@@ -112,6 +115,7 @@ const api: NexumDesktopApi = {
   mongodb: {
     findDocuments: (payload) =>
       invoke(ipcChannels.mongodbFindDocuments, payload),
+    listIndexes: (payload) => invoke(ipcChannels.mongodbListIndexes, payload),
   },
 };
 

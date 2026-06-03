@@ -24,6 +24,7 @@ import type {
   CoreUiState,
   EnvironmentName,
   HealthState,
+  IndexSummary,
   SchemaFieldSummary,
   ToastMessage,
 } from "./types";
@@ -141,6 +142,44 @@ export const App = () => {
   const visibleSelectedCollectionName = shouldShowDatabasePanel
     ? selectedCollectionName
     : null;
+  const selectedCollectionPath = parseSelectedCollectionPath(
+    visibleSelectedCollectionName,
+  );
+  const indexesQuery = useQuery({
+    enabled:
+      shouldShowInspectorPanel &&
+      activeInspectorTab === "Indexes" &&
+      Boolean(selectedConnectionId) &&
+      selectedCollectionPath !== null,
+    queryKey: [
+      "indexes",
+      selectedConnectionId,
+      selectedCollectionPath?.database,
+      selectedCollectionPath?.collection,
+    ],
+    queryFn: async () => {
+      if (!window.nexum) {
+        throw new Error("Preload API is unavailable");
+      }
+
+      if (typeof window.nexum.mongodb.listIndexes !== "function") {
+        throw new Error(
+          "Preload API is outdated. Restart Nexum and try again.",
+        );
+      }
+
+      if (!selectedConnectionId || !selectedCollectionPath) {
+        throw new Error("No collection selected");
+      }
+
+      return window.nexum.mongodb.listIndexes({
+        collection: selectedCollectionPath.collection,
+        connectionId: selectedConnectionId,
+        database: selectedCollectionPath.database,
+      });
+    },
+  });
+  const indexRows = (indexesQuery.data ?? []) as IndexSummary[];
   const shellClassName = [
     "app-shell",
     isConnectionRailOpen ? "" : "is-connections-closed",
@@ -329,6 +368,13 @@ export const App = () => {
       {shouldShowInspectorPanel ? (
         <InspectorPanel
           activeInspectorTab={activeInspectorTab}
+          indexRows={indexRows}
+          indexesError={
+            indexesQuery.error instanceof Error
+              ? indexesQuery.error.message
+              : null
+          }
+          isIndexesLoading={indexesQuery.isLoading}
           onClose={() => setIsInspectorOpen(false)}
           onInspectorTabChange={setActiveInspectorTab}
           schemaFields={schemaFields}
@@ -390,6 +436,23 @@ const columnResizeBounds = {
   inspector: { max: 620, min: 300 },
   rail: { max: 280, min: 120 },
 } as const;
+
+const parseSelectedCollectionPath = (
+  selectedCollectionName: string | null,
+): { collection: string; database: string } | null => {
+  if (!selectedCollectionName) {
+    return null;
+  }
+
+  const [database, ...collectionParts] = selectedCollectionName.split(".");
+  const collection = collectionParts.join(".");
+
+  if (!database || !collection) {
+    return null;
+  }
+
+  return { collection, database };
+};
 
 const mapConnectionStatus = (
   status: ConnectionSummary["status"],

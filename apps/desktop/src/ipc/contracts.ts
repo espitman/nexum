@@ -15,6 +15,7 @@ export const ipcChannels = {
   explorerListRootNodes: "nexum:explorer:list-root-nodes",
   healthPing: "nexum:health:ping",
   mongodbFindDocuments: "nexum:mongodb:find-documents",
+  mongodbListIndexes: "nexum:mongodb:list-indexes",
 } as const;
 
 export type IpcChannel = (typeof ipcChannels)[keyof typeof ipcChannels];
@@ -59,6 +60,12 @@ export type DocumentQueryResult = {
   documents: string[];
   executionTimeMs: number;
   hasMore: boolean;
+};
+
+export type MongoIndexDto = {
+  key: string;
+  meta: string;
+  name: string;
 };
 
 export type AuditLogDto = {

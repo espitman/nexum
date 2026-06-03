@@ -1,9 +1,12 @@
-import { indexRows, inspectorTabs, type InspectorTabLabel } from "../mockData";
-import type { SchemaFieldSummary } from "../types";
+import { inspectorTabs, type InspectorTabLabel } from "../mockData";
+import type { IndexSummary, SchemaFieldSummary } from "../types";
 import { JsonTreeView } from "./JsonTreeView";
 
 type InspectorPanelProps = {
   activeInspectorTab: InspectorTabLabel;
+  indexRows: IndexSummary[];
+  indexesError: string | null;
+  isIndexesLoading: boolean;
   onClose: () => void;
   onInspectorTabChange: (tab: InspectorTabLabel) => void;
   schemaFields: SchemaFieldSummary[];
@@ -12,6 +15,9 @@ type InspectorPanelProps = {
 
 export const InspectorPanel = ({
   activeInspectorTab,
+  indexRows,
+  indexesError,
+  isIndexesLoading,
   onClose,
   onInspectorTabChange,
   schemaFields,
@@ -26,6 +32,9 @@ export const InspectorPanel = ({
     <InspectorToolbar />
     <InspectorBody
       activeInspectorTab={activeInspectorTab}
+      indexRows={indexRows}
+      indexesError={indexesError}
+      isIndexesLoading={isIndexesLoading}
       schemaFields={schemaFields}
       selectedDocument={selectedDocument}
     />
@@ -88,12 +97,18 @@ const InspectorToolbar = () => (
 
 type InspectorBodyProps = {
   activeInspectorTab: InspectorTabLabel;
+  indexRows: IndexSummary[];
+  indexesError: string | null;
+  isIndexesLoading: boolean;
   schemaFields: SchemaFieldSummary[];
   selectedDocument: Record<string, unknown> | null;
 };
 
 const InspectorBody = ({
   activeInspectorTab,
+  indexRows,
+  indexesError,
+  isIndexesLoading,
   schemaFields,
   selectedDocument,
 }: InspectorBodyProps) =>
@@ -117,16 +132,58 @@ const InspectorBody = ({
       {activeInspectorTab === "Schema" ? (
         <SchemaTree fields={schemaFields} />
       ) : (
-        indexRows.map(([name, value, meta]) => (
-          <div className="inspector-list-row" key={name}>
-            <strong>{name}</strong>
-            <code>{value}</code>
-            <span>{meta}</span>
-          </div>
-        ))
+        <IndexList
+          error={indexesError}
+          indexes={indexRows}
+          isLoading={isIndexesLoading}
+        />
       )}
+      <div className="inspector-scroll-spacer" aria-hidden="true" />
     </div>
   );
+
+type IndexListProps = {
+  error: string | null;
+  indexes: IndexSummary[];
+  isLoading: boolean;
+};
+
+const IndexList = ({ error, indexes, isLoading }: IndexListProps) => {
+  if (isLoading) {
+    return (
+      <div className="inspector-empty-state inline">
+        <strong>Loading indexes</strong>
+        <span>Reading index metadata from MongoDB.</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="inspector-empty-state inline">
+        <strong>Unable to load indexes</strong>
+        <span>{error}</span>
+      </div>
+    );
+  }
+
+  if (indexes.length === 0) {
+    return (
+      <div className="inspector-empty-state inline">
+        <strong>No indexes found</strong>
+        <span>This collection did not return index metadata.</span>
+      </div>
+    );
+  }
+
+  return indexes.map((index) => (
+    <div className="index-list-row" key={index.name}>
+      <strong>{index.name}</strong>
+      <code>{index.key}</code>
+      <span>{index.meta}</span>
+    </div>
+  ));
+};
 
 type SchemaTreeNode = {
   children: SchemaTreeNode[];

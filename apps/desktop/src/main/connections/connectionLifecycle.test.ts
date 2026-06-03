@@ -91,6 +91,7 @@ class FakeActiveConnection implements ActiveMongoConnection {
   ]);
   databases = ["admin", "app"];
   findInputs: unknown[] = [];
+  indexInputs: unknown[] = [];
   pingCount = 0;
 
   async close(): Promise<void> {
@@ -115,6 +116,21 @@ class FakeActiveConnection implements ActiveMongoConnection {
 
   async listDatabases(): Promise<string[]> {
     return this.databases;
+  }
+
+  async listIndexes(
+    input: Parameters<ActiveMongoConnection["listIndexes"]>[0],
+  ) {
+    this.indexInputs.push(input);
+
+    return [
+      { key: '{"_id":{"$numberInt":"1"}}', meta: "Unique", name: "_id_" },
+      {
+        key: '{"email":{"$numberInt":"1"}}',
+        meta: "Unique",
+        name: "email_1",
+      },
+    ];
   }
 
   async ping(): Promise<void> {
@@ -333,6 +349,35 @@ describe("ConnectionLifecycleService", () => {
     ]);
   });
 
+  it("lists indexes through active sessions", async () => {
+    const { driver, lifecycle } = createLifecycle();
+    await createStoredConnection(lifecycle);
+    await lifecycle.connect("conn_local");
+
+    const result = lifecycle.listIndexes("conn_local", {
+      collection: "users",
+      database: "app",
+    });
+
+    expect(result).toMatchObject({ ok: true });
+    await expect(
+      result.ok ? result.value : Promise.resolve([]),
+    ).resolves.toEqual([
+      { key: '{"_id":{"$numberInt":"1"}}', meta: "Unique", name: "_id_" },
+      {
+        key: '{"email":{"$numberInt":"1"}}',
+        meta: "Unique",
+        name: "email_1",
+      },
+    ]);
+    expect(driver.activeConnections[0]?.indexInputs).toEqual([
+      {
+        collection: "users",
+        database: "app",
+      },
+    ]);
+  });
+
   it("rejects explorer reads without an active session", async () => {
     const { lifecycle } = createLifecycle();
     await createStoredConnection(lifecycle);
@@ -354,6 +399,15 @@ describe("ConnectionLifecycleService", () => {
         projection: {},
         skip: 0,
         sort: {},
+      }),
+    ).toMatchObject({
+      ok: false,
+      error: { code: "CONNECTION_NOT_ACTIVE" },
+    });
+    expect(
+      lifecycle.listIndexes("conn_local", {
+        collection: "users",
+        database: "app",
       }),
     ).toMatchObject({
       ok: false,

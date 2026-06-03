@@ -160,10 +160,3 @@ export const inspectorLines = [
   ['  "__v": { "$numberInt": "0" }', "string"],
   ["}", "plain"],
 ] as const;
-
-export const indexRows = [
-  ["_id_", "{ _id: 1 }", "Unique"],
-  ["email_1", "{ email: 1 }", "Unique"],
-  ["status_1_createdAt_-1", "{ status: 1, createdAt: -1 }", "Compound"],
-  ["createdAt_-1", "{ createdAt: -1 }", "TTL-ready"],
-] as const;

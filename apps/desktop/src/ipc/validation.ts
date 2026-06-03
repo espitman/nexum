@@ -75,6 +75,12 @@ export const mongodbFindDocumentsPayloadSchema = z.object({
     .default({}),
 });
 
+export const mongodbCollectionPayloadSchema = z.object({
+  collection: z.string().min(1),
+  connectionId: z.string().min(1),
+  database: z.string().min(1),
+});
+
 export const auditListPayloadSchema = z
   .object({
     connectionId: z.string().min(1).optional(),
@@ -93,5 +99,8 @@ export type ExplorerChildrenPayload = z.infer<
 >;
 export type MongodbFindDocumentsPayload = z.infer<
   typeof mongodbFindDocumentsPayloadSchema
+>;
+export type MongodbCollectionPayload = z.infer<
+  typeof mongodbCollectionPayloadSchema
 >;
 export type AuditListPayload = z.infer<typeof auditListPayloadSchema>;

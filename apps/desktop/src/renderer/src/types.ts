@@ -32,6 +32,12 @@ export type SchemaFieldSummary = {
   type: string;
 };
 
+export type IndexSummary = {
+  key: string;
+  meta: string;
+  name: string;
+};
+
 export type Connection = {
   icon: string;
   label: string;

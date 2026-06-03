@@ -110,6 +110,20 @@ describe("registerIpcHandlers connection lifecycle", () => {
             }),
           );
         },
+        listIndexes(): Result<
+          Promise<Array<{ key: string; meta: string; name: string }>>,
+          AppError
+        > {
+          return ok(
+            Promise.resolve([
+              {
+                key: '{"_id":{"$numberInt":"1"}}',
+                meta: "Unique",
+                name: "_id_",
+              },
+            ]),
+          );
+        },
         async test(): Promise<Result<StoredConnectionTestResult, AppError>> {
           return ok({
             latencyMs: 1,
@@ -222,6 +236,16 @@ describe("registerIpcHandlers connection lifecycle", () => {
         documents: ['{"_id":{"$oid":"6649f8c3e7b1d2a4f8c9a1b2"}}'],
         hasMore: false,
       },
+    });
+    await expect(
+      handlers.get(ipcChannels.mongodbListIndexes)?.(undefined, {
+        collection: "users",
+        connectionId: "conn_test",
+        database: "app",
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: [{ key: '{"_id":{"$numberInt":"1"}}', name: "_id_" }],
     });
     await expect(
       handlers.get(ipcChannels.mongodbFindDocuments)?.(undefined, {

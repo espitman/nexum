@@ -2115,10 +2115,19 @@ input:disabled {
 }
 
 .inspector-list {
+  align-content: start;
   display: grid;
   gap: 8px;
+  grid-auto-rows: max-content;
+  height: 100%;
+  min-height: 0;
   overflow: auto;
   padding: 14px;
+}
+
+.inspector-scroll-spacer {
+  height: 96px;
+  pointer-events: none;
 }
 
 .inspector-list-row {
@@ -2149,9 +2158,52 @@ input:disabled {
   font-size: 12px;
 }
 
+.index-list-row {
+  align-items: center;
+  border: 1px solid #e1e7ef;
+  border-radius: 7px;
+  display: grid;
+  gap: 6px 10px;
+  grid-template-columns: minmax(110px, 0.7fr) minmax(0, 1.6fr);
+  min-height: 58px;
+  padding: 10px 12px;
+}
+
+.index-list-row strong {
+  color: #263142;
+  font-size: 13px;
+  font-weight: 700;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.index-list-row code {
+  color: #00717d;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.index-list-row span {
+  color: #6a7484;
+  font-size: 12px;
+  grid-column: 1 / -1;
+}
+
 .schema-tree {
   display: grid;
   gap: 8px;
+}
+
+.schema-tree::after {
+  content: "";
+  display: block;
+  height: 1px;
 }
 
 .schema-tree-node {
@@ -2220,7 +2272,7 @@ input:disabled {
   border-top: 1px solid #e1e6ee;
   min-height: 0;
   overflow: auto;
-  padding: 16px 20px 28px;
+  padding: 16px 20px 72px;
 }
 
 .inspector-document-viewer .json-tree-viewer {
