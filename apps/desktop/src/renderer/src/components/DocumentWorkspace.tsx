@@ -1058,16 +1058,6 @@ const ResultsHeader = ({
           JSON
         </button>
       </div>
-      {["export", "download", "upload", "link"].map((tool) => (
-        <button
-          className="tool-button"
-          key={tool}
-          type="button"
-          aria-label={tool}
-        >
-          <Icon name={tool} />
-        </button>
-      ))}
     </div>
   </div>
 );
