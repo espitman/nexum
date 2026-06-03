@@ -63,6 +63,7 @@ const defaultQueryState: DocumentQueryState = {
 };
 
 const documentIdColumn = "{Document id}";
+const documentTableHorizontalGutter = 96;
 const maxAutoColumnWidth = 1400;
 const maxInitialColumnWidth = 360;
 const objectPreviewGap = 8;
@@ -774,6 +775,7 @@ const DocumentTable = ({
     .map((column) => `${column.getSize()}px`)
     .join(" ");
   const tableWidth = table.getTotalSize();
+  const scrollableTableWidth = tableWidth + documentTableHorizontalGutter;
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
     estimateSize: () => 46,
@@ -792,7 +794,10 @@ const DocumentTable = ({
 
   return (
     <div className="data-grid" ref={parentRef}>
-      <div className="document-table" style={{ width: `${tableWidth}px` }}>
+      <div
+        className="document-table"
+        style={{ width: `${scrollableTableWidth}px` }}
+      >
         <div
           className="document-table-head"
           style={{ gridTemplateColumns: columnTemplate }}
