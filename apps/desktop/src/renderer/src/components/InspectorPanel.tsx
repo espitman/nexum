@@ -1,21 +1,23 @@
 import {
   indexRows,
-  inspectorLines,
   inspectorTabs,
   schemaFields,
   type InspectorTabLabel,
 } from "../mockData";
+import { JsonTreeView } from "./JsonTreeView";
 
 type InspectorPanelProps = {
   activeInspectorTab: InspectorTabLabel;
   onClose: () => void;
   onInspectorTabChange: (tab: InspectorTabLabel) => void;
+  selectedDocument: Record<string, unknown> | null;
 };
 
 export const InspectorPanel = ({
   activeInspectorTab,
   onClose,
   onInspectorTabChange,
+  selectedDocument,
 }: InspectorPanelProps) => (
   <aside className="inspector-panel">
     <InspectorTabs
@@ -24,7 +26,10 @@ export const InspectorPanel = ({
       onInspectorTabChange={onInspectorTabChange}
     />
     <InspectorToolbar />
-    <InspectorBody activeInspectorTab={activeInspectorTab} />
+    <InspectorBody
+      activeInspectorTab={activeInspectorTab}
+      selectedDocument={selectedDocument}
+    />
   </aside>
 );
 
@@ -84,18 +89,28 @@ const InspectorToolbar = () => (
 
 type InspectorBodyProps = {
   activeInspectorTab: InspectorTabLabel;
+  selectedDocument: Record<string, unknown> | null;
 };
 
-const InspectorBody = ({ activeInspectorTab }: InspectorBodyProps) =>
+const InspectorBody = ({
+  activeInspectorTab,
+  selectedDocument,
+}: InspectorBodyProps) =>
   activeInspectorTab === "Document" ? (
-    <pre className="json-viewer" aria-label="Selected document JSON">
-      {inspectorLines.map(([line, tone], index) => (
-        <span className="json-line" key={`${index}-${line}`}>
-          <span className="line-number">{index + 1}</span>
-          <code className={`json-${tone}`}>{line}</code>
-        </span>
-      ))}
-    </pre>
+    selectedDocument ? (
+      <div
+        className="inspector-document-viewer"
+        role="tabpanel"
+        aria-label="Selected document JSON"
+      >
+        <JsonTreeView data={selectedDocument} />
+      </div>
+    ) : (
+      <div className="inspector-empty-state" role="tabpanel">
+        <strong>No document selected</strong>
+        <span>Select a row in Documents to inspect its JSON.</span>
+      </div>
+    )
   ) : (
     <div className="inspector-list" role="tabpanel">
       {(activeInspectorTab === "Schema" ? schemaFields : indexRows).map(

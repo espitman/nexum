@@ -8,8 +8,6 @@ import {
   type ColumnSizingState,
 } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { collapseAllNested, JsonView } from "react-json-view-lite";
-import type { Props as JsonViewProps } from "react-json-view-lite";
 import {
   workspaceTabs,
   type NavItemLabel,
@@ -18,6 +16,7 @@ import {
 import type { ConnectionProfile } from "../types";
 import { ConnectionManager } from "./ConnectionManager";
 import { Icon } from "./Icon";
+import { JsonTreeView } from "./JsonTreeView";
 
 type DocumentWorkspaceProps = {
   activeSection: NavItemLabel;
@@ -33,6 +32,7 @@ type DocumentWorkspaceProps = {
   onCollectionClose: () => void;
   onCollectionOpen: () => void;
   onSectionChange: (section: NavItemLabel) => void;
+  onSelectedDocumentChange: (document: Record<string, unknown> | null) => void;
   onWorkspaceTabChange: (tab: WorkspaceTabLabel) => void;
 };
 
@@ -41,6 +41,7 @@ type DocumentViewMode = "table" | "json";
 type ParsedDocument = {
   ejson: string;
   id: string;
+  rootValue: Record<string, unknown>;
   value: Record<string, unknown>;
 };
 
@@ -58,25 +59,6 @@ const defaultQueryState: DocumentQueryState = {
   projection: {},
   skip: 0,
   sort: {},
-};
-
-const jsonViewerStyles: NonNullable<JsonViewProps["style"]> = {
-  basicChildStyle: "json-viewer-child",
-  booleanValue: "json-viewer-boolean",
-  childFieldsContainer: "json-viewer-children",
-  clickableLabel: "json-viewer-clickable-label",
-  collapsedContent: "json-viewer-collapsed-content",
-  collapseIcon: "json-viewer-collapse-icon",
-  container: "json-viewer",
-  expandIcon: "json-viewer-expand-icon",
-  label: "json-viewer-label",
-  nullValue: "json-viewer-null",
-  numberValue: "json-viewer-number",
-  otherValue: "json-viewer-other",
-  punctuation: "json-viewer-punctuation",
-  quotesForFieldNames: false,
-  stringValue: "json-viewer-string",
-  undefinedValue: "json-viewer-undefined",
 };
 
 const documentIdColumn = "{Document id}";
@@ -100,6 +82,7 @@ export const DocumentWorkspace = ({
   onCollectionClose,
   onCollectionOpen,
   onSectionChange,
+  onSelectedDocumentChange,
   onWorkspaceTabChange,
 }: DocumentWorkspaceProps) => {
   const selectedConnection =
@@ -281,6 +264,7 @@ export const DocumentWorkspace = ({
             isFetching={documentsQuery.isFetching}
             isInitialLoading={documentsQuery.isLoading}
             onRefresh={() => void documentsQuery.refetch()}
+            onSelectedDocumentChange={onSelectedDocumentChange}
             onTablePathChange={handleTablePathChange}
             tablePath={tablePath}
             viewMode={documentViewMode}
@@ -490,6 +474,7 @@ type ResultsSectionProps = {
   isFetching: boolean;
   isInitialLoading: boolean;
   onRefresh: () => void;
+  onSelectedDocumentChange: (document: Record<string, unknown> | null) => void;
   onTablePathChange: (path: string[]) => void;
   tablePath: string[];
   onViewModeChange: (mode: DocumentViewMode) => void;
@@ -504,6 +489,7 @@ const ResultsSection = ({
   isFetching,
   isInitialLoading,
   onRefresh,
+  onSelectedDocumentChange,
   onTablePathChange,
   tablePath,
   onViewModeChange,
@@ -542,6 +528,7 @@ const ResultsSection = ({
           key={`${tablePath.join(".")}:${tableDocuments[0]?.id ?? "empty"}:${tableDocuments.length}`}
           documents={tableDocuments}
           onObjectOpen={handleObjectOpen}
+          onSelectedDocumentChange={onSelectedDocumentChange}
         />
       )}
     </section>
@@ -670,6 +657,7 @@ const DocumentBreadcrumbs = ({
 type DocumentTableProps = {
   documents: ParsedDocument[];
   onObjectOpen: (field: string) => void;
+  onSelectedDocumentChange: (document: Record<string, unknown> | null) => void;
 };
 
 type ObjectPreviewState = {
@@ -683,7 +671,11 @@ type SelectedDocumentCell = {
   rowId: string;
 };
 
-const DocumentTable = ({ documents, onObjectOpen }: DocumentTableProps) => {
+const DocumentTable = ({
+  documents,
+  onObjectOpen,
+  onSelectedDocumentChange,
+}: DocumentTableProps) => {
   const parentRef = useRef<HTMLDivElement | null>(null);
   const objectPreviewHideTimer = useRef<number | null>(null);
   const objectPreviewShowTimer = useRef<number | null>(null);
@@ -870,12 +862,13 @@ const DocumentTable = ({ documents, onObjectOpen }: DocumentTableProps) => {
                       selectedCell?.cellId === cell.id ? "is-selected" : ""
                     }`}
                     key={cell.id}
-                    onClick={() =>
+                    onClick={() => {
                       setSelectedCell({
                         cellId: cell.id,
                         rowId: row.id,
-                      })
-                    }
+                      });
+                      onSelectedDocumentChange(row.original.rootValue);
+                    }}
                   >
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </div>
@@ -949,13 +942,7 @@ const JsonResults = ({ documents }: JsonResultsProps) => {
                 <strong>{document.id}</strong>
               </header>
               <div className="json-document-tree">
-                <JsonView
-                  clickToExpandNode
-                  compactTopLevel
-                  data={document.value}
-                  shouldExpandNode={collapseAllNested}
-                  style={jsonViewerStyles}
-                />
+                <JsonTreeView data={document.value} />
               </div>
             </article>
           );
@@ -1451,6 +1438,7 @@ const parseEjsonDocuments = (documents: string[]): ParsedDocument[] =>
     return {
       ejson: document,
       id: getDocumentId(value, index),
+      rootValue: value,
       value,
     };
   });

@@ -46,7 +46,9 @@ export const App = () => {
   const [activeWorkspaceTab, setActiveWorkspaceTab] =
     useState<WorkspaceTabLabel>("Documents");
   const [activeInspectorTab, setActiveInspectorTab] =
-    useState<InspectorTabLabel>("Document");
+    useState<InspectorTabLabel>("Schema");
+  const [selectedInspectorDocument, setSelectedInspectorDocument] =
+    useState<Record<string, unknown> | null>(null);
   const [selectedConnectionId, setSelectedConnectionId] = useState<
     string | null
   >(null);
@@ -170,6 +172,7 @@ export const App = () => {
 
     if (section !== "Explore") {
       setSelectedCollectionName(null);
+      setSelectedInspectorDocument(null);
       return;
     }
 
@@ -220,11 +223,13 @@ export const App = () => {
             setActiveSection("Connections");
             setSelectedConnectionId(null);
             setSelectedCollectionName(null);
+            setSelectedInspectorDocument(null);
           }}
           onConnectionSelect={(connectionId) => {
             setActiveSection("Connections");
             setSelectedConnectionId(connectionId);
             setSelectedCollectionName(null);
+            setSelectedInspectorDocument(null);
           }}
           onSectionChange={handleSectionChange}
           selectedConnectionId={selectedConnectionId}
@@ -258,7 +263,10 @@ export const App = () => {
           connectionId={selectedConnection.id}
           connectionName={selectedConnection.name}
           selectedCollectionName={visibleSelectedCollectionName}
-          onCollectionSelect={setSelectedCollectionName}
+          onCollectionSelect={(collectionName) => {
+            setSelectedCollectionName(collectionName);
+            setSelectedInspectorDocument(null);
+          }}
         />
       ) : null}
 
@@ -289,14 +297,22 @@ export const App = () => {
         onConnectionsChanged={() =>
           queryClient.invalidateQueries({ queryKey: ["connections"] })
         }
-        onSelectedConnectionChange={setSelectedConnectionId}
-        onCollectionClose={() => setSelectedCollectionName(null)}
+        onSelectedConnectionChange={(connectionId) => {
+          setSelectedConnectionId(connectionId);
+          setSelectedInspectorDocument(null);
+        }}
+        onCollectionClose={() => {
+          setSelectedCollectionName(null);
+          setSelectedInspectorDocument(null);
+        }}
         onCollectionOpen={() => {
           if (shouldShowDatabasePanel) {
             setSelectedCollectionName("users");
+            setSelectedInspectorDocument(null);
           }
         }}
         onSectionChange={handleSectionChange}
+        onSelectedDocumentChange={setSelectedInspectorDocument}
         onWorkspaceTabChange={setActiveWorkspaceTab}
       />
 
@@ -305,6 +321,7 @@ export const App = () => {
           activeInspectorTab={activeInspectorTab}
           onClose={() => setIsInspectorOpen(false)}
           onInspectorTabChange={setActiveInspectorTab}
+          selectedDocument={selectedInspectorDocument}
         />
       ) : isExploreSection ? (
         <PanelRestoreButton

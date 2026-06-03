@@ -30,7 +30,7 @@ export const workspaceTabs = [
 
 export type WorkspaceTabLabel = (typeof workspaceTabs)[number][1];
 
-export const inspectorTabs = ["Document", "Schema", "Indexes"] as const;
+export const inspectorTabs = ["Schema", "Indexes", "Document"] as const;
 
 export type InspectorTabLabel = (typeof inspectorTabs)[number];
 

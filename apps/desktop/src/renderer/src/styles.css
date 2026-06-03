@@ -1634,57 +1634,57 @@ input:disabled {
   padding: 12px 16px 16px;
 }
 
-.json-viewer {
+.json-tree-viewer {
   color: #2b3445;
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   font-size: 13px;
   line-height: 1.65;
 }
 
-.json-viewer-children {
+.json-tree-viewer-children {
   margin: 0;
   padding: 0 0 0 18px;
 }
 
-.json-viewer-child {
+.json-tree-viewer-child {
   list-style: none;
   margin: 0;
 }
 
-.json-viewer-label,
-.json-viewer-clickable-label {
+.json-tree-viewer-label,
+.json-tree-viewer-clickable-label {
   color: #c2410c;
   font-weight: 700;
 }
 
-.json-viewer-clickable-label {
+.json-tree-viewer-clickable-label {
   cursor: pointer;
 }
 
-.json-viewer-string {
+.json-tree-viewer-string {
   color: #00717d;
 }
 
-.json-viewer-number {
+.json-tree-viewer-number {
   color: #2563eb;
 }
 
-.json-viewer-boolean {
+.json-tree-viewer-boolean {
   color: #9333ea;
 }
 
-.json-viewer-null,
-.json-viewer-undefined,
-.json-viewer-other {
+.json-tree-viewer-null,
+.json-tree-viewer-undefined,
+.json-tree-viewer-other {
   color: #647084;
 }
 
-.json-viewer-punctuation {
+.json-tree-viewer-punctuation {
   color: #4b5563;
 }
 
-.json-viewer-expand-icon,
-.json-viewer-collapse-icon {
+.json-tree-viewer-expand-icon,
+.json-tree-viewer-collapse-icon {
   color: #526071;
   cursor: pointer;
   display: inline-block;
@@ -1692,20 +1692,20 @@ input:disabled {
   width: 12px;
 }
 
-.json-viewer-expand-icon::after {
+.json-tree-viewer-expand-icon::after {
   content: "›";
 }
 
-.json-viewer-collapse-icon::after {
+.json-tree-viewer-collapse-icon::after {
   content: "⌄";
 }
 
-.json-viewer-collapsed-content {
+.json-tree-viewer-collapsed-content {
   color: #8a94a6;
   margin-left: 4px;
 }
 
-.json-viewer-collapsed-content::after {
+.json-tree-viewer-collapsed-content::after {
   content: "...";
 }
 
@@ -2149,54 +2149,37 @@ input:disabled {
   font-size: 12px;
 }
 
-.json-viewer {
-  background: #ffffff;
-  color: #273244;
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+.inspector-document-viewer {
+  border-top: 1px solid #e1e6ee;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px 20px 28px;
+}
+
+.inspector-document-viewer .json-tree-viewer {
   font-size: 12px;
-  line-height: 1.72;
-  margin: 0;
-  overflow: hidden;
-  padding: 10px 0 22px;
+  line-height: 1.7;
 }
 
-.json-line {
+.inspector-empty-state {
+  align-content: center;
+  border-top: 1px solid #e1e6ee;
+  color: #647084;
   display: grid;
-  grid-template-columns: 32px 1fr;
-  min-height: 20px;
+  gap: 6px;
+  justify-items: center;
+  min-height: 0;
+  padding: 28px;
+  text-align: center;
 }
 
-.line-number {
-  border-right: 1px solid #e2e8f0;
-  color: #8792a1;
-  padding-right: 10px;
-  text-align: right;
-  user-select: none;
+.inspector-empty-state strong {
+  color: #263142;
+  font-size: 13px;
 }
 
-.json-line code {
-  display: block;
-  min-width: 0;
-  overflow: hidden;
-  padding-left: 16px;
-  text-overflow: ellipsis;
-  white-space: pre;
-}
-
-.json-key {
-  color: #c2410c;
-}
-
-.json-string {
-  color: #00717d;
-}
-
-.json-boolean {
-  color: #9333ea;
-}
-
-.json-plain {
-  color: #344052;
+.inspector-empty-state span {
+  font-size: 12px;
 }
 
 .icon {
