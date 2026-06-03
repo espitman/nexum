@@ -832,9 +832,9 @@ const createDocumentColumns = (
   documents: ParsedDocument[],
   onObjectOpen: (field: string) => void,
 ): ColumnDef<ParsedDocument>[] => {
-  const keys = [
+  const keys = orderDocumentColumnKeys([
     ...new Set(documents.flatMap((document) => Object.keys(document.value))),
-  ].slice(0, 24);
+  ]).slice(0, 24);
   const visibleKeys = keys.length > 0 ? keys : ["document"];
 
   return [
@@ -882,6 +882,19 @@ const createDocumentColumns = (
         size: getInitialColumnSize(key, documents),
       }),
     ),
+  ];
+};
+
+const orderDocumentColumnKeys = (keys: string[]): string[] => {
+  const uniqueKeys = [...new Set(keys)];
+
+  if (!uniqueKeys.includes(documentIdColumn)) {
+    return uniqueKeys;
+  }
+
+  return [
+    documentIdColumn,
+    ...uniqueKeys.filter((key) => key !== documentIdColumn),
   ];
 };
 
