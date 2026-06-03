@@ -169,13 +169,13 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
   - [x] List collections
   - [x] Distinguish collections and views
   - [x] Return typed explorer nodes
-- [ ] Build explorer UI
-  - [ ] Render connection root nodes
-  - [ ] Render database nodes
-  - [ ] Render collection nodes
-  - [ ] Add loading state
-  - [ ] Add empty state
-  - [ ] Add error state
+- [x] Build explorer UI
+  - [x] Render connection root nodes
+  - [x] Render database nodes
+  - [x] Render collection nodes
+  - [x] Add loading state
+  - [x] Add empty state
+  - [x] Add error state
 - [ ] Verify explorer
   - [ ] Browse databases
   - [ ] Browse collections

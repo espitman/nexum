@@ -521,14 +521,34 @@ button {
 }
 
 .tree-list {
+  display: grid;
   margin-top: 16px;
-  overflow: hidden;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-gutter: stable;
 }
 
 .tree-row {
+  align-items: center;
   border-radius: 6px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 14px 18px max-content;
   height: 34px;
+  justify-content: flex-start;
+  min-width: max-content;
   padding-left: calc(8px + var(--depth) * 22px);
+  width: 100%;
+}
+
+.tree-row .icon {
+  flex: 0 0 auto;
+}
+
+.tree-row > span:last-child {
+  min-width: max-content;
+  text-align: left;
+  white-space: nowrap;
 }
 
 .tree-caret {
@@ -542,6 +562,26 @@ button {
 
 .tree-caret.is-open {
   transform: rotate(90deg);
+}
+
+.explorer-root-row {
+  color: #263142;
+  font-weight: 700;
+}
+
+.explorer-panel-state {
+  align-items: center;
+  color: #7c8797;
+  display: flex;
+  font-size: 12px;
+  gap: 8px;
+  min-height: 30px;
+  padding-left: calc(8px + var(--depth) * 22px);
+}
+
+.explorer-panel-state button {
+  color: #00717d;
+  font-weight: 700;
 }
 
 .document-workspace {

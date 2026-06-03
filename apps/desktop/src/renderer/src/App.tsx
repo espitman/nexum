@@ -198,9 +198,10 @@ export const App = () => {
 
       {shouldShowDatabasePanel ? (
         <DatabasePanel
+          connectionId={selectedConnection.id}
+          connectionName={selectedConnection.name}
           selectedCollectionName={visibleSelectedCollectionName}
           onCollectionSelect={setSelectedCollectionName}
-          onSectionChange={setActiveSection}
         />
       ) : null}
 

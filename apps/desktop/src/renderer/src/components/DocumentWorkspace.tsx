@@ -123,27 +123,31 @@ const CollectionTabBar = ({
   isCollectionWorkspace,
   selectedCollectionName,
   onCollectionClose,
-}: CollectionTabBarProps) => (
-  <div className="collection-tabbar">
-    {isCollectionWorkspace ? (
-      <div className="collection-tab is-active">
-        <Icon name="table" />
-        <span>{selectedCollectionName}</span>
-        <button
-          aria-label={`Close ${selectedCollectionName} tab`}
-          className="close-mark"
-          onClick={onCollectionClose}
-          type="button"
-        >
-          ×
-        </button>
-      </div>
-    ) : null}
-    <button className="tab-plus" type="button" aria-label="New tab">
-      +
-    </button>
-  </div>
-);
+}: CollectionTabBarProps) => {
+  const collectionLabel = selectedCollectionName?.split(".").at(-1);
+
+  return (
+    <div className="collection-tabbar">
+      {isCollectionWorkspace ? (
+        <div className="collection-tab is-active">
+          <Icon name="table" />
+          <span>{collectionLabel}</span>
+          <button
+            aria-label={`Close ${collectionLabel} tab`}
+            className="close-mark"
+            onClick={onCollectionClose}
+            type="button"
+          >
+            ×
+          </button>
+        </div>
+      ) : null}
+      <button className="tab-plus" type="button" aria-label="New tab">
+        +
+      </button>
+    </div>
+  );
+};
 
 type WorkspaceTabsProps = {
   activeWorkspaceTab: WorkspaceTabLabel;
