@@ -5,6 +5,7 @@ import {
   createDefaultQueryBuilderModel,
   createQueryBuilderCondition,
   createQueryBuilderGroup,
+  queryBuilderConditionOperators,
   removeQueryBuilderNode,
   updateQueryBuilderCondition,
   updateQueryBuilderGroup,
@@ -127,4 +128,112 @@ describe("queryBuilderModel", () => {
       $or: [{ "profile.age": 30 }, { verified: true }],
     });
   });
+
+  it("exposes every supported condition operator", () => {
+    expect(queryBuilderConditionOperators).toEqual([
+      "equals",
+      "notEquals",
+      "greaterThan",
+      "greaterThanOrEqual",
+      "lessThan",
+      "lessThanOrEqual",
+      "contains",
+      "exists",
+      "in",
+      "notIn",
+      "regex",
+    ]);
+  });
+
+  it.each([
+    {
+      expectedFilter: { status: "active" },
+      operator: "equals",
+      value: "active",
+    },
+    {
+      expectedFilter: { status: { $ne: "deleted" } },
+      operator: "notEquals",
+      value: "deleted",
+    },
+    {
+      expectedFilter: { age: { $gt: 18 } },
+      field: "age",
+      operator: "greaterThan",
+      value: 18,
+    },
+    {
+      expectedFilter: { age: { $gte: 18 } },
+      field: "age",
+      operator: "greaterThanOrEqual",
+      value: 18,
+    },
+    {
+      expectedFilter: { age: { $lt: 65 } },
+      field: "age",
+      operator: "lessThan",
+      value: 65,
+    },
+    {
+      expectedFilter: { age: { $lte: 65 } },
+      field: "age",
+      operator: "lessThanOrEqual",
+      value: 65,
+    },
+    {
+      expectedFilter: { title: { $options: "i", $regex: "hotel\\.com" } },
+      field: "title",
+      operator: "contains",
+      value: "hotel.com",
+    },
+    {
+      expectedFilter: { deletedAt: { $exists: true } },
+      field: "deletedAt",
+      operator: "exists",
+      value: true,
+    },
+    {
+      expectedFilter: { deletedAt: { $exists: false } },
+      field: "deletedAt",
+      operator: "exists",
+      value: false,
+    },
+    {
+      expectedFilter: { status: { $in: ["active", "pending"] } },
+      operator: "in",
+      value: ["active", "pending"],
+    },
+    {
+      expectedFilter: { status: { $in: ["active"] } },
+      operator: "in",
+      value: "active",
+    },
+    {
+      expectedFilter: { status: { $nin: ["deleted", "archived"] } },
+      operator: "notIn",
+      value: ["deleted", "archived"],
+    },
+    {
+      expectedFilter: { email: { $regex: ".*@example\\.com$" } },
+      field: "email",
+      operator: "regex",
+      value: ".*@example\\.com$",
+    },
+  ] as const)(
+    "builds MongoDB filters for $operator",
+    ({ expectedFilter, field = "status", operator, value }) => {
+      const root = createQueryBuilderGroup({
+        children: [
+          createQueryBuilderCondition({
+            field,
+            operator,
+            value,
+          }),
+        ],
+        id: "root",
+      });
+
+      expect(buildMongoFilterFromQueryBuilder(root)).toEqual(expectedFilter);
+    },
+  );
 });

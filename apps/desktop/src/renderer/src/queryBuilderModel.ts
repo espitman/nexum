@@ -2,7 +2,22 @@ export const queryBuilderCombinators = ["and", "or"] as const;
 
 export type QueryBuilderCombinator = (typeof queryBuilderCombinators)[number];
 
-export type QueryBuilderConditionOperator = "equals";
+export const queryBuilderConditionOperators = [
+  "equals",
+  "notEquals",
+  "greaterThan",
+  "greaterThanOrEqual",
+  "lessThan",
+  "lessThanOrEqual",
+  "contains",
+  "exists",
+  "in",
+  "notIn",
+  "regex",
+] as const;
+
+export type QueryBuilderConditionOperator =
+  (typeof queryBuilderConditionOperators)[number];
 
 export type QueryBuilderConditionNode = {
   enabled: boolean;
@@ -197,11 +212,35 @@ const buildMongoFilterForCondition = (
     return null;
   }
 
-  if (condition.operator === "equals") {
-    return { [field]: condition.value };
+  switch (condition.operator) {
+    case "equals":
+      return { [field]: condition.value };
+    case "notEquals":
+      return { [field]: { $ne: condition.value } };
+    case "greaterThan":
+      return { [field]: { $gt: condition.value } };
+    case "greaterThanOrEqual":
+      return { [field]: { $gte: condition.value } };
+    case "lessThan":
+      return { [field]: { $lt: condition.value } };
+    case "lessThanOrEqual":
+      return { [field]: { $lte: condition.value } };
+    case "contains":
+      return {
+        [field]: {
+          $options: "i",
+          $regex: escapeRegex(String(condition.value)),
+        },
+      };
+    case "exists":
+      return { [field]: { $exists: condition.value !== false } };
+    case "in":
+      return { [field]: { $in: toQueryBuilderValueList(condition.value) } };
+    case "notIn":
+      return { [field]: { $nin: toQueryBuilderValueList(condition.value) } };
+    case "regex":
+      return { [field]: { $regex: String(condition.value) } };
   }
-
-  return null;
 };
 
 const createQueryBuilderNodeId = (prefix: string): string => {
@@ -214,3 +253,9 @@ const createQueryBuilderNodeId = (prefix: string): string => {
   fallbackId += 1;
   return `${prefix}_${fallbackId}`;
 };
+
+const toQueryBuilderValueList = (value: unknown): unknown[] =>
+  Array.isArray(value) ? value : [value];
+
+const escapeRegex = (value: string): string =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

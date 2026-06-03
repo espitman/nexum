@@ -212,18 +212,18 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
   - [x] Add condition model
   - [x] Add group model
   - [x] Support AND/OR combinators
-- [ ] Implement supported operators
-  - [ ] Equals
-  - [ ] Not equals
-  - [ ] Greater than
-  - [ ] Greater than or equal
-  - [ ] Less than
-  - [ ] Less than or equal
-  - [ ] Contains
-  - [ ] Exists
-  - [ ] In
-  - [ ] Not in
-  - [ ] Regex
+- [x] Implement supported operators
+  - [x] Equals
+  - [x] Not equals
+  - [x] Greater than
+  - [x] Greater than or equal
+  - [x] Less than
+  - [x] Less than or equal
+  - [x] Contains
+  - [x] Exists
+  - [x] In
+  - [x] Not in
+  - [x] Regex
 - [ ] Implement field inference
   - [ ] Sample up to 100 documents by default
   - [ ] Infer nested paths with dot notation
