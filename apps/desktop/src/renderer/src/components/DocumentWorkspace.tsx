@@ -62,6 +62,9 @@ const defaultQueryState: DocumentQueryState = {
 const documentIdColumn = "{Document id}";
 const maxAutoColumnWidth = 1400;
 const maxInitialColumnWidth = 360;
+const objectPreviewGap = 8;
+const objectPreviewHeight = 280;
+const objectPreviewWidth = 360;
 
 export const DocumentWorkspace = ({
   activeSection,
@@ -589,12 +592,68 @@ type DocumentTableProps = {
   onObjectOpen: (field: string) => void;
 };
 
+type ObjectPreviewState = {
+  content: string;
+  left: number;
+  top: number;
+};
+
 const DocumentTable = ({ documents, onObjectOpen }: DocumentTableProps) => {
   const parentRef = useRef<HTMLDivElement | null>(null);
+  const objectPreviewHideTimer = useRef<number | null>(null);
+  const objectPreviewShowTimer = useRef<number | null>(null);
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
+  const [objectPreview, setObjectPreview] = useState<ObjectPreviewState | null>(
+    null,
+  );
+  const cancelObjectPreviewShow = useCallback(() => {
+    if (objectPreviewShowTimer.current !== null) {
+      window.clearTimeout(objectPreviewShowTimer.current);
+      objectPreviewShowTimer.current = null;
+    }
+  }, []);
+  const cancelObjectPreviewHide = useCallback(() => {
+    if (objectPreviewHideTimer.current !== null) {
+      window.clearTimeout(objectPreviewHideTimer.current);
+      objectPreviewHideTimer.current = null;
+    }
+  }, []);
+  const scheduleObjectPreviewHide = useCallback(() => {
+    cancelObjectPreviewShow();
+    cancelObjectPreviewHide();
+    objectPreviewHideTimer.current = window.setTimeout(() => {
+      setObjectPreview(null);
+      objectPreviewHideTimer.current = null;
+    }, 180);
+  }, [cancelObjectPreviewHide, cancelObjectPreviewShow]);
   const columns = useMemo<ColumnDef<ParsedDocument>[]>(
-    () => createDocumentColumns(documents, onObjectOpen),
-    [documents, onObjectOpen],
+    () =>
+      createDocumentColumns(
+        documents,
+        onObjectOpen,
+        (event, value) => {
+          cancelObjectPreviewShow();
+          cancelObjectPreviewHide();
+          const rect = event.currentTarget.getBoundingClientRect();
+
+          objectPreviewShowTimer.current = window.setTimeout(() => {
+            setObjectPreview({
+              content: formatPreviewJson(value),
+              left: getObjectPreviewLeft(rect),
+              top: getObjectPreviewTop(rect),
+            });
+            objectPreviewShowTimer.current = null;
+          }, 1000);
+        },
+        scheduleObjectPreviewHide,
+      ),
+    [
+      cancelObjectPreviewHide,
+      cancelObjectPreviewShow,
+      documents,
+      onObjectOpen,
+      scheduleObjectPreviewHide,
+    ],
   );
   const autoColumnSizes = useMemo(
     () => getAutoColumnSizes(documents),
@@ -723,6 +782,19 @@ const DocumentTable = ({ documents, onObjectOpen }: DocumentTableProps) => {
           })}
         </div>
       </div>
+      {objectPreview ? (
+        <div
+          className="object-preview-popover"
+          onMouseEnter={cancelObjectPreviewHide}
+          onMouseLeave={scheduleObjectPreviewHide}
+          style={{
+            left: `${objectPreview.left}px`,
+            top: `${objectPreview.top}px`,
+          }}
+        >
+          <pre>{objectPreview.content}</pre>
+        </div>
+      ) : null}
     </div>
   );
 };
@@ -866,6 +938,11 @@ const WorkspaceEmptyState = ({
 const createDocumentColumns = (
   documents: ParsedDocument[],
   onObjectOpen: (field: string) => void,
+  onObjectPreviewShow: (
+    event: { currentTarget: HTMLButtonElement },
+    value: unknown,
+  ) => void,
+  onObjectPreviewHide: () => void,
 ): ColumnDef<ParsedDocument>[] => {
   const keys = orderDocumentColumnKeys([
     ...new Set(documents.flatMap((document) => Object.keys(document.value))),
@@ -886,7 +963,10 @@ const createDocumentColumns = (
           <button
             className="object-cell"
             onDoubleClick={() => onObjectOpen(key)}
-            title={formatCellValue(value)}
+            onMouseEnter={(event) => onObjectPreviewShow(event, value)}
+            onMouseLeave={onObjectPreviewHide}
+            onFocus={(event) => onObjectPreviewShow(event, value)}
+            onBlur={onObjectPreviewHide}
             type="button"
           >
             <span className="object-cell-icon" />
@@ -965,6 +1045,41 @@ const getProjectedTableValue = (
     ...baseValue,
     value,
   };
+};
+
+const getObjectPreviewLeft = (rect: DOMRect): number => {
+  const rightSideLeft = rect.right + objectPreviewGap;
+
+  if (rightSideLeft + objectPreviewWidth <= window.innerWidth - 12) {
+    return rightSideLeft;
+  }
+
+  const leftSideLeft = rect.left - objectPreviewWidth - objectPreviewGap;
+
+  if (leftSideLeft >= 12) {
+    return leftSideLeft;
+  }
+
+  return Math.max(
+    12,
+    Math.min(rect.left, window.innerWidth - objectPreviewWidth - 12),
+  );
+};
+
+const getObjectPreviewTop = (rect: DOMRect): number => {
+  const belowTop = rect.bottom + objectPreviewGap;
+
+  if (belowTop + objectPreviewHeight <= window.innerHeight - 12) {
+    return belowTop;
+  }
+
+  const aboveTop = rect.top - objectPreviewHeight - objectPreviewGap;
+
+  if (aboveTop >= 12) {
+    return aboveTop;
+  }
+
+  return Math.max(12, window.innerHeight - objectPreviewHeight - 12);
 };
 
 const getValueAtPath = (
@@ -1309,6 +1424,9 @@ const formatJson = (value: string): string => {
     return value;
   }
 };
+
+const formatPreviewJson = (value: unknown): string =>
+  JSON.stringify(unwrapEjsonValue(value), null, 2);
 
 const getExploreEmptyState = (
   selectedConnection: ConnectionProfile | null,

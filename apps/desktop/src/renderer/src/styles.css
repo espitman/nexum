@@ -196,7 +196,7 @@ button {
   position: absolute;
   bottom: 28px;
   width: 28px;
-  z-index: 6;
+  z-index: 30;
 }
 
 .panel-restore-left {
@@ -1535,6 +1535,29 @@ input:disabled {
 .object-cell-icon::before {
   content: "{}";
   line-height: 1;
+}
+
+.object-preview-popover {
+  background: #ffffff;
+  border: 1px solid #cfd7e2;
+  border-radius: 6px;
+  box-shadow: 0 14px 34px rgba(27, 39, 54, 0.18);
+  max-height: 280px;
+  max-width: 360px;
+  min-width: 260px;
+  overflow: auto;
+  padding: 12px 14px;
+  position: fixed;
+  z-index: 40;
+}
+
+.object-preview-popover pre {
+  color: #00717d;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  margin: 0;
+  white-space: pre;
 }
 
 .json-results {
