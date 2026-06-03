@@ -1186,6 +1186,10 @@ button {
   padding: 8px;
 }
 
+.query-builder-condition > .query-autocomplete {
+  min-width: 0;
+}
+
 .document-workspace.is-query-builder .query-builder-header {
   align-items: stretch;
   gap: 10px;

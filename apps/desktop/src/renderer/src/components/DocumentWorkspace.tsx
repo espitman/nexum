@@ -235,6 +235,9 @@ export const DocumentWorkspace = ({
     }
 
     setQueryInputError(null);
+    setFilterInput(JSON.stringify(nextState.value.filter));
+    setProjectionInput(JSON.stringify(nextState.value.projection));
+    setSortInput(JSON.stringify(nextState.value.sort));
     setQueryState(nextState.value);
   };
 
@@ -549,6 +552,7 @@ const QuerySection = ({
           mode="filter"
           value={filterInput}
           onChange={onFilterInputChange}
+          onEnter={onRunQuery}
         />
         <button className="plain-icon" type="button" aria-label="Copy query">
           ⧉
@@ -565,6 +569,7 @@ const QuerySection = ({
             placeholder='{ "email": 1 }'
             value={projectionInput}
             onChange={onProjectionInputChange}
+            onEnter={onRunQuery}
           />
         </label>
         <label>
@@ -574,6 +579,12 @@ const QuerySection = ({
             inputMode="numeric"
             value={limitInput}
             onChange={(event) => onLimitInputChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                onRunQuery();
+              }
+            }}
           />
         </label>
         <label>
@@ -583,6 +594,12 @@ const QuerySection = ({
             inputMode="numeric"
             value={skipInput}
             onChange={(event) => onSkipInputChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                onRunQuery();
+              }
+            }}
           />
         </label>
         <label className="sort-control">
@@ -591,6 +608,12 @@ const QuerySection = ({
             aria-label="Sort"
             value={sortInput}
             onChange={(event) => onSortInputChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                onRunQuery();
+              }
+            }}
           />
         </label>
         <button
@@ -613,10 +636,11 @@ const QuerySection = ({
 type QueryFieldAutocompleteInputProps = {
   "aria-label": string;
   fields: SchemaFieldSummary[];
-  mode: "filter" | "projection";
+  mode: "field" | "filter" | "projection";
   placeholder?: string;
   value: string;
   onChange: (value: string) => void;
+  onEnter?: () => void;
 };
 
 const QueryFieldAutocompleteInput = ({
@@ -626,6 +650,7 @@ const QueryFieldAutocompleteInput = ({
   placeholder,
   value,
   onChange,
+  onEnter,
 }: QueryFieldAutocompleteInputProps) => {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -664,6 +689,7 @@ const QueryFieldAutocompleteInput = ({
     });
 
     onChange(nextValue);
+    setIsFocused(false);
     window.requestAnimationFrame(() => {
       const input = inputRef.current;
 
@@ -671,12 +697,19 @@ const QueryFieldAutocompleteInput = ({
         return;
       }
 
+      const afterSuggestion = value.slice(
+        context.start + context.fragment.length,
+      );
+      const insertedKey = getFormattedQueryFieldKey(context, suggestion.path);
+      const insertedValueSuffix =
+        mode === "field"
+          ? ""
+          : getQueryFieldSuggestionValueSuffix(afterSuggestion, mode);
       const nextCaret = Math.min(
         nextValue.length,
-        context.start +
-          (context.hasOpeningQuote
-            ? suggestion.path.length
-            : `"${suggestion.path}"`.length),
+        mode === "field"
+          ? suggestion.path.length
+          : context.start + insertedKey.length + insertedValueSuffix.length,
       );
       input.focus();
       input.setSelectionRange(nextCaret, nextCaret);
@@ -695,6 +728,7 @@ const QueryFieldAutocompleteInput = ({
         onBlur={() => window.setTimeout(() => setIsFocused(false), 140)}
         onChange={(event) => {
           onChange(event.target.value);
+          setIsFocused(true);
           setActiveIndex(0);
           setCaretIndex(
             event.target.selectionStart ?? event.target.value.length,
@@ -706,6 +740,13 @@ const QueryFieldAutocompleteInput = ({
           syncCaret();
         }}
         onKeyDown={(event) => {
+          if (event.key === "Enter" && !shouldShowSuggestions) {
+            event.preventDefault();
+            event.stopPropagation();
+            onEnter?.();
+            return;
+          }
+
           if (!shouldShowSuggestions) {
             return;
           }
@@ -726,6 +767,7 @@ const QueryFieldAutocompleteInput = ({
 
           if (event.key === "Enter" || event.key === "Tab") {
             event.preventDefault();
+            event.stopPropagation();
             const activeSuggestion =
               suggestions[Math.min(activeIndex, suggestions.length - 1)];
 
@@ -807,7 +849,6 @@ const QueryBuilderSection = ({
   onRunQuery,
   preview,
 }: QueryBuilderSectionProps) => {
-  const fieldOptionsId = "query-builder-fields";
   const [activeBuilderTab, setActiveBuilderTab] = useState<"Preview" | "Query">(
     "Query",
   );
@@ -836,24 +877,14 @@ const QueryBuilderSection = ({
           </div>
         </div>
 
-        <datalist id={fieldOptionsId}>
-          {fields.map((field) => (
-            <option
-              key={field.path}
-              label={`${field.types.join(" | ")} · ${field.occurrenceCount}`}
-              value={field.path}
-            />
-          ))}
-        </datalist>
-
         {activeBuilderTab === "Query" ? (
           <div className="query-builder-panel" role="tabpanel">
             <QueryBuilderGroup
-              fieldOptionsId={fieldOptionsId}
               fields={fields}
               group={model}
               isRoot
               root={model}
+              onRunQuery={onRunQuery}
               onRootChange={onModelChange}
             />
           </div>
@@ -880,19 +911,19 @@ const QueryBuilderSection = ({
 };
 
 type QueryBuilderGroupProps = {
-  fieldOptionsId: string;
   fields: QueryBuilderFieldInference[];
   group: QueryBuilderGroupNode;
   isRoot?: boolean;
   root: QueryBuilderGroupNode;
+  onRunQuery: () => void;
   onRootChange: (root: QueryBuilderGroupNode) => void;
 };
 
 const QueryBuilderGroup = ({
-  fieldOptionsId,
   fields,
   group,
   isRoot = false,
+  onRunQuery,
   root,
   onRootChange,
 }: QueryBuilderGroupProps) => (
@@ -968,19 +999,19 @@ const QueryBuilderGroup = ({
         group.children.map((child) =>
           child.kind === "group" ? (
             <QueryBuilderGroup
-              fieldOptionsId={fieldOptionsId}
               fields={fields}
               group={child}
               key={child.id}
+              onRunQuery={onRunQuery}
               root={root}
               onRootChange={onRootChange}
             />
           ) : (
             <QueryBuilderCondition
               condition={child}
-              fieldOptionsId={fieldOptionsId}
               fields={fields}
               key={child.id}
+              onRunQuery={onRunQuery}
               root={root}
               onRootChange={onRootChange}
             />
@@ -993,34 +1024,44 @@ const QueryBuilderGroup = ({
 
 type QueryBuilderConditionProps = {
   condition: QueryBuilderConditionNode;
-  fieldOptionsId: string;
   fields: QueryBuilderFieldInference[];
   root: QueryBuilderGroupNode;
+  onRunQuery: () => void;
   onRootChange: (root: QueryBuilderGroupNode) => void;
 };
 
 const QueryBuilderCondition = ({
   condition,
-  fieldOptionsId,
   fields,
+  onRunQuery,
   root,
   onRootChange,
 }: QueryBuilderConditionProps) => {
   const inferredField = fields.find((field) => field.path === condition.field);
   const requiresValue = condition.operator !== "exists";
+  const autocompleteFields = useMemo(
+    () =>
+      fields.map((field) => ({
+        meta: `${field.occurrenceCount}`,
+        name: field.path,
+        type: field.types.join(" | "),
+      })),
+    [fields],
+  );
 
   return (
     <div className="query-builder-condition">
-      <input
+      <QueryFieldAutocompleteInput
         aria-label="Field"
-        className="query-builder-field"
-        list={fieldOptionsId}
+        fields={autocompleteFields}
+        mode="field"
         placeholder="field.path"
         value={condition.field}
-        onChange={(event) =>
+        onEnter={onRunQuery}
+        onChange={(field) =>
           onRootChange(
             updateQueryBuilderCondition(root, condition.id, {
-              field: event.target.value,
+              field,
             }),
           )
         }
@@ -1058,6 +1099,12 @@ const QueryBuilderCondition = ({
               }),
             )
           }
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              onRunQuery();
+            }
+          }}
         />
       ) : (
         <select
@@ -2020,7 +2067,7 @@ const getQueryFieldSuggestionContext = (
   caretIndex: number,
 ): QueryFieldSuggestionContext | null => {
   const prefix = value.slice(0, caretIndex);
-  const match = /(?:^|[,{]\s*)"?([\w.$-]+\.?)$/.exec(prefix);
+  const match = /(?:^|[,{]\s*)"?([\w.$-]*\.?)$/.exec(prefix);
 
   if (!match) {
     return null;
@@ -2086,28 +2133,44 @@ const insertQueryFieldSuggestion = ({
   value,
 }: {
   context: QueryFieldSuggestionContext;
-  mode: "filter" | "projection";
+  mode: "field" | "filter" | "projection";
   path: string;
   value: string;
 }): string => {
+  if (mode === "field") {
+    return path;
+  }
+
   const trimmedValue = value.trim();
 
   if (!trimmedValue || trimmedValue === "{}") {
-    return `{ "${path}": ${mode === "filter" ? '""' : "1"} }`;
+    return `{"${path}":${mode === "filter" ? '""' : "1"}}`;
   }
 
   const before = value.slice(0, context.start);
   const after = value.slice(context.start + context.fragment.length);
-  const nextAfter = after.trimStart();
-  const formattedKey = context.hasOpeningQuote ? path : `"${path}"`;
-  const valueSuffix =
-    nextAfter.startsWith(":") || nextAfter.startsWith('"')
-      ? ""
-      : mode === "filter"
-        ? ': ""'
-        : ": 1";
+  const formattedKey = getFormattedQueryFieldKey(context, path);
+  const valueSuffix = getQueryFieldSuggestionValueSuffix(after, mode);
 
   return `${before}${formattedKey}${valueSuffix}${after}`;
+};
+
+const getFormattedQueryFieldKey = (
+  context: QueryFieldSuggestionContext,
+  path: string,
+): string => (context.hasOpeningQuote ? path : `"${path}"`);
+
+const getQueryFieldSuggestionValueSuffix = (
+  after: string,
+  mode: "filter" | "projection",
+): string => {
+  const nextAfter = after.trimStart();
+
+  if (nextAfter.startsWith(":") || nextAfter.startsWith('"')) {
+    return "";
+  }
+
+  return mode === "filter" ? ':""' : ":1";
 };
 
 const parseJsonObject = (
