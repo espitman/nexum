@@ -1,10 +1,11 @@
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   flexRender,
   getCoreRowModel,
   useReactTable,
   type ColumnDef,
+  type ColumnSizingState,
 } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
@@ -58,6 +59,8 @@ const defaultQueryState: DocumentQueryState = {
   sort: {},
 };
 
+const documentIdColumn = "{Document id}";
+
 export const DocumentWorkspace = ({
   activeSection,
   activeWorkspaceTab,
@@ -91,6 +94,10 @@ export const DocumentWorkspace = ({
   const [skipInput, setSkipInput] = useState("0");
   const [sortInput, setSortInput] = useState("{}");
   const [queryInputError, setQueryInputError] = useState<string | null>(null);
+  const [tableDrillState, setTableDrillState] = useState<{
+    collectionName: string | null;
+    path: string[];
+  }>({ collectionName: null, path: [] });
   const isCollectionWorkspace =
     activeSection === "Explore" && selectedCollectionName !== null;
   const isConnectionManager =
@@ -132,6 +139,11 @@ export const DocumentWorkspace = ({
     () => parseEjsonDocuments(documentsQuery.data?.documents ?? []),
     [documentsQuery.data?.documents],
   );
+  const selectedCollectionLabel = selectedCollectionName?.split(".").at(-1);
+  const tablePath =
+    tableDrillState.collectionName === selectedCollectionName
+      ? tableDrillState.path
+      : [];
   const exploreEmptyState = getExploreEmptyState(
     selectedConnection,
     onCollectionOpen,
@@ -160,6 +172,13 @@ export const DocumentWorkspace = ({
 
     setQueryInputError(null);
     setQueryState(nextState.value);
+  };
+
+  const handleTablePathChange = (path: string[]) => {
+    setTableDrillState({
+      collectionName: selectedCollectionName,
+      path,
+    });
   };
 
   return (
@@ -195,11 +214,14 @@ export const DocumentWorkspace = ({
             sortInput={sortInput}
           />
           <ResultsSection
+            collectionLabel={selectedCollectionLabel ?? "Collection"}
             documents={parsedDocuments}
             error={documentsQuery.error}
             hasMore={documentsQuery.data?.hasMore ?? false}
             isFetching={documentsQuery.isFetching}
             onRefresh={() => void documentsQuery.refetch()}
+            onTablePathChange={handleTablePathChange}
+            tablePath={tablePath}
             viewMode={documentViewMode}
             onViewModeChange={setDocumentViewMode}
           />
@@ -388,66 +410,104 @@ const QuerySection = ({
 );
 
 type ResultsSectionProps = {
+  collectionLabel: string;
   documents: ParsedDocument[];
   error: Error | null;
   hasMore: boolean;
   isFetching: boolean;
   onRefresh: () => void;
+  onTablePathChange: (path: string[]) => void;
+  tablePath: string[];
   onViewModeChange: (mode: DocumentViewMode) => void;
   viewMode: DocumentViewMode;
 };
 
 const ResultsSection = ({
+  collectionLabel,
   documents,
   error,
   hasMore,
   isFetching,
   onRefresh,
+  onTablePathChange,
+  tablePath,
   onViewModeChange,
   viewMode,
-}: ResultsSectionProps) => (
-  <section className="results-section">
-    <ResultsHeader
-      count={documents.length}
-      hasMore={hasMore}
-      isFetching={isFetching}
-      onRefresh={onRefresh}
-      onViewModeChange={onViewModeChange}
-      viewMode={viewMode}
-    />
-    {error ? (
-      <ResultsState title="Unable to load documents" label={error.message} />
-    ) : viewMode === "json" ? (
-      <JsonResults documents={documents} />
-    ) : (
-      <DocumentTable documents={documents} />
-    )}
-  </section>
-);
+}: ResultsSectionProps) => {
+  const tableDocuments = useMemo(
+    () => projectDocumentsForTable(documents, tablePath),
+    [documents, tablePath],
+  );
+  const handleObjectOpen = useCallback(
+    (field: string) => onTablePathChange([...tablePath, field]),
+    [onTablePathChange, tablePath],
+  );
+
+  return (
+    <section className="results-section">
+      <ResultsHeader
+        collectionLabel={collectionLabel}
+        count={documents.length}
+        hasMore={hasMore}
+        isFetching={isFetching}
+        onRefresh={onRefresh}
+        onTablePathChange={onTablePathChange}
+        onViewModeChange={onViewModeChange}
+        tablePath={tablePath}
+        viewMode={viewMode}
+      />
+      {error ? (
+        <ResultsState title="Unable to load documents" label={error.message} />
+      ) : viewMode === "json" ? (
+        <JsonResults documents={documents} />
+      ) : (
+        <DocumentTable
+          key={`${tablePath.join(".")}:${tableDocuments[0]?.id ?? "empty"}:${tableDocuments.length}`}
+          documents={tableDocuments}
+          onObjectOpen={handleObjectOpen}
+        />
+      )}
+    </section>
+  );
+};
 
 type ResultsHeaderProps = {
+  collectionLabel: string;
   count: number;
   hasMore: boolean;
   isFetching: boolean;
   onRefresh: () => void;
+  onTablePathChange: (path: string[]) => void;
   onViewModeChange: (mode: DocumentViewMode) => void;
+  tablePath: string[];
   viewMode: DocumentViewMode;
 };
 
 const ResultsHeader = ({
+  collectionLabel,
   count,
   hasMore,
   isFetching,
   onRefresh,
+  onTablePathChange,
   onViewModeChange,
+  tablePath,
   viewMode,
 }: ResultsHeaderProps) => (
   <div className="results-header">
     <div>
-      <strong>
-        {count}
-        {hasMore ? "+" : ""} documents
-      </strong>
+      {viewMode === "table" && tablePath.length > 0 ? (
+        <DocumentBreadcrumbs
+          collectionLabel={collectionLabel}
+          onTablePathChange={onTablePathChange}
+          tablePath={tablePath}
+        />
+      ) : (
+        <strong>
+          {count}
+          {hasMore ? "+" : ""} documents
+        </strong>
+      )}
       <button
         className="plain-icon"
         type="button"
@@ -493,24 +553,65 @@ const ResultsHeader = ({
   </div>
 );
 
-type DocumentTableProps = {
-  documents: ParsedDocument[];
+type DocumentBreadcrumbsProps = {
+  collectionLabel: string;
+  onTablePathChange: (path: string[]) => void;
+  tablePath: string[];
 };
 
-const DocumentTable = ({ documents }: DocumentTableProps) => {
+const DocumentBreadcrumbs = ({
+  collectionLabel,
+  onTablePathChange,
+  tablePath,
+}: DocumentBreadcrumbsProps) => (
+  <nav className="document-breadcrumbs" aria-label="Document object path">
+    <button type="button" onClick={() => onTablePathChange([])}>
+      {collectionLabel}
+    </button>
+    {tablePath.map((segment, index) => (
+      <span className="document-breadcrumb-segment" key={`${segment}-${index}`}>
+        <span className="breadcrumb-separator">›</span>
+        <button
+          type="button"
+          onClick={() => onTablePathChange(tablePath.slice(0, index + 1))}
+        >
+          {segment}
+        </button>
+      </span>
+    ))}
+  </nav>
+);
+
+type DocumentTableProps = {
+  documents: ParsedDocument[];
+  onObjectOpen: (field: string) => void;
+};
+
+const DocumentTable = ({ documents, onObjectOpen }: DocumentTableProps) => {
   const parentRef = useRef<HTMLDivElement | null>(null);
+  const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
   const columns = useMemo<ColumnDef<ParsedDocument>[]>(
-    () => createDocumentColumns(documents),
-    [documents],
+    () => createDocumentColumns(documents, onObjectOpen),
+    [documents, onObjectOpen],
   );
   // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
+    columnResizeMode: "onChange",
     columns,
     data: documents,
+    enableColumnResizing: true,
     getCoreRowModel: getCoreRowModel(),
+    onColumnSizingChange: setColumnSizing,
+    state: {
+      columnSizing,
+    },
   });
   const rows = table.getRowModel().rows;
-  const columnTemplate = `42px repeat(${Math.max(columns.length - 1, 1)}, minmax(164px, 1fr))`;
+  const columnTemplate = table
+    .getVisibleLeafColumns()
+    .map((column) => `${column.getSize()}px`)
+    .join(" ");
+  const tableWidth = table.getTotalSize();
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
     estimateSize: () => 46,
@@ -529,14 +630,31 @@ const DocumentTable = ({ documents }: DocumentTableProps) => {
 
   return (
     <div className="data-grid" ref={parentRef}>
-      <div className="document-table">
+      <div className="document-table" style={{ width: `${tableWidth}px` }}>
         <div
           className="document-table-head"
           style={{ gridTemplateColumns: columnTemplate }}
         >
           {table.getFlatHeaders().map((header) => (
-            <div className="document-table-cell" key={header.id}>
-              {flexRender(header.column.columnDef.header, header.getContext())}
+            <div
+              className="document-table-cell document-table-header-cell"
+              key={header.id}
+            >
+              <span className="document-table-cell-content">
+                {flexRender(
+                  header.column.columnDef.header,
+                  header.getContext(),
+                )}
+              </span>
+              {header.column.getCanResize() ? (
+                <button
+                  aria-label={`Resize ${header.column.id} column`}
+                  className="document-table-resizer"
+                  onMouseDown={header.getResizeHandler()}
+                  onTouchStart={header.getResizeHandler()}
+                  type="button"
+                />
+              ) : null}
             </div>
           ))}
         </div>
@@ -712,6 +830,7 @@ const WorkspaceEmptyState = ({
 
 const createDocumentColumns = (
   documents: ParsedDocument[],
+  onObjectOpen: (field: string) => void,
 ): ColumnDef<ParsedDocument>[] => {
   const keys = [
     ...new Set(documents.flatMap((document) => Object.keys(document.value))),
@@ -723,24 +842,148 @@ const createDocumentColumns = (
       cell: ({ row }) => (
         <span className="checkbox" aria-label={`Row ${row.index + 1}`} />
       ),
+      enableResizing: false,
       header: "",
       id: "select",
+      maxSize: 42,
+      minSize: 42,
+      size: 42,
     },
     ...visibleKeys.map(
       (key): ColumnDef<ParsedDocument> => ({
         accessorFn: (document) =>
           key === "document" ? document.value : document.value[key],
-        cell: ({ getValue }) => (
-          <span className={key === "_id" ? "mono" : ""}>
-            {formatCellValue(getValue())}
-          </span>
-        ),
+        cell: ({ getValue }) => {
+          const value = getValue();
+          const displayValue = formatTableCellValue(value);
+          const canOpenObject =
+            key !== documentIdColumn && isDrillableTableValue(value);
+
+          return canOpenObject ? (
+            <button
+              className="object-cell"
+              onDoubleClick={() => onObjectOpen(key)}
+              title={formatCellValue(value)}
+              type="button"
+            >
+              <span className="object-cell-icon" />
+              <span>{displayValue}</span>
+            </button>
+          ) : (
+            <span className={key === "_id" ? "mono" : ""} title={displayValue}>
+              {displayValue}
+            </span>
+          );
+        },
         header: key,
         id: key,
+        maxSize: 1400,
+        minSize: key === "_id" ? 230 : 92,
+        size: getInitialColumnSize(key, documents),
       }),
     ),
   ];
 };
+
+const projectDocumentsForTable = (
+  documents: ParsedDocument[],
+  tablePath: string[],
+): ParsedDocument[] => {
+  if (tablePath.length === 0) {
+    return documents;
+  }
+
+  return documents.map((document) => {
+    const nestedValue = getValueAtPath(document.value, tablePath);
+    const projectedValue = getProjectedTableValue(document.id, nestedValue);
+
+    return {
+      ...document,
+      value: projectedValue,
+    };
+  });
+};
+
+const getProjectedTableValue = (
+  documentId: string,
+  value: unknown,
+): Record<string, unknown> => {
+  const baseValue: Record<string, unknown> = {
+    [documentIdColumn]: documentId,
+  };
+
+  if (Array.isArray(value)) {
+    return {
+      ...baseValue,
+      ...Object.fromEntries(value.map((item, index) => [String(index), item])),
+    };
+  }
+
+  if (isRecord(value)) {
+    return {
+      ...baseValue,
+      ...value,
+    };
+  }
+
+  return {
+    ...baseValue,
+    value,
+  };
+};
+
+const getValueAtPath = (
+  value: Record<string, unknown>,
+  tablePath: string[],
+): unknown =>
+  tablePath.reduce<unknown>((currentValue, segment) => {
+    if (Array.isArray(currentValue)) {
+      return currentValue[Number(segment)];
+    }
+
+    if (isRecord(currentValue)) {
+      return currentValue[segment];
+    }
+
+    return undefined;
+  }, value);
+
+const getInitialColumnSize = (
+  key: string,
+  documents: ParsedDocument[],
+): number => {
+  const samples = [
+    key,
+    ...documents
+      .slice(0, 50)
+      .map((document) =>
+        formatTableCellValue(
+          key === "document" ? document.value : document.value[key],
+        ),
+      ),
+  ];
+  const widestText = samples.reduce(
+    (widest, sample) => Math.max(widest, getDisplayWidth(sample)),
+    0,
+  );
+  const paddedWidth = widestText + 42;
+  const minWidth = key === "_id" ? 250 : 112;
+
+  return Math.min(Math.max(paddedWidth, minWidth), 1400);
+};
+
+const getDisplayWidth = (value: string): number =>
+  Array.from(value).reduce((width, character) => {
+    if (/[\u0600-\u06ff]/.test(character)) {
+      return width + 10;
+    }
+
+    if (/[A-Z0-9]/.test(character)) {
+      return width + 8;
+    }
+
+    return width + 7;
+  }, 0);
 
 const parseCollectionPath = (
   selectedCollectionName: string | null,
@@ -885,23 +1128,111 @@ const getDocumentId = (
 ): string => {
   const id = document._id;
 
-  return id === undefined ? `document-${index}` : JSON.stringify(id);
+  return id === undefined ? `document-${index}` : formatCellValue(id);
+};
+
+const formatTableCellValue = (value: unknown): string => {
+  const displayValue = unwrapEjsonValue(value);
+
+  if (Array.isArray(displayValue) && displayValue.length > 0) {
+    return `[ ${displayValue.length} items ]`;
+  }
+
+  if (isRecord(displayValue) && Object.keys(displayValue).length > 0) {
+    return `{ ${Object.keys(displayValue).length} fields }`;
+  }
+
+  return formatCellValue(displayValue);
+};
+
+const isDrillableTableValue = (value: unknown): boolean => {
+  const displayValue = unwrapEjsonValue(value);
+
+  if (Array.isArray(displayValue)) {
+    return displayValue.length > 0;
+  }
+
+  return isRecord(displayValue) && Object.keys(displayValue).length > 0;
 };
 
 const formatCellValue = (value: unknown): string => {
-  if (value === null) {
+  const displayValue = unwrapEjsonValue(value);
+
+  if (displayValue === null) {
     return "null";
   }
 
-  if (value === undefined) {
+  if (displayValue === undefined) {
     return "";
   }
 
-  if (typeof value === "object") {
-    return JSON.stringify(value);
+  if (typeof displayValue === "object") {
+    return JSON.stringify(displayValue);
   }
 
-  return String(value);
+  return String(displayValue);
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === "object" && !Array.isArray(value);
+
+const unwrapEjsonValue = (value: unknown): unknown => {
+  if (value === null) {
+    return value;
+  }
+
+  if (value === undefined) {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => unwrapEjsonValue(item));
+  }
+
+  if (typeof value !== "object") {
+    return value;
+  }
+
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record);
+
+  if (keys.length === 1) {
+    const key = keys[0];
+
+    if (!key) {
+      return value;
+    }
+
+    const ejsonValue = record[key];
+
+    if (ejsonDisplayKeys.has(key)) {
+      return unwrapEjsonScalar(ejsonValue);
+    }
+  }
+
+  return Object.fromEntries(
+    Object.entries(record).map(([key, nestedValue]) => [
+      key,
+      unwrapEjsonValue(nestedValue),
+    ]),
+  );
+};
+
+const ejsonDisplayKeys = new Set([
+  "$date",
+  "$numberDecimal",
+  "$numberDouble",
+  "$numberInt",
+  "$numberLong",
+  "$oid",
+]);
+
+const unwrapEjsonScalar = (value: unknown): unknown => {
+  if (isRecord(value) && "$numberLong" in value) {
+    return (value as { $numberLong: unknown }).$numberLong;
+  }
+
+  return value;
 };
 
 const formatJson = (value: string): string => {

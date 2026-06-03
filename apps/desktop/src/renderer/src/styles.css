@@ -1322,6 +1322,38 @@ input:disabled {
   gap: 8px;
 }
 
+.document-breadcrumbs {
+  align-items: center;
+  color: #273244;
+  display: flex;
+  font-size: 15px;
+  font-weight: 700;
+  gap: 7px;
+  min-width: 0;
+}
+
+.document-breadcrumbs button {
+  color: inherit;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.document-breadcrumb-segment {
+  align-items: center;
+  display: inline-flex;
+  gap: 7px;
+  min-width: 0;
+}
+
+.breadcrumb-separator {
+  color: #7c8796;
+  font-size: 21px;
+  font-weight: 500;
+  line-height: 1;
+}
+
 .result-tools {
   gap: 10px;
 }
@@ -1364,7 +1396,7 @@ input:disabled {
 }
 
 .document-table {
-  min-width: max-content;
+  min-width: 100%;
 }
 
 .document-table-head,
@@ -1407,12 +1439,75 @@ input:disabled {
   min-width: 0;
   overflow: hidden;
   padding: 0 16px;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .document-table-cell:last-child {
   border-right: 0;
+}
+
+.document-table-header-cell {
+  padding-right: 22px;
+  position: relative;
+}
+
+.document-table-cell-content {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.document-table-resizer {
+  bottom: 0;
+  cursor: col-resize;
+  position: absolute;
+  right: -4px;
+  top: 0;
+  width: 8px;
+  z-index: 3;
+}
+
+.document-table-resizer::after {
+  background: transparent;
+  content: "";
+  inset: 0 3px;
+  position: absolute;
+}
+
+.document-table-resizer:hover::after,
+.document-table-resizer:active::after {
+  background: #00717d;
+}
+
+.object-cell {
+  align-items: center;
+  color: #12bfa5;
+  display: inline-flex;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 13px;
+  font-weight: 700;
+  gap: 6px;
+  min-width: 0;
+}
+
+.object-cell:hover {
+  color: #00717d;
+}
+
+.object-cell-icon {
+  align-items: center;
+  border: 1px solid #8d99a8;
+  color: #566174;
+  display: inline-flex;
+  flex: 0 0 18px;
+  font-size: 11px;
+  height: 16px;
+  justify-content: center;
+  width: 18px;
+}
+
+.object-cell-icon::before {
+  content: "{}";
+  line-height: 1;
 }
 
 .json-results {
