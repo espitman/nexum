@@ -229,14 +229,14 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
   - [x] Infer nested paths with dot notation
   - [x] Return detected types
   - [x] Return occurrence counts
-- [ ] Build query builder UI
-  - [ ] Add condition rows
-  - [ ] Add group rows
-  - [ ] Add field input
-  - [ ] Add operator select
-  - [ ] Add value input
-  - [ ] Add raw JSON preview
-  - [ ] Add run query action
+- [x] Build query builder UI
+  - [x] Add condition rows
+  - [x] Add group rows
+  - [x] Add field input
+  - [x] Add operator select
+  - [x] Add value input
+  - [x] Add raw JSON preview
+  - [x] Add run query action
 - [ ] Verify query builder
   - [ ] Generate valid MongoDB filters
   - [ ] Run generated query

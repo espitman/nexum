@@ -13,6 +13,22 @@ import {
   type NavItemLabel,
   type WorkspaceTabLabel,
 } from "../mockData";
+import {
+  addQueryBuilderNode,
+  buildMongoFilterFromQueryBuilder,
+  createDefaultQueryBuilderModel,
+  createQueryBuilderCondition,
+  createQueryBuilderGroup,
+  inferQueryBuilderFields,
+  queryBuilderConditionOperators,
+  removeQueryBuilderNode,
+  updateQueryBuilderCondition,
+  updateQueryBuilderGroup,
+  type QueryBuilderConditionNode,
+  type QueryBuilderConditionOperator,
+  type QueryBuilderFieldInference,
+  type QueryBuilderGroupNode,
+} from "../queryBuilderModel";
 import type { ConnectionProfile, SchemaFieldSummary } from "../types";
 import { ConnectionManager } from "./ConnectionManager";
 import { Icon } from "./Icon";
@@ -101,6 +117,8 @@ export const DocumentWorkspace = ({
   const [limitInput, setLimitInput] = useState("50");
   const [queryState, setQueryState] =
     useState<DocumentQueryState>(defaultQueryState);
+  const [queryBuilderModel, setQueryBuilderModel] =
+    useState<QueryBuilderGroupNode>(() => createDefaultQueryBuilderModel());
   const [skipInput, setSkipInput] = useState("0");
   const [sortInput, setSortInput] = useState("{}");
   const [queryInputError, setQueryInputError] = useState<string | null>(null);
@@ -153,6 +171,21 @@ export const DocumentWorkspace = ({
     () => inferDocumentSchema(parsedDocuments),
     [parsedDocuments],
   );
+  const queryBuilderFields = useMemo(
+    () =>
+      inferQueryBuilderFields(
+        parsedDocuments.map((document) => document.rootValue),
+      ),
+    [parsedDocuments],
+  );
+  const queryBuilderFilter = useMemo(
+    () => buildMongoFilterFromQueryBuilder(queryBuilderModel),
+    [queryBuilderModel],
+  );
+  const queryBuilderPreview = useMemo(
+    () => JSON.stringify(queryBuilderFilter, null, 2),
+    [queryBuilderFilter],
+  );
   const selectedCollectionLabel = selectedCollectionName?.split(".").at(-1);
   const tablePath =
     tableDrillState.collectionName === selectedCollectionName
@@ -186,6 +219,17 @@ export const DocumentWorkspace = ({
 
     setQueryInputError(null);
     setQueryState(nextState.value);
+  };
+
+  const runQueryBuilder = () => {
+    setQueryInputError(null);
+    setFilterInput(queryBuilderPreview);
+    setSkipInput("0");
+    setQueryState((currentState) => ({
+      ...currentState,
+      filter: queryBuilderFilter,
+      skip: 0,
+    }));
   };
 
   useEffect(() => {
@@ -254,19 +298,30 @@ export const DocumentWorkspace = ({
 
       {isCollectionWorkspace ? (
         <>
-          <QuerySection
-            filterInput={filterInput}
-            isFetching={documentsQuery.isFetching}
-            limitInput={limitInput}
-            onFilterInputChange={setFilterInput}
-            onLimitInputChange={setLimitInput}
-            onRunQuery={runQuery}
-            onSkipInputChange={setSkipInput}
-            onSortInputChange={setSortInput}
-            queryInputError={queryInputError}
-            skipInput={skipInput}
-            sortInput={sortInput}
-          />
+          {activeWorkspaceTab === "Query Builder" ? (
+            <QueryBuilderSection
+              fields={queryBuilderFields}
+              isFetching={documentsQuery.isFetching}
+              model={queryBuilderModel}
+              onModelChange={setQueryBuilderModel}
+              onRunQuery={runQueryBuilder}
+              preview={queryBuilderPreview}
+            />
+          ) : (
+            <QuerySection
+              filterInput={filterInput}
+              isFetching={documentsQuery.isFetching}
+              limitInput={limitInput}
+              onFilterInputChange={setFilterInput}
+              onLimitInputChange={setLimitInput}
+              onRunQuery={runQuery}
+              onSkipInputChange={setSkipInput}
+              onSortInputChange={setSortInput}
+              queryInputError={queryInputError}
+              skipInput={skipInput}
+              sortInput={sortInput}
+            />
+          )}
           <ResultsSection
             collectionLabel={selectedCollectionLabel ?? "Collection"}
             documents={parsedDocuments}
@@ -476,6 +531,288 @@ const QuerySection = ({
     {queryInputError ? <p className="query-error">{queryInputError}</p> : null}
   </section>
 );
+
+type QueryBuilderSectionProps = {
+  fields: QueryBuilderFieldInference[];
+  isFetching: boolean;
+  model: QueryBuilderGroupNode;
+  onModelChange: (model: QueryBuilderGroupNode) => void;
+  onRunQuery: () => void;
+  preview: string;
+};
+
+const QueryBuilderSection = ({
+  fields,
+  isFetching,
+  model,
+  onModelChange,
+  onRunQuery,
+  preview,
+}: QueryBuilderSectionProps) => {
+  const fieldOptionsId = "query-builder-fields";
+
+  return (
+    <section className="query-builder-section">
+      <div className="query-builder-panel">
+        <div className="query-builder-header">
+          <div>
+            <strong>Query Builder</strong>
+            <span>{fields.length} inferred fields</span>
+          </div>
+          <button
+            className="run-button compact"
+            disabled={isFetching}
+            onClick={onRunQuery}
+            type="button"
+          >
+            <span className="play-icon" />
+            Run
+          </button>
+        </div>
+
+        <datalist id={fieldOptionsId}>
+          {fields.map((field) => (
+            <option
+              key={field.path}
+              label={`${field.types.join(" | ")} · ${field.occurrenceCount}`}
+              value={field.path}
+            />
+          ))}
+        </datalist>
+
+        <QueryBuilderGroup
+          fieldOptionsId={fieldOptionsId}
+          fields={fields}
+          group={model}
+          isRoot
+          root={model}
+          onRootChange={onModelChange}
+        />
+      </div>
+
+      <div className="query-builder-preview">
+        <div className="query-builder-preview-header">
+          <strong>Preview</strong>
+          <span>MongoDB filter</span>
+        </div>
+        <pre>{preview}</pre>
+      </div>
+    </section>
+  );
+};
+
+type QueryBuilderGroupProps = {
+  fieldOptionsId: string;
+  fields: QueryBuilderFieldInference[];
+  group: QueryBuilderGroupNode;
+  isRoot?: boolean;
+  root: QueryBuilderGroupNode;
+  onRootChange: (root: QueryBuilderGroupNode) => void;
+};
+
+const QueryBuilderGroup = ({
+  fieldOptionsId,
+  fields,
+  group,
+  isRoot = false,
+  root,
+  onRootChange,
+}: QueryBuilderGroupProps) => (
+  <div className={`query-builder-group ${isRoot ? "is-root" : ""}`}>
+    <div className="query-builder-group-toolbar">
+      <label>
+        <span>{isRoot ? "Match" : "Group"}</span>
+        <select
+          aria-label={`${isRoot ? "Root" : "Nested"} group combinator`}
+          value={group.combinator}
+          onChange={(event) =>
+            onRootChange(
+              updateQueryBuilderGroup(root, group.id, {
+                combinator: event.target
+                  .value as QueryBuilderGroupNode["combinator"],
+              }),
+            )
+          }
+        >
+          <option value="and">All conditions</option>
+          <option value="or">Any condition</option>
+        </select>
+      </label>
+      <div className="query-builder-actions">
+        <button
+          className="secondary-button"
+          onClick={() =>
+            onRootChange(
+              addQueryBuilderNode(
+                root,
+                group.id,
+                createQueryBuilderCondition(),
+              ),
+            )
+          }
+          type="button"
+        >
+          Add condition
+        </button>
+        <button
+          className="secondary-button"
+          onClick={() =>
+            onRootChange(
+              addQueryBuilderNode(
+                root,
+                group.id,
+                createQueryBuilderGroup({
+                  children: [createQueryBuilderCondition()],
+                }),
+              ),
+            )
+          }
+          type="button"
+        >
+          Add group
+        </button>
+        {!isRoot ? (
+          <button
+            className="query-builder-remove"
+            onClick={() => onRootChange(removeQueryBuilderNode(root, group.id))}
+            type="button"
+          >
+            Remove
+          </button>
+        ) : null}
+      </div>
+    </div>
+
+    <div className="query-builder-children">
+      {group.children.length === 0 ? (
+        <div className="query-builder-empty">No conditions in this group.</div>
+      ) : (
+        group.children.map((child) =>
+          child.kind === "group" ? (
+            <QueryBuilderGroup
+              fieldOptionsId={fieldOptionsId}
+              fields={fields}
+              group={child}
+              key={child.id}
+              root={root}
+              onRootChange={onRootChange}
+            />
+          ) : (
+            <QueryBuilderCondition
+              condition={child}
+              fieldOptionsId={fieldOptionsId}
+              fields={fields}
+              key={child.id}
+              root={root}
+              onRootChange={onRootChange}
+            />
+          ),
+        )
+      )}
+    </div>
+  </div>
+);
+
+type QueryBuilderConditionProps = {
+  condition: QueryBuilderConditionNode;
+  fieldOptionsId: string;
+  fields: QueryBuilderFieldInference[];
+  root: QueryBuilderGroupNode;
+  onRootChange: (root: QueryBuilderGroupNode) => void;
+};
+
+const QueryBuilderCondition = ({
+  condition,
+  fieldOptionsId,
+  fields,
+  root,
+  onRootChange,
+}: QueryBuilderConditionProps) => {
+  const inferredField = fields.find((field) => field.path === condition.field);
+  const requiresValue = condition.operator !== "exists";
+
+  return (
+    <div className="query-builder-condition">
+      <input
+        aria-label="Field"
+        className="query-builder-field"
+        list={fieldOptionsId}
+        placeholder="field.path"
+        value={condition.field}
+        onChange={(event) =>
+          onRootChange(
+            updateQueryBuilderCondition(root, condition.id, {
+              field: event.target.value,
+            }),
+          )
+        }
+      />
+      <select
+        aria-label="Operator"
+        value={condition.operator}
+        onChange={(event) =>
+          onRootChange(
+            updateQueryBuilderCondition(root, condition.id, {
+              operator: event.target.value as QueryBuilderConditionOperator,
+            }),
+          )
+        }
+      >
+        {queryBuilderConditionOperators.map((operator) => (
+          <option key={operator} value={operator}>
+            {formatQueryBuilderOperator(operator)}
+          </option>
+        ))}
+      </select>
+      {requiresValue ? (
+        <input
+          aria-label="Value"
+          className="query-builder-value"
+          placeholder="value"
+          value={formatQueryBuilderInputValue(condition.value)}
+          onChange={(event) =>
+            onRootChange(
+              updateQueryBuilderCondition(root, condition.id, {
+                value: parseQueryBuilderInputValue(
+                  event.target.value,
+                  condition.operator,
+                ),
+              }),
+            )
+          }
+        />
+      ) : (
+        <select
+          aria-label="Exists value"
+          className="query-builder-value"
+          value={condition.value === false ? "false" : "true"}
+          onChange={(event) =>
+            onRootChange(
+              updateQueryBuilderCondition(root, condition.id, {
+                value: event.target.value === "true",
+              }),
+            )
+          }
+        >
+          <option value="true">exists</option>
+          <option value="false">missing</option>
+        </select>
+      )}
+      <span className="query-builder-field-meta">
+        {inferredField
+          ? `${inferredField.types.join(" | ")} · ${inferredField.occurrenceCount}`
+          : "custom"}
+      </span>
+      <button
+        className="query-builder-remove"
+        onClick={() => onRootChange(removeQueryBuilderNode(root, condition.id))}
+        type="button"
+      >
+        Remove
+      </button>
+    </div>
+  );
+};
 
 type ResultsSectionProps = {
   collectionLabel: string;
@@ -1444,6 +1781,95 @@ const parseSortInput = (
   }
 
   return { ok: true, value: sort };
+};
+
+const formatQueryBuilderOperator = (
+  operator: QueryBuilderConditionOperator,
+): string => {
+  switch (operator) {
+    case "equals":
+      return "Equals";
+    case "notEquals":
+      return "Not equals";
+    case "greaterThan":
+      return "Greater than";
+    case "greaterThanOrEqual":
+      return "Greater than or equal";
+    case "lessThan":
+      return "Less than";
+    case "lessThanOrEqual":
+      return "Less than or equal";
+    case "contains":
+      return "Contains";
+    case "exists":
+      return "Exists";
+    case "in":
+      return "In";
+    case "notIn":
+      return "Not in";
+    case "regex":
+      return "Regex";
+  }
+};
+
+const formatQueryBuilderInputValue = (value: unknown): string => {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  return JSON.stringify(value);
+};
+
+const parseQueryBuilderInputValue = (
+  value: string,
+  operator: QueryBuilderConditionOperator,
+): unknown => {
+  if (operator === "in" || operator === "notIn") {
+    return parseQueryBuilderListValue(value);
+  }
+
+  return parseQueryBuilderScalarValue(value);
+};
+
+const parseQueryBuilderListValue = (value: string): unknown[] => {
+  const parsed = parseQueryBuilderJsonValue(value);
+
+  if (Array.isArray(parsed)) {
+    return parsed;
+  }
+
+  if (parsed !== undefined) {
+    return [parsed];
+  }
+
+  return value
+    .split(",")
+    .map((item) => parseQueryBuilderScalarValue(item.trim()))
+    .filter((item) => item !== "");
+};
+
+const parseQueryBuilderScalarValue = (value: string): unknown => {
+  const parsed = parseQueryBuilderJsonValue(value);
+
+  if (parsed !== undefined) {
+    return parsed;
+  }
+
+  return value;
+};
+
+const parseQueryBuilderJsonValue = (value: string): unknown => {
+  const trimmedValue = value.trim();
+
+  if (!trimmedValue) {
+    return "";
+  }
+
+  try {
+    return JSON.parse(trimmedValue) as unknown;
+  } catch {
+    return undefined;
+  }
 };
 
 const parseEjsonDocuments = (documents: string[]): ParsedDocument[] =>
