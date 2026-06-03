@@ -161,18 +161,6 @@ export const inspectorLines = [
   ["}", "plain"],
 ] as const;
 
-export const schemaFields = [
-  ["_id", "ObjectId", "Required"],
-  ["email", "String", "Unique"],
-  ["status", "String", "Indexed"],
-  ["profile.firstName", "String", "Optional"],
-  ["profile.lastName", "String", "Optional"],
-  ["addresses", "Array", "Nested"],
-  ["preferences.newsletter", "Boolean", "Optional"],
-  ["total", "Decimal128", "Optional"],
-  ["createdAt", "Date", "Indexed"],
-] as const;
-
 export const indexRows = [
   ["_id_", "{ _id: 1 }", "Unique"],
   ["email_1", "{ email: 1 }", "Unique"],

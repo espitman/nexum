@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   flexRender,
@@ -13,7 +13,7 @@ import {
   type NavItemLabel,
   type WorkspaceTabLabel,
 } from "../mockData";
-import type { ConnectionProfile } from "../types";
+import type { ConnectionProfile, SchemaFieldSummary } from "../types";
 import { ConnectionManager } from "./ConnectionManager";
 import { Icon } from "./Icon";
 import { JsonTreeView } from "./JsonTreeView";
@@ -33,6 +33,7 @@ type DocumentWorkspaceProps = {
   onCollectionOpen: () => void;
   onSectionChange: (section: NavItemLabel) => void;
   onSelectedDocumentChange: (document: Record<string, unknown> | null) => void;
+  onSchemaChange: (schemaFields: SchemaFieldSummary[]) => void;
   onWorkspaceTabChange: (tab: WorkspaceTabLabel) => void;
 };
 
@@ -83,6 +84,7 @@ export const DocumentWorkspace = ({
   onCollectionOpen,
   onSectionChange,
   onSelectedDocumentChange,
+  onSchemaChange,
   onWorkspaceTabChange,
 }: DocumentWorkspaceProps) => {
   const selectedConnection =
@@ -146,6 +148,10 @@ export const DocumentWorkspace = ({
     () => parseEjsonDocuments(documentsQuery.data?.documents ?? []),
     [documentsQuery.data?.documents],
   );
+  const schemaFields = useMemo(
+    () => inferDocumentSchema(parsedDocuments),
+    [parsedDocuments],
+  );
   const selectedCollectionLabel = selectedCollectionName?.split(".").at(-1);
   const tablePath =
     tableDrillState.collectionName === selectedCollectionName
@@ -180,6 +186,10 @@ export const DocumentWorkspace = ({
     setQueryInputError(null);
     setQueryState(nextState.value);
   };
+
+  useEffect(() => {
+    onSchemaChange(isCollectionWorkspace ? schemaFields : []);
+  }, [isCollectionWorkspace, onSchemaChange, schemaFields]);
 
   const updatePagination = ({
     limit,
@@ -1442,6 +1452,172 @@ const parseEjsonDocuments = (documents: string[]): ParsedDocument[] =>
       value,
     };
   });
+
+type SchemaAccumulator = {
+  presentInDocuments: Set<number>;
+  sampleCount: number;
+  types: Set<string>;
+};
+
+const inferDocumentSchema = (
+  documents: ParsedDocument[],
+): SchemaFieldSummary[] => {
+  const fields = new Map<string, SchemaAccumulator>();
+
+  documents.forEach((document, index) => {
+    const seenPaths = new Set<string>();
+    collectSchemaFields(document.rootValue, "", fields, seenPaths);
+
+    for (const path of seenPaths) {
+      fields.get(path)?.presentInDocuments.add(index);
+    }
+  });
+
+  return [...fields.entries()]
+    .sort(([leftPath], [rightPath]) => leftPath.localeCompare(rightPath))
+    .map(([path, field]) => ({
+      meta:
+        field.presentInDocuments.size === documents.length
+          ? "Required"
+          : "Optional",
+      name: path,
+      type: formatSchemaTypes(field.types),
+    }));
+};
+
+const collectSchemaFields = (
+  value: Record<string, unknown>,
+  prefix: string,
+  fields: Map<string, SchemaAccumulator>,
+  seenPaths: Set<string>,
+) => {
+  for (const [key, fieldValue] of Object.entries(value)) {
+    const path = prefix ? `${prefix}.${key}` : key;
+    addSchemaSample(path, fieldValue, fields, seenPaths);
+
+    if (isPlainSchemaObject(fieldValue)) {
+      collectSchemaFields(
+        fieldValue as Record<string, unknown>,
+        path,
+        fields,
+        seenPaths,
+      );
+      continue;
+    }
+
+    if (Array.isArray(fieldValue)) {
+      fieldValue.forEach((item) => {
+        if (isPlainSchemaObject(item)) {
+          collectSchemaFields(
+            item as Record<string, unknown>,
+            path,
+            fields,
+            seenPaths,
+          );
+        }
+      });
+    }
+  }
+};
+
+const addSchemaSample = (
+  path: string,
+  value: unknown,
+  fields: Map<string, SchemaAccumulator>,
+  seenPaths: Set<string>,
+) => {
+  const field = fields.get(path) ?? {
+    presentInDocuments: new Set<number>(),
+    sampleCount: 0,
+    types: new Set<string>(),
+  };
+
+  field.sampleCount += 1;
+  field.types.add(getSchemaValueType(value));
+  fields.set(path, field);
+  seenPaths.add(path);
+};
+
+const formatSchemaTypes = (types: Set<string>): string =>
+  [...types].sort().join(" | ");
+
+const getSchemaValueType = (value: unknown): string => {
+  const ejsonType = getEjsonSchemaType(value);
+
+  if (ejsonType) {
+    return ejsonType;
+  }
+
+  if (value === null) {
+    return "Null";
+  }
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      return "Array";
+    }
+
+    const itemTypes = new Set(value.map((item) => getSchemaValueType(item)));
+
+    return `Array<${formatSchemaTypes(itemTypes)}>`;
+  }
+
+  if (isRecord(value)) {
+    return "Object";
+  }
+
+  if (typeof value === "boolean") {
+    return "Boolean";
+  }
+
+  if (typeof value === "number") {
+    return "Number";
+  }
+
+  if (typeof value === "string") {
+    return "String";
+  }
+
+  return "Unknown";
+};
+
+const getEjsonSchemaType = (value: unknown): string | null => {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const keys = Object.keys(value);
+
+  if (keys.length !== 1) {
+    return null;
+  }
+
+  switch (keys[0]) {
+    case "$binary":
+      return "Binary";
+    case "$date":
+      return "Date";
+    case "$numberDecimal":
+      return "Decimal128";
+    case "$numberDouble":
+      return "Double";
+    case "$numberInt":
+      return "Int32";
+    case "$numberLong":
+      return "Long";
+    case "$oid":
+      return "ObjectId";
+    case "$regularExpression":
+      return "Regex";
+    case "$timestamp":
+      return "Timestamp";
+    default:
+      return null;
+  }
+};
+
+const isPlainSchemaObject = (value: unknown): boolean =>
+  isRecord(value) && getEjsonSchemaType(value) === null;
 
 const parseEjsonDocument = (document: string): Record<string, unknown> => {
   try {

@@ -2149,6 +2149,73 @@ input:disabled {
   font-size: 12px;
 }
 
+.schema-tree {
+  display: grid;
+  gap: 8px;
+}
+
+.schema-tree-node {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.schema-tree-card {
+  background: #ffffff;
+  border: 1px solid #e1e7ef;
+  border-radius: 7px;
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.schema-tree-card strong {
+  color: #263142;
+  font-size: 13px;
+  font-weight: 700;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.schema-tree-card code {
+  color: #00717d;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.schema-tree-card span {
+  color: #6a7484;
+  font-size: 12px;
+}
+
+.schema-tree-children {
+  border-left: 1px solid #dce4ee;
+  display: grid;
+  gap: 8px;
+  margin-left: 13px;
+  padding-left: 14px;
+}
+
+.schema-tree-children > .schema-tree-node {
+  position: relative;
+}
+
+.schema-tree-children > .schema-tree-node::before {
+  background: #dce4ee;
+  content: "";
+  height: 1px;
+  left: -14px;
+  position: absolute;
+  top: 26px;
+  width: 14px;
+}
+
 .inspector-document-viewer {
   border-top: 1px solid #e1e6ee;
   min-height: 0;
@@ -2180,6 +2247,12 @@ input:disabled {
 
 .inspector-empty-state span {
   font-size: 12px;
+}
+
+.inspector-empty-state.inline {
+  border: 1px solid #e1e7ef;
+  border-radius: 7px;
+  min-height: 120px;
 }
 
 .icon {

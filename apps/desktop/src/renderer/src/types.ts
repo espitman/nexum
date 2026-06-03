@@ -26,6 +26,12 @@ export type ToastMessage = {
   message: string;
 };
 
+export type SchemaFieldSummary = {
+  meta: string;
+  name: string;
+  type: string;
+};
+
 export type Connection = {
   icon: string;
   label: string;

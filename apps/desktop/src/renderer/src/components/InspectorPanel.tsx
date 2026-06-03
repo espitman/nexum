@@ -1,15 +1,12 @@
-import {
-  indexRows,
-  inspectorTabs,
-  schemaFields,
-  type InspectorTabLabel,
-} from "../mockData";
+import { indexRows, inspectorTabs, type InspectorTabLabel } from "../mockData";
+import type { SchemaFieldSummary } from "../types";
 import { JsonTreeView } from "./JsonTreeView";
 
 type InspectorPanelProps = {
   activeInspectorTab: InspectorTabLabel;
   onClose: () => void;
   onInspectorTabChange: (tab: InspectorTabLabel) => void;
+  schemaFields: SchemaFieldSummary[];
   selectedDocument: Record<string, unknown> | null;
 };
 
@@ -17,6 +14,7 @@ export const InspectorPanel = ({
   activeInspectorTab,
   onClose,
   onInspectorTabChange,
+  schemaFields,
   selectedDocument,
 }: InspectorPanelProps) => (
   <aside className="inspector-panel">
@@ -28,6 +26,7 @@ export const InspectorPanel = ({
     <InspectorToolbar />
     <InspectorBody
       activeInspectorTab={activeInspectorTab}
+      schemaFields={schemaFields}
       selectedDocument={selectedDocument}
     />
   </aside>
@@ -89,11 +88,13 @@ const InspectorToolbar = () => (
 
 type InspectorBodyProps = {
   activeInspectorTab: InspectorTabLabel;
+  schemaFields: SchemaFieldSummary[];
   selectedDocument: Record<string, unknown> | null;
 };
 
 const InspectorBody = ({
   activeInspectorTab,
+  schemaFields,
   selectedDocument,
 }: InspectorBodyProps) =>
   activeInspectorTab === "Document" ? (
@@ -113,14 +114,131 @@ const InspectorBody = ({
     )
   ) : (
     <div className="inspector-list" role="tabpanel">
-      {(activeInspectorTab === "Schema" ? schemaFields : indexRows).map(
-        ([name, value, meta]) => (
+      {activeInspectorTab === "Schema" ? (
+        <SchemaTree fields={schemaFields} />
+      ) : (
+        indexRows.map(([name, value, meta]) => (
           <div className="inspector-list-row" key={name}>
             <strong>{name}</strong>
             <code>{value}</code>
             <span>{meta}</span>
           </div>
-        ),
+        ))
       )}
     </div>
   );
+
+type SchemaTreeNode = {
+  children: SchemaTreeNode[];
+  field: SchemaFieldSummary | null;
+  label: string;
+  path: string;
+};
+
+type MutableSchemaTreeNode = SchemaTreeNode & {
+  childrenByLabel: Map<string, MutableSchemaTreeNode>;
+};
+
+type SchemaTreeProps = {
+  fields: SchemaFieldSummary[];
+};
+
+const SchemaTree = ({ fields }: SchemaTreeProps) => {
+  const nodes = buildSchemaTree(fields);
+
+  if (nodes.length === 0) {
+    return (
+      <div className="inspector-empty-state inline">
+        <strong>No schema sample</strong>
+        <span>Run a query with documents to infer this collection schema.</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="schema-tree">
+      {nodes.map((node) => (
+        <SchemaTreeBranch key={node.path} node={node} />
+      ))}
+    </div>
+  );
+};
+
+type SchemaTreeBranchProps = {
+  node: SchemaTreeNode;
+};
+
+const SchemaTreeBranch = ({ node }: SchemaTreeBranchProps) => {
+  const hasChildren = node.children.length > 0;
+  const type = node.field?.type ?? "Object";
+  const meta = node.field?.meta ?? "Inferred";
+
+  return (
+    <div className={`schema-tree-node ${hasChildren ? "has-children" : ""}`}>
+      <div className="schema-tree-card" aria-label={node.path}>
+        <strong>{node.label}</strong>
+        <code>{type}</code>
+        <span>{meta}</span>
+      </div>
+      {hasChildren ? (
+        <div className="schema-tree-children">
+          {node.children.map((child) => (
+            <SchemaTreeBranch key={child.path} node={child} />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
+const buildSchemaTree = (fields: SchemaFieldSummary[]): SchemaTreeNode[] => {
+  const rootNodes = new Map<string, MutableSchemaTreeNode>();
+
+  fields.forEach((field) => {
+    const segments = field.name.split(".").filter(Boolean);
+    let siblings = rootNodes;
+    let currentPath = "";
+
+    segments.forEach((segment, index) => {
+      currentPath = currentPath ? `${currentPath}.${segment}` : segment;
+
+      const node =
+        siblings.get(segment) ??
+        ({
+          children: [],
+          childrenByLabel: new Map<string, MutableSchemaTreeNode>(),
+          field: null,
+          label: segment,
+          path: currentPath,
+        } satisfies MutableSchemaTreeNode);
+
+      if (index === segments.length - 1) {
+        node.field = field;
+      }
+
+      siblings.set(segment, node);
+      siblings = node.childrenByLabel;
+    });
+  });
+
+  return sortSchemaTreeNodes(
+    [...rootNodes.values()].map(convertSchemaTreeNode),
+  );
+};
+
+const convertSchemaTreeNode = (
+  node: MutableSchemaTreeNode,
+): SchemaTreeNode => ({
+  children: [...node.childrenByLabel.values()].map(convertSchemaTreeNode),
+  field: node.field,
+  label: node.label,
+  path: node.path,
+});
+
+const sortSchemaTreeNodes = (nodes: SchemaTreeNode[]): SchemaTreeNode[] =>
+  nodes
+    .map((node) => ({
+      ...node,
+      children: sortSchemaTreeNodes(node.children),
+    }))
+    .sort((left, right) => left.label.localeCompare(right.label));

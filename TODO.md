@@ -200,11 +200,11 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
   - [x] Add TanStack Table view
   - [x] Add JSON view
   - [x] Add TanStack Virtual for large result sets
-- [ ] Verify document viewer
-  - [ ] View first 50 documents
-  - [ ] Switch table and JSON modes
-  - [ ] Show execution time
-  - [ ] Preserve BSON types through EJSON
+- [x] Verify document viewer
+  - [x] View first 50 documents
+  - [x] Switch table and JSON modes
+  - [x] Show execution time
+  - [x] Preserve BSON types through EJSON
 
 ## Phase 8 — Safe Document Editor
 

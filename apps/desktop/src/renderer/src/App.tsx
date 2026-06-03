@@ -24,6 +24,7 @@ import type {
   CoreUiState,
   EnvironmentName,
   HealthState,
+  SchemaFieldSummary,
   ToastMessage,
 } from "./types";
 
@@ -49,6 +50,7 @@ export const App = () => {
     useState<InspectorTabLabel>("Schema");
   const [selectedInspectorDocument, setSelectedInspectorDocument] =
     useState<Record<string, unknown> | null>(null);
+  const [schemaFields, setSchemaFields] = useState<SchemaFieldSummary[]>([]);
   const [selectedConnectionId, setSelectedConnectionId] = useState<
     string | null
   >(null);
@@ -173,6 +175,7 @@ export const App = () => {
     if (section !== "Explore") {
       setSelectedCollectionName(null);
       setSelectedInspectorDocument(null);
+      setSchemaFields([]);
       return;
     }
 
@@ -224,12 +227,14 @@ export const App = () => {
             setSelectedConnectionId(null);
             setSelectedCollectionName(null);
             setSelectedInspectorDocument(null);
+            setSchemaFields([]);
           }}
           onConnectionSelect={(connectionId) => {
             setActiveSection("Connections");
             setSelectedConnectionId(connectionId);
             setSelectedCollectionName(null);
             setSelectedInspectorDocument(null);
+            setSchemaFields([]);
           }}
           onSectionChange={handleSectionChange}
           selectedConnectionId={selectedConnectionId}
@@ -266,6 +271,7 @@ export const App = () => {
           onCollectionSelect={(collectionName) => {
             setSelectedCollectionName(collectionName);
             setSelectedInspectorDocument(null);
+            setSchemaFields([]);
           }}
         />
       ) : null}
@@ -300,18 +306,22 @@ export const App = () => {
         onSelectedConnectionChange={(connectionId) => {
           setSelectedConnectionId(connectionId);
           setSelectedInspectorDocument(null);
+          setSchemaFields([]);
         }}
         onCollectionClose={() => {
           setSelectedCollectionName(null);
           setSelectedInspectorDocument(null);
+          setSchemaFields([]);
         }}
         onCollectionOpen={() => {
           if (shouldShowDatabasePanel) {
             setSelectedCollectionName("users");
             setSelectedInspectorDocument(null);
+            setSchemaFields([]);
           }
         }}
         onSectionChange={handleSectionChange}
+        onSchemaChange={setSchemaFields}
         onSelectedDocumentChange={setSelectedInspectorDocument}
         onWorkspaceTabChange={setActiveWorkspaceTab}
       />
@@ -321,6 +331,7 @@ export const App = () => {
           activeInspectorTab={activeInspectorTab}
           onClose={() => setIsInspectorOpen(false)}
           onInspectorTabChange={setActiveInspectorTab}
+          schemaFields={schemaFields}
           selectedDocument={selectedInspectorDocument}
         />
       ) : isExploreSection ? (
