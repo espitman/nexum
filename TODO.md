@@ -208,10 +208,10 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
 
 ## Phase 8 — Visual Query Builder
 
-- [ ] Implement query builder model
-  - [ ] Add condition model
-  - [ ] Add group model
-  - [ ] Support AND/OR combinators
+- [x] Implement query builder model
+  - [x] Add condition model
+  - [x] Add group model
+  - [x] Support AND/OR combinators
 - [ ] Implement supported operators
   - [ ] Equals
   - [ ] Not equals

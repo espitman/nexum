@@ -177,11 +177,12 @@ button {
   display: flex;
   height: 24px;
   justify-content: center;
+  isolation: isolate;
   position: absolute;
   right: -12px;
   bottom: 28px;
   width: 24px;
-  z-index: 5;
+  z-index: 80;
 }
 
 .panel-restore {
@@ -193,10 +194,11 @@ button {
   display: flex;
   height: 34px;
   justify-content: center;
+  isolation: isolate;
   position: absolute;
   bottom: 28px;
   width: 28px;
-  z-index: 30;
+  z-index: 80;
 }
 
 .panel-restore-left {
@@ -235,7 +237,7 @@ button {
   margin-right: -4px;
   position: relative;
   width: 8px;
-  z-index: 12;
+  z-index: 8;
 }
 
 .column-resize-handle::after {
