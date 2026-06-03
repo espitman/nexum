@@ -682,7 +682,7 @@ button {
   font-size: 15px;
   font-weight: 600;
   gap: 8px;
-  height: 52px;
+  height: 100%;
   padding: 0 10px;
   position: relative;
 }
@@ -749,6 +749,10 @@ button {
   margin-left: auto;
   position: relative;
   width: 32px;
+}
+
+.workspace-tool-button svg {
+  display: block;
 }
 
 .workspace-tool-button.is-active {
@@ -2833,25 +2837,6 @@ input:disabled {
   font-size: 11px;
   left: 5px;
   top: 1px;
-}
-
-.icon-query-builder::before {
-  background:
-    linear-gradient(currentColor 0 0) 0 3px / 100% 1.6px no-repeat,
-    linear-gradient(currentColor 0 0) 0 8px / 100% 1.6px no-repeat,
-    linear-gradient(currentColor 0 0) 0 13px / 100% 1.6px no-repeat;
-  inset: 2px;
-}
-
-.icon-query-builder::after {
-  background:
-    radial-gradient(circle, currentColor 0 2px, transparent 2.2px) 3px 1px / 4px
-      4px no-repeat,
-    radial-gradient(circle, currentColor 0 2px, transparent 2.2px) 9px 6px / 4px
-      4px no-repeat,
-    radial-gradient(circle, currentColor 0 2px, transparent 2.2px) 5px 11px /
-      4px 4px no-repeat;
-  inset: 2px;
 }
 
 .icon-pipeline::before {

@@ -21,6 +21,7 @@
     "@tanstack/react-virtual": "^3.13.26",
     "electron-store": "^11.0.2",
     "keytar": "^7.9.0",
+    "lucide-react": "^1.17.0",
     "mongodb": "^7.2.0",
     "mongodb-connection-string-url": "^7.0.1",
     "react": "^19.2.3",

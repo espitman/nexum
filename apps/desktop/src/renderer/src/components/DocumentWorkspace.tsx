@@ -8,6 +8,7 @@ import {
   type ColumnSizingState,
 } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { DatabaseSearch } from "lucide-react";
 import {
   workspaceTabs,
   type NavItemLabel,
@@ -493,7 +494,7 @@ const WorkspaceTabs = ({
       onClick={onQueryBuilderToggle}
       type="button"
     >
-      <Icon name="query-builder" />
+      <DatabaseSearch aria-hidden="true" size={17} strokeWidth={1.9} />
     </button>
   </div>
 );
