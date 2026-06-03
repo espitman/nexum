@@ -1,7 +1,11 @@
 import { ok, type AppError, type Result } from "@nexum/shared";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { ipcChannels, type ConnectionSummary } from "../../ipc/contracts";
+import {
+  ipcChannels,
+  type ConnectionSummary,
+  type ExplorerNodeDto,
+} from "../../ipc/contracts";
 import type { StoredConnectionTestResult } from "../connections";
 import { createValidatedIpcHandler, registerIpcHandlers } from "./router";
 
@@ -110,6 +114,34 @@ describe("registerIpcHandlers connection lifecycle", () => {
           throw new Error("unused");
         },
       },
+      explorer: {
+        async listChildren(): Promise<Result<ExplorerNodeDto[], AppError>> {
+          return ok([
+            {
+              connectionId: "conn_test",
+              hasChildren: false,
+              id: "mongodb:conn_test:database:app:collection:users",
+              label: "users",
+              path: ["app", "users"],
+              pluginId: "mongodb",
+              type: "collection",
+            },
+          ]);
+        },
+        async listRootNodes(): Promise<Result<ExplorerNodeDto[], AppError>> {
+          return ok([
+            {
+              connectionId: "conn_test",
+              hasChildren: true,
+              id: "mongodb:conn_test:database:app",
+              label: "app",
+              path: ["app"],
+              pluginId: "mongodb",
+              type: "database",
+            },
+          ]);
+        },
+      },
     };
 
     registerIpcHandlers(ipc as never, services as never);
@@ -140,5 +172,22 @@ describe("registerIpcHandlers connection lifecycle", () => {
         connectionId: "conn_test",
       }),
     ).resolves.toMatchObject({ ok: true });
+    await expect(
+      handlers.get(ipcChannels.explorerListRootNodes)?.(undefined, {
+        connectionId: "conn_test",
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: [{ label: "app", type: "database" }],
+    });
+    await expect(
+      handlers.get(ipcChannels.explorerListChildren)?.(undefined, {
+        connectionId: "conn_test",
+        nodeId: "mongodb:conn_test:database:app",
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: [{ label: "users", type: "collection" }],
+    });
   });
 });

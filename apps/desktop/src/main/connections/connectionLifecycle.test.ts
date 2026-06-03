@@ -79,10 +79,29 @@ class InMemorySecretStore implements ConnectionSecretRepository {
 
 class FakeActiveConnection implements ActiveMongoConnection {
   closed = false;
+  collections = new Map([
+    [
+      "app",
+      [
+        { name: "orders", type: "collection" as const },
+        { name: "activeUsers", type: "view" as const },
+        { name: "users", type: "collection" as const },
+      ],
+    ],
+  ]);
+  databases = ["admin", "app"];
   pingCount = 0;
 
   async close(): Promise<void> {
     this.closed = true;
+  }
+
+  async listCollections(databaseName: string) {
+    return this.collections.get(databaseName) ?? [];
+  }
+
+  async listDatabases(): Promise<string[]> {
+    return this.databases;
   }
 
   async ping(): Promise<void> {
@@ -236,6 +255,42 @@ describe("ConnectionLifecycleService", () => {
       value: { status: "disconnected" },
     });
     expect(driver.activeConnections[0]?.closed).toBe(true);
+  });
+
+  it("lists databases and collections from active sessions", async () => {
+    const { lifecycle } = createLifecycle();
+    await createStoredConnection(lifecycle);
+    await lifecycle.connect("conn_local");
+
+    const databasesResult = lifecycle.listDatabases("conn_local");
+    expect(databasesResult).toMatchObject({ ok: true });
+    await expect(
+      databasesResult.ok ? databasesResult.value : Promise.resolve([]),
+    ).resolves.toEqual(["admin", "app"]);
+
+    const collectionsResult = lifecycle.listCollections("conn_local", "app");
+    expect(collectionsResult).toMatchObject({ ok: true });
+    await expect(
+      collectionsResult.ok ? collectionsResult.value : Promise.resolve([]),
+    ).resolves.toEqual([
+      { name: "orders", type: "collection" },
+      { name: "activeUsers", type: "view" },
+      { name: "users", type: "collection" },
+    ]);
+  });
+
+  it("rejects explorer reads without an active session", async () => {
+    const { lifecycle } = createLifecycle();
+    await createStoredConnection(lifecycle);
+
+    expect(lifecycle.listDatabases("conn_local")).toMatchObject({
+      ok: false,
+      error: { code: "CONNECTION_NOT_ACTIVE" },
+    });
+    expect(lifecycle.listCollections("conn_local", "app")).toMatchObject({
+      ok: false,
+      error: { code: "CONNECTION_NOT_ACTIVE" },
+    });
   });
 
   it("closes active sessions before update and delete", async () => {

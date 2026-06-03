@@ -9,6 +9,7 @@ import {
   type StoredConnectionSummary,
   type StoredConnectionTestResult,
 } from "../connections";
+import { MongoExplorerService } from "../explorer";
 import { ipcChannels, type IpcResponse } from "../../ipc/contracts";
 import {
   auditListPayloadSchema,
@@ -19,12 +20,7 @@ import {
   mongodbFindDocumentsPayloadSchema,
   voidPayloadSchema,
 } from "../../ipc/validation";
-import {
-  findMockDocuments,
-  mockAuditLogs,
-  mockExplorerChildren,
-  mockExplorerRoots,
-} from "./mockData";
+import { findMockDocuments, mockAuditLogs } from "./mockData";
 
 type IpcHandler<TPayload, TResult> = (
   payload: TPayload,
@@ -84,16 +80,22 @@ const registerValidatedHandler = <TSchema extends z.ZodType, TResult>(
 
 export type IpcServices = {
   connections: ConnectionLifecycleService;
+  explorer: MongoExplorerService;
 };
 
-const createDefaultIpcServices = (): IpcServices => ({
-  connections: new ConnectionLifecycleService(
+const createDefaultIpcServices = (): IpcServices => {
+  const connections = new ConnectionLifecycleService(
     new ConnectionStorageService(
       new ElectronConnectionMetadataStore(),
       new KeychainConnectionSecretStore(),
     ),
-  ),
-});
+  );
+
+  return {
+    connections,
+    explorer: new MongoExplorerService(connections),
+  };
+};
 
 const unwrapResult = <TValue>(
   result: { ok: true; value: TValue } | { ok: false; error: AppError },
@@ -207,15 +209,16 @@ export const registerIpcHandlers = (
   registerValidatedHandler(
     ipcChannels.explorerListRootNodes,
     connectionIdPayloadSchema,
-    ({ connectionId }) =>
-      mockExplorerRoots.filter((node) => node.connectionId === connectionId),
+    async ({ connectionId }) =>
+      unwrapResult(await services.explorer.listRootNodes(connectionId)),
     ipc,
   );
 
   registerValidatedHandler(
     ipcChannels.explorerListChildren,
     explorerChildrenPayloadSchema,
-    ({ nodeId }) => mockExplorerChildren[nodeId] ?? [],
+    async ({ connectionId, nodeId }) =>
+      unwrapResult(await services.explorer.listChildren(connectionId, nodeId)),
     ipc,
   );
 

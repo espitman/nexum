@@ -17,8 +17,17 @@ import type {
   UpdateStoredConnectionInput,
 } from "./types";
 
+export type MongoCollectionKind = "collection" | "view";
+
+export type MongoCollectionMetadata = {
+  name: string;
+  type: MongoCollectionKind;
+};
+
 export interface ActiveMongoConnection {
   close(): Promise<void>;
+  listCollections(databaseName: string): Promise<MongoCollectionMetadata[]>;
+  listDatabases(): Promise<string[]>;
   ping(): Promise<void>;
 }
 
@@ -40,6 +49,31 @@ export class MongoDriverConnectionClient implements MongoConnectionDriver {
 
     return {
       close: () => client.close(true),
+      async listCollections(databaseName) {
+        const collections = await client
+          .db(databaseName)
+          .listCollections({}, { nameOnly: true })
+          .toArray();
+
+        return collections
+          .map(
+            (collection): MongoCollectionMetadata => ({
+              name: collection.name,
+              type: collection.type === "view" ? "view" : "collection",
+            }),
+          )
+          .sort((left, right) => left.name.localeCompare(right.name));
+      },
+      async listDatabases() {
+        const result = await client
+          .db("admin")
+          .admin()
+          .listDatabases({ nameOnly: true });
+
+        return result.databases
+          .map((database) => database.name)
+          .sort((left, right) => left.localeCompare(right));
+      },
       async ping() {
         await pingClient(client);
       },
@@ -178,6 +212,37 @@ export class ConnectionLifecycleService {
     return this.#storage
       .listMetadata()
       .map((metadata) => this.#toSummary(metadata));
+  }
+
+  listCollections(
+    connectionId: string,
+    databaseName: string,
+  ): Result<Promise<MongoCollectionMetadata[]>, AppError> {
+    const session = this.#sessions.get(connectionId);
+
+    if (!session) {
+      return err(
+        new AppError("CONNECTION_NOT_ACTIVE", "Connection is not active", {
+          details: { connectionId },
+        }),
+      );
+    }
+
+    return ok(session.listCollections(databaseName));
+  }
+
+  listDatabases(connectionId: string): Result<Promise<string[]>, AppError> {
+    const session = this.#sessions.get(connectionId);
+
+    if (!session) {
+      return err(
+        new AppError("CONNECTION_NOT_ACTIVE", "Connection is not active", {
+          details: { connectionId },
+        }),
+      );
+    }
+
+    return ok(session.listDatabases());
   }
 
   async test(

@@ -164,11 +164,11 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
 
 ## Phase 6 — MongoDB Explorer
 
-- [ ] Implement explorer backend
-  - [ ] List databases
-  - [ ] List collections
-  - [ ] Distinguish collections and views
-  - [ ] Return typed explorer nodes
+- [x] Implement explorer backend
+  - [x] List databases
+  - [x] List collections
+  - [x] Distinguish collections and views
+  - [x] Return typed explorer nodes
 - [ ] Build explorer UI
   - [ ] Render connection root nodes
   - [ ] Render database nodes
