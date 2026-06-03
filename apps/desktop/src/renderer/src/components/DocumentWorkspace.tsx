@@ -13,7 +13,7 @@ import {
   type NavItemLabel,
   type WorkspaceTabLabel,
 } from "../mockData";
-import type { ConnectionProfile, HealthState } from "../types";
+import type { ConnectionProfile } from "../types";
 import { ConnectionManager } from "./ConnectionManager";
 import { Icon } from "./Icon";
 
@@ -21,7 +21,6 @@ type DocumentWorkspaceProps = {
   activeSection: NavItemLabel;
   activeWorkspaceTab: WorkspaceTabLabel;
   connections: ConnectionProfile[];
-  health: HealthState;
   healthLabel: string;
   isConnectionsLoading: boolean;
   selectedConnectionId: string | null;
@@ -70,7 +69,6 @@ export const DocumentWorkspace = ({
   activeSection,
   activeWorkspaceTab,
   connections,
-  health,
   healthLabel,
   isConnectionsLoading,
   selectedConnectionId,
@@ -179,6 +177,42 @@ export const DocumentWorkspace = ({
     setQueryState(nextState.value);
   };
 
+  const updatePagination = ({
+    limit,
+    skip,
+  }: {
+    limit: number;
+    skip: number;
+  }) => {
+    setQueryInputError(null);
+    setLimitInput(String(limit));
+    setSkipInput(String(skip));
+    setQueryState((currentState) => ({
+      ...currentState,
+      limit,
+      skip,
+    }));
+  };
+
+  const goToPage = (page: number) => {
+    if (!Number.isInteger(page) || page < 1) {
+      return;
+    }
+
+    updatePagination({
+      limit: queryState.limit,
+      skip: (page - 1) * queryState.limit,
+    });
+  };
+
+  const updatePageSize = (limit: number) => {
+    if (!Number.isInteger(limit) || limit < 1 || limit > 500) {
+      return;
+    }
+
+    updatePagination({ limit, skip: 0 });
+  };
+
   const handleTablePathChange = (path: string[]) => {
     setTableDrillState({
       collectionName: selectedCollectionName,
@@ -224,6 +258,7 @@ export const DocumentWorkspace = ({
             error={documentsQuery.error}
             hasMore={documentsQuery.data?.hasMore ?? false}
             isFetching={documentsQuery.isFetching}
+            isInitialLoading={documentsQuery.isLoading}
             onRefresh={() => void documentsQuery.refetch()}
             onTablePathChange={handleTablePathChange}
             tablePath={tablePath}
@@ -231,11 +266,23 @@ export const DocumentWorkspace = ({
             onViewModeChange={setDocumentViewMode}
           />
           <WorkspaceFooter
+            canGoNext={documentsQuery.data?.hasMore ?? false}
+            canGoPrevious={queryState.skip > 0}
             executionTimeMs={documentsQuery.data?.executionTimeMs}
             hasMore={documentsQuery.data?.hasMore ?? false}
-            health={health}
             healthLabel={healthLabel}
             limit={queryState.limit}
+            onFirstPage={() => goToPage(1)}
+            onNextPage={() =>
+              goToPage(Math.floor(queryState.skip / queryState.limit) + 2)
+            }
+            onPageChange={goToPage}
+            onPageSizeChange={updatePageSize}
+            onPreviousPage={() =>
+              goToPage(
+                Math.max(Math.floor(queryState.skip / queryState.limit), 1),
+              )
+            }
             resultCount={parsedDocuments.length}
             skip={queryState.skip}
           />
@@ -420,6 +467,7 @@ type ResultsSectionProps = {
   error: Error | null;
   hasMore: boolean;
   isFetching: boolean;
+  isInitialLoading: boolean;
   onRefresh: () => void;
   onTablePathChange: (path: string[]) => void;
   tablePath: string[];
@@ -433,6 +481,7 @@ const ResultsSection = ({
   error,
   hasMore,
   isFetching,
+  isInitialLoading,
   onRefresh,
   onTablePathChange,
   tablePath,
@@ -463,6 +512,8 @@ const ResultsSection = ({
       />
       {error ? (
         <ResultsState title="Unable to load documents" label={error.message} />
+      ) : isInitialLoading ? (
+        <ResultsLoadingState />
       ) : viewMode === "json" ? (
         <JsonResults documents={documents} />
       ) : (
@@ -475,6 +526,14 @@ const ResultsSection = ({
     </section>
   );
 };
+
+const ResultsLoadingState = () => (
+  <div className="results-loading-state">
+    {Array.from({ length: 10 }, (_, index) => (
+      <span key={index} />
+    ))}
+  </div>
+);
 
 type ResultsHeaderProps = {
   collectionLabel: string;
@@ -887,51 +946,108 @@ const ResultsState = ({ label, title }: ResultsStateProps) => (
 );
 
 type WorkspaceFooterProps = {
+  canGoNext: boolean;
+  canGoPrevious: boolean;
   executionTimeMs: number | undefined;
   hasMore: boolean;
-  health: HealthState;
   healthLabel: string;
   limit: number;
+  onFirstPage: () => void;
+  onNextPage: () => void;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (limit: number) => void;
+  onPreviousPage: () => void;
   resultCount: number;
   skip: number;
 };
 
 const WorkspaceFooter = ({
+  canGoNext,
+  canGoPrevious,
   executionTimeMs,
   hasMore,
-  health,
   healthLabel,
   limit,
+  onFirstPage,
+  onNextPage,
+  onPageChange,
+  onPageSizeChange,
+  onPreviousPage,
   resultCount,
   skip,
-}: WorkspaceFooterProps) => (
-  <footer className="workspace-footer">
-    <div className="pager-group">
-      <button className="page-icon muted" type="button" aria-label="First page">
-        <span className="pagination-icon pagination-first" />
-      </button>
-      <span>Skip</span>
-      <input value={skip} readOnly />
-      <span>Limit</span>
-      <input value={limit} readOnly />
-      <button className="page-icon" type="button" aria-label="Next page">
-        <span className="pagination-icon pagination-next" />
-      </button>
-      <button className="page-size" type="button">
-        <span>{limit} / page</span>
-        <span className="select-caret" />
-      </button>
-    </div>
-    <div className="range-status">
-      <span>
-        {resultCount} shown{hasMore ? "+" : ""}
-      </span>
-      {executionTimeMs !== undefined ? <span>{executionTimeMs} ms</span> : null}
-      <span className={`health-dot health-${health.status}`} />
-      <span>{healthLabel}</span>
-    </div>
-  </footer>
-);
+}: WorkspaceFooterProps) => {
+  const page = Math.floor(skip / limit) + 1;
+
+  return (
+    <footer className="workspace-footer">
+      <div className="pager-group">
+        <button
+          className={`page-icon ${canGoPrevious ? "" : "muted"}`}
+          type="button"
+          aria-label="First page"
+          disabled={!canGoPrevious}
+          onClick={onFirstPage}
+        >
+          <span className="pagination-icon pagination-first" />
+        </button>
+        <button
+          className={`page-icon ${canGoPrevious ? "" : "muted"}`}
+          type="button"
+          aria-label="Previous page"
+          disabled={!canGoPrevious}
+          onClick={onPreviousPage}
+        >
+          <span className="pagination-icon pagination-prev" />
+        </button>
+        <span>Page</span>
+        <input
+          aria-label="Page"
+          inputMode="numeric"
+          min={1}
+          onChange={(event) => onPageChange(Number(event.target.value))}
+          type="number"
+          value={page}
+        />
+        <button
+          className={`page-icon ${canGoNext ? "" : "muted"}`}
+          type="button"
+          aria-label="Next page"
+          disabled={!canGoNext}
+          onClick={onNextPage}
+        >
+          <span className="pagination-icon pagination-next" />
+        </button>
+        <select
+          aria-label="Page size"
+          className="page-size-select"
+          onChange={(event) => onPageSizeChange(Number(event.target.value))}
+          value={limit}
+        >
+          {[25, 50, 100, 250, 500].map((pageSize) => (
+            <option key={pageSize} value={pageSize}>
+              {pageSize} / page
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="range-status">
+        <span className="status-metric">
+          {resultCount} shown{hasMore ? "+" : ""}
+        </span>
+        {executionTimeMs !== undefined ? (
+          <span className="status-metric">
+            <span className="status-label">query</span>
+            {executionTimeMs} ms
+          </span>
+        ) : null}
+        <span className="status-metric">
+          <span className="status-label">latency</span>
+          {healthLabel}
+        </span>
+      </div>
+    </footer>
+  );
+};
 
 type WorkspaceEmptyStateProps = {
   actionLabel: string;

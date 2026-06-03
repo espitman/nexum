@@ -1637,6 +1637,36 @@ input:disabled {
   font-size: 13px;
 }
 
+.results-loading-state {
+  border-top: 1px solid #e1e6ee;
+  display: grid;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.results-loading-state span {
+  background:
+    linear-gradient(
+        90deg,
+        transparent,
+        rgba(255, 255, 255, 0.76),
+        transparent
+      ) -220px
+      0 / 220px 100% no-repeat,
+    #f4f7fa;
+  border-bottom: 1px solid #e6ebf1;
+  min-height: 46px;
+  animation: table-loading-shimmer 1.2s ease-in-out infinite;
+}
+
+@keyframes table-loading-shimmer {
+  to {
+    background-position:
+      100vw 0,
+      0 0;
+  }
+}
+
 .grid-row {
   border-bottom: 1px solid #e6ebf1;
   color: #273244;
@@ -1729,6 +1759,23 @@ input:disabled {
   gap: 12px;
 }
 
+.range-status {
+  color: #293241;
+  font-weight: 600;
+}
+
+.status-metric {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.status-label {
+  color: #7a8594;
+  font-weight: 600;
+}
+
 .workspace-footer input {
   border: 1px solid #dbe2eb;
   border-radius: 7px;
@@ -1745,6 +1792,10 @@ input:disabled {
   width: 30px;
 }
 
+.page-icon:disabled {
+  cursor: default;
+}
+
 .pagination-icon {
   display: inline-block;
   height: 14px;
@@ -1759,6 +1810,7 @@ input:disabled {
 }
 
 .pagination-next::before,
+.pagination-prev::before,
 .pagination-first::before,
 .pagination-last::before {
   border-right: 2px solid currentColor;
@@ -1771,6 +1823,11 @@ input:disabled {
 
 .pagination-next::before {
   left: 2px;
+}
+
+.pagination-prev::before {
+  left: 5px;
+  transform: rotate(-135deg);
 }
 
 .pagination-first::before {
@@ -1798,17 +1855,22 @@ input:disabled {
   right: 2px;
 }
 
-.page-size {
+.page-size-select {
+  appearance: none;
   align-items: center;
+  background:
+    linear-gradient(45deg, transparent 50%, currentColor 50%) right 14px
+      center / 6px 6px no-repeat,
+    linear-gradient(135deg, currentColor 50%, transparent 50%) right 9px
+      center / 6px 6px no-repeat,
+    #ffffff;
   border: 1px solid #dbe2eb;
   border-radius: 7px;
   color: #4b5563;
-  display: inline-flex;
-  gap: 8px;
   height: 34px;
   margin-left: 10px;
   min-width: 112px;
-  padding: 0 12px;
+  padding: 0 28px 0 12px;
 }
 
 .select-caret {

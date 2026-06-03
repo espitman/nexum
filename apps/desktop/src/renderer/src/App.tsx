@@ -275,7 +275,6 @@ export const App = () => {
         activeWorkspaceTab={activeWorkspaceTab}
         connections={connections}
         isConnectionsLoading={connectionsQuery.isLoading}
-        health={health}
         healthLabel={healthLabel}
         selectedConnectionId={selectedConnectionId}
         selectedCollectionName={visibleSelectedCollectionName}
