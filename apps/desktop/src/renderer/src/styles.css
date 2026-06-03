@@ -1446,6 +1446,26 @@ input:disabled {
   border-right: 0;
 }
 
+.document-table-row.is-row-selected .document-table-cell {
+  background: #d0d3d4;
+}
+
+.document-table-row.is-row-selected .document-table-cell.is-selected,
+.document-table-cell.is-selected {
+  background: #0969d8;
+  color: #ffffff;
+}
+
+.document-table-cell.is-selected .object-cell,
+.document-table-cell.is-selected .mono {
+  color: #ffffff;
+}
+
+.document-table-cell.is-selected .object-cell-icon {
+  border-color: rgba(255, 255, 255, 0.82);
+  color: #ffffff;
+}
+
 .document-table-header-cell {
   gap: 7px;
   padding-right: 28px;

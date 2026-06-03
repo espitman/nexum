@@ -598,12 +598,20 @@ type ObjectPreviewState = {
   top: number;
 };
 
+type SelectedDocumentCell = {
+  cellId: string;
+  rowId: string;
+};
+
 const DocumentTable = ({ documents, onObjectOpen }: DocumentTableProps) => {
   const parentRef = useRef<HTMLDivElement | null>(null);
   const objectPreviewHideTimer = useRef<number | null>(null);
   const objectPreviewShowTimer = useRef<number | null>(null);
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
   const [objectPreview, setObjectPreview] = useState<ObjectPreviewState | null>(
+    null,
+  );
+  const [selectedCell, setSelectedCell] = useState<SelectedDocumentCell | null>(
     null,
   );
   const cancelObjectPreviewShow = useCallback(() => {
@@ -765,7 +773,9 @@ const DocumentTable = ({ documents, onObjectOpen }: DocumentTableProps) => {
 
             return (
               <div
-                className="document-table-row"
+                className={`document-table-row ${
+                  selectedCell?.rowId === row.id ? "is-row-selected" : ""
+                }`}
                 key={row.id}
                 style={{
                   gridTemplateColumns: columnTemplate,
@@ -773,7 +783,18 @@ const DocumentTable = ({ documents, onObjectOpen }: DocumentTableProps) => {
                 }}
               >
                 {row.getVisibleCells().map((cell) => (
-                  <div className="document-table-cell" key={cell.id}>
+                  <div
+                    className={`document-table-cell ${
+                      selectedCell?.cellId === cell.id ? "is-selected" : ""
+                    }`}
+                    key={cell.id}
+                    onClick={() =>
+                      setSelectedCell({
+                        cellId: cell.id,
+                        rowId: row.id,
+                      })
+                    }
+                  >
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </div>
                 ))}
