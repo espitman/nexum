@@ -1,5 +1,10 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import {
+  useEffect,
+  useState,
+  type CSSProperties,
+  type PointerEvent,
+} from "react";
 import type { ConnectionSummary } from "../../ipc/contracts";
 import { ConnectionRail } from "./components/ConnectionRail";
 import { DatabasePanel } from "./components/DatabasePanel";
@@ -45,6 +50,11 @@ export const App = () => {
   const [selectedConnectionId, setSelectedConnectionId] = useState<
     string | null
   >(null);
+  const [columnWidths, setColumnWidths] = useState({
+    database: 320,
+    inspector: 420,
+    rail: 150,
+  });
 
   const connectionsQuery = useQuery({
     queryKey: ["connections"],
@@ -135,6 +145,15 @@ export const App = () => {
   ]
     .filter(Boolean)
     .join(" ");
+  const shellStyle = {
+    "--database-panel-width": shouldShowDatabasePanel
+      ? `${columnWidths.database}px`
+      : "0px",
+    "--inspector-panel-width": shouldShowInspectorPanel
+      ? `${columnWidths.inspector}px`
+      : "0px",
+    "--rail-width": isConnectionRailOpen ? `${columnWidths.rail}px` : "0px",
+  } as CSSProperties;
   const connectionListToast: ToastMessage | null = connectionsQuery.error
     ? {
         id: "connection-list-failed",
@@ -159,9 +178,39 @@ export const App = () => {
         currentConnectionId ?? connections[0]?.id ?? null,
     );
   };
+  const startColumnResize = (
+    column: "database" | "inspector" | "rail",
+    event: PointerEvent<HTMLButtonElement>,
+  ) => {
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = columnWidths[column];
+    const bounds = columnResizeBounds[column];
+    const direction = column === "inspector" ? -1 : 1;
+
+    const handlePointerMove = (moveEvent: globalThis.PointerEvent) => {
+      const delta = (moveEvent.clientX - startX) * direction;
+      const nextWidth = clamp(startWidth + delta, bounds.min, bounds.max);
+
+      setColumnWidths((current) => ({
+        ...current,
+        [column]: nextWidth,
+      }));
+    };
+
+    const handlePointerUp = () => {
+      document.body.classList.remove("is-resizing-column");
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+
+    document.body.classList.add("is-resizing-column");
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp, { once: true });
+  };
 
   return (
-    <main className={shellClassName}>
+    <main className={shellClassName} style={shellStyle}>
       {isConnectionRailOpen ? (
         <ConnectionRail
           activeSection={activeSection}
@@ -188,6 +237,14 @@ export const App = () => {
         />
       )}
 
+      {isConnectionRailOpen ? (
+        <ColumnResizeHandle
+          label="Resize connections column"
+          placement="rail"
+          onPointerDown={(event) => startColumnResize("rail", event)}
+        />
+      ) : null}
+
       <TopBar
         connectionStatus={connectionStatus}
         connectionStatusLabel={connectionStatusLabel}
@@ -202,6 +259,14 @@ export const App = () => {
           connectionName={selectedConnection.name}
           selectedCollectionName={visibleSelectedCollectionName}
           onCollectionSelect={setSelectedCollectionName}
+        />
+      ) : null}
+
+      {shouldShowDatabasePanel ? (
+        <ColumnResizeHandle
+          label="Resize database column"
+          placement="database"
+          onPointerDown={(event) => startColumnResize("database", event)}
         />
       ) : null}
 
@@ -250,6 +315,14 @@ export const App = () => {
         />
       ) : null}
 
+      {shouldShowInspectorPanel ? (
+        <ColumnResizeHandle
+          label="Resize inspector column"
+          placement="inspector"
+          onPointerDown={(event) => startColumnResize("inspector", event)}
+        />
+      ) : null}
+
       <ErrorToastSurface
         toast={toast ?? connectionListToast}
         onDismiss={() => {
@@ -262,6 +335,34 @@ export const App = () => {
     </main>
   );
 };
+
+type ColumnResizeHandleProps = {
+  label: string;
+  placement: "database" | "inspector" | "rail";
+  onPointerDown: (event: PointerEvent<HTMLButtonElement>) => void;
+};
+
+const ColumnResizeHandle = ({
+  label,
+  placement,
+  onPointerDown,
+}: ColumnResizeHandleProps) => (
+  <button
+    aria-label={label}
+    className={`column-resize-handle column-resize-${placement}`}
+    onPointerDown={onPointerDown}
+    type="button"
+  />
+);
+
+const clamp = (value: number, min: number, max: number): number =>
+  Math.min(Math.max(value, min), max);
+
+const columnResizeBounds = {
+  database: { max: 560, min: 220 },
+  inspector: { max: 620, min: 300 },
+  rail: { max: 280, min: 120 },
+} as const;
 
 const mapConnectionStatus = (
   status: ConnectionSummary["status"],
