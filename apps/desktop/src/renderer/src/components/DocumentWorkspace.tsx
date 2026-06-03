@@ -44,15 +44,23 @@ export const DocumentWorkspace = ({
   onSectionChange,
   onWorkspaceTabChange,
 }: DocumentWorkspaceProps) => {
+  const selectedConnection =
+    connections.find((connection) => connection.id === selectedConnectionId) ??
+    null;
   const isCollectionWorkspace =
     activeSection === "Explore" && selectedCollectionName !== null;
   const isConnectionManager =
     activeSection === "Connections" && selectedCollectionName === null;
+  const exploreEmptyState = getExploreEmptyState(
+    selectedConnection,
+    onCollectionOpen,
+    () => onSectionChange("Connections"),
+  );
   const emptyWorkspaceTitle =
-    activeSection === "Explore" ? "No collection selected" : activeSection;
+    activeSection === "Explore" ? exploreEmptyState.title : activeSection;
   const emptyWorkspaceLabel =
     activeSection === "Explore"
-      ? "Select a collection from the database tree"
+      ? exploreEmptyState.label
       : "This workspace is ready for the next shell route";
 
   return (
@@ -90,10 +98,14 @@ export const DocumentWorkspace = ({
       ) : (
         <WorkspaceEmptyState
           label={emptyWorkspaceLabel}
-          onCollectionOpen={() => {
-            onSectionChange("Explore");
-            onCollectionOpen();
-          }}
+          actionLabel={
+            activeSection === "Explore" ? exploreEmptyState.actionLabel : "Open"
+          }
+          onAction={
+            activeSection === "Explore"
+              ? exploreEmptyState.onAction
+              : () => onSectionChange("Explore")
+          }
           title={emptyWorkspaceTitle}
         />
       )}
@@ -289,28 +301,57 @@ const WorkspaceFooter = ({ health, healthLabel }: WorkspaceFooterProps) => (
 );
 
 type WorkspaceEmptyStateProps = {
+  actionLabel: string;
   label: string;
   title: string;
-  onCollectionOpen: () => void;
+  onAction: () => void;
 };
 
 const WorkspaceEmptyState = ({
+  actionLabel,
   label,
   title,
-  onCollectionOpen,
+  onAction,
 }: WorkspaceEmptyStateProps) => (
   <section className="workspace-empty-state">
     <div>
       <Icon name="folder" />
       <h1>{title}</h1>
       <p>{label}</p>
-      <button
-        className="run-button compact"
-        type="button"
-        onClick={onCollectionOpen}
-      >
-        Open users
+      <button className="run-button compact" type="button" onClick={onAction}>
+        {actionLabel}
       </button>
     </div>
   </section>
 );
+
+const getExploreEmptyState = (
+  selectedConnection: ConnectionProfile | null,
+  onCollectionOpen: () => void,
+  onConnectionsOpen: () => void,
+) => {
+  if (!selectedConnection) {
+    return {
+      actionLabel: "Open connections",
+      label: "Select a saved connection before exploring databases.",
+      onAction: onConnectionsOpen,
+      title: "No connection selected",
+    };
+  }
+
+  if (selectedConnection.status !== "connected") {
+    return {
+      actionLabel: "Open connection",
+      label: "Connect the selected profile before browsing databases.",
+      onAction: onConnectionsOpen,
+      title: "Connection is not active",
+    };
+  }
+
+  return {
+    actionLabel: "Open users",
+    label: "Select a collection from the database tree.",
+    onAction: onCollectionOpen,
+    title: "No collection selected",
+  };
+};

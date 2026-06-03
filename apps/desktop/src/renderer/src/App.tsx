@@ -123,13 +123,14 @@ export const App = () => {
   const isDatabaseConnected = selectedConnection?.status === "connected";
   const isExploreSection = activeSection === "Explore";
   const shouldShowDatabasePanel = isExploreSection && isDatabaseConnected;
+  const shouldShowInspectorPanel = isExploreSection && isInspectorOpen;
   const visibleSelectedCollectionName = shouldShowDatabasePanel
     ? selectedCollectionName
     : null;
   const shellClassName = [
     "app-shell",
     isConnectionRailOpen ? "" : "is-connections-closed",
-    isInspectorOpen ? "" : "is-inspector-closed",
+    shouldShowInspectorPanel ? "" : "is-inspector-closed",
     shouldShowDatabasePanel ? "" : "is-database-hidden",
   ]
     .filter(Boolean)
@@ -145,6 +146,19 @@ export const App = () => {
             : "Unknown error",
       }
     : null;
+  const handleSectionChange = (section: NavItemLabel) => {
+    setActiveSection(section);
+
+    if (section !== "Explore") {
+      setSelectedCollectionName(null);
+      return;
+    }
+
+    setSelectedConnectionId(
+      (currentConnectionId) =>
+        currentConnectionId ?? connections[0]?.id ?? null,
+    );
+  };
 
   return (
     <main className={shellClassName}>
@@ -163,7 +177,7 @@ export const App = () => {
             setSelectedConnectionId(connectionId);
             setSelectedCollectionName(null);
           }}
-          onSectionChange={setActiveSection}
+          onSectionChange={handleSectionChange}
           selectedConnectionId={selectedConnectionId}
         />
       ) : (
@@ -217,23 +231,23 @@ export const App = () => {
             setSelectedCollectionName("users");
           }
         }}
-        onSectionChange={setActiveSection}
+        onSectionChange={handleSectionChange}
         onWorkspaceTabChange={setActiveWorkspaceTab}
       />
 
-      {isInspectorOpen ? (
+      {shouldShowInspectorPanel ? (
         <InspectorPanel
           activeInspectorTab={activeInspectorTab}
           onClose={() => setIsInspectorOpen(false)}
           onInspectorTabChange={setActiveInspectorTab}
         />
-      ) : (
+      ) : isExploreSection ? (
         <PanelRestoreButton
           direction="right"
           label="Open document inspector"
           onClick={() => setIsInspectorOpen(true)}
         />
-      )}
+      ) : null}
 
       <ErrorToastSurface
         toast={toast ?? connectionListToast}

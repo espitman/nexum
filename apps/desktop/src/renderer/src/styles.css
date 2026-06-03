@@ -554,7 +554,7 @@ button {
 }
 
 .collection-tabbar {
-  align-items: flex-end;
+  align-items: stretch;
   border-bottom: 1px solid #dfe5ed;
   display: flex;
   gap: 8px;
@@ -562,25 +562,44 @@ button {
 }
 
 .collection-tab {
-  border-bottom: 2px solid #006d78;
+  align-items: center;
   color: #263142;
+  display: inline-flex;
   font-size: 15px;
   font-weight: 600;
+  gap: 8px;
   height: 52px;
-  padding: 0 12px;
+  padding: 0 10px;
+  position: relative;
+}
+
+.collection-tab.is-active::after {
+  background: #00717d;
+  bottom: -1px;
+  content: "";
+  height: 2px;
+  left: 0;
+  position: absolute;
+  right: 0;
 }
 
 .close-mark {
+  align-items: center;
   color: #4f5b6b;
-  font-size: 22px;
+  display: inline-flex;
+  font-size: 20px;
   font-weight: 300;
-  margin-left: 14px;
+  height: 28px;
+  justify-content: center;
+  margin-left: 8px;
+  width: 28px;
 }
 
 .tab-plus {
+  align-self: center;
   color: #253145;
   font-size: 25px;
-  height: 46px;
+  height: 36px;
   width: 36px;
 }
 
