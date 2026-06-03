@@ -176,10 +176,10 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
   - [x] Add loading state
   - [x] Add empty state
   - [x] Add error state
-- [ ] Verify explorer
-  - [ ] Browse databases
-  - [ ] Browse collections
-  - [ ] Select collection into workspace
+- [x] Verify explorer
+  - [x] Browse databases
+  - [x] Browse collections
+  - [x] Select collection into workspace
 
 ## Phase 7 — Document Viewer
 
