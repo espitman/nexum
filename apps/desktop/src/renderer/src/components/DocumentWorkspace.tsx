@@ -29,9 +29,14 @@ import {
   type QueryBuilderFieldInference,
   type QueryBuilderGroupNode,
 } from "../queryBuilderModel";
-import type { ConnectionProfile, SchemaFieldSummary } from "../types";
+import type {
+  ConnectionProfile,
+  IndexSummary,
+  SchemaFieldSummary,
+} from "../types";
 import { ConnectionManager } from "./ConnectionManager";
 import { Icon } from "./Icon";
+import { IndexList, SchemaTree } from "./InspectorPanel";
 import { JsonTreeView } from "./JsonTreeView";
 
 type DocumentWorkspaceProps = {
@@ -39,6 +44,9 @@ type DocumentWorkspaceProps = {
   activeWorkspaceTab: WorkspaceTabLabel;
   connections: ConnectionProfile[];
   healthLabel: string;
+  indexRows: IndexSummary[];
+  indexesError: string | null;
+  isIndexesLoading: boolean;
   isConnectionsLoading: boolean;
   selectedConnectionId: string | null;
   selectedCollectionName: string | null;
@@ -48,7 +56,6 @@ type DocumentWorkspaceProps = {
   onCollectionClose: () => void;
   onCollectionOpen: () => void;
   onSectionChange: (section: NavItemLabel) => void;
-  onSelectedDocumentChange: (document: Record<string, unknown> | null) => void;
   onSchemaChange: (schemaFields: SchemaFieldSummary[]) => void;
   onWorkspaceTabChange: (tab: WorkspaceTabLabel) => void;
 };
@@ -91,6 +98,9 @@ export const DocumentWorkspace = ({
   activeWorkspaceTab,
   connections,
   healthLabel,
+  indexRows,
+  indexesError,
+  isIndexesLoading,
   isConnectionsLoading,
   selectedConnectionId,
   selectedCollectionName,
@@ -100,7 +110,6 @@ export const DocumentWorkspace = ({
   onCollectionClose,
   onCollectionOpen,
   onSectionChange,
-  onSelectedDocumentChange,
   onSchemaChange,
   onWorkspaceTabChange,
 }: DocumentWorkspaceProps) => {
@@ -122,12 +131,17 @@ export const DocumentWorkspace = ({
   const [skipInput, setSkipInput] = useState("0");
   const [sortInput, setSortInput] = useState("{}");
   const [queryInputError, setQueryInputError] = useState<string | null>(null);
+  const [isQueryBuilderOpen, setIsQueryBuilderOpen] = useState(false);
   const [tableDrillState, setTableDrillState] = useState<{
     collectionName: string | null;
     path: string[];
   }>({ collectionName: null, path: [] });
   const isCollectionWorkspace =
     activeSection === "Explore" && selectedCollectionName !== null;
+  const isMetadataWorkspace =
+    activeWorkspaceTab === "Schema" || activeWorkspaceTab === "Indexes";
+  const shouldShowQueryBuilderPanel =
+    isCollectionWorkspace && !isMetadataWorkspace && isQueryBuilderOpen;
   const isConnectionManager =
     activeSection === "Connections" && selectedCollectionName === null;
   const documentsQuery = useQuery({
@@ -280,7 +294,11 @@ export const DocumentWorkspace = ({
   };
 
   return (
-    <section className="document-workspace">
+    <section
+      className={`document-workspace ${
+        shouldShowQueryBuilderPanel ? "is-query-builder" : ""
+      }`}
+    >
       <CollectionTabBar
         isCollectionWorkspace={isCollectionWorkspace}
         selectedCollectionName={selectedCollectionName}
@@ -290,6 +308,10 @@ export const DocumentWorkspace = ({
       {isCollectionWorkspace ? (
         <WorkspaceTabs
           activeWorkspaceTab={activeWorkspaceTab}
+          isQueryBuilderOpen={isQueryBuilderOpen}
+          onQueryBuilderToggle={() =>
+            setIsQueryBuilderOpen((currentValue) => !currentValue)
+          }
           onWorkspaceTabChange={onWorkspaceTabChange}
         />
       ) : (
@@ -298,65 +320,76 @@ export const DocumentWorkspace = ({
 
       {isCollectionWorkspace ? (
         <>
-          {activeWorkspaceTab === "Query Builder" ? (
-            <QueryBuilderSection
-              fields={queryBuilderFields}
-              isFetching={documentsQuery.isFetching}
-              model={queryBuilderModel}
-              onModelChange={setQueryBuilderModel}
-              onRunQuery={runQueryBuilder}
-              preview={queryBuilderPreview}
+          {isMetadataWorkspace ? (
+            <MetadataWorkspace
+              activeWorkspaceTab={activeWorkspaceTab}
+              indexRows={indexRows}
+              indexesError={indexesError}
+              isIndexesLoading={isIndexesLoading}
+              schemaFields={schemaFields}
             />
-          ) : (
-            <QuerySection
-              filterInput={filterInput}
-              isFetching={documentsQuery.isFetching}
-              limitInput={limitInput}
-              onFilterInputChange={setFilterInput}
-              onLimitInputChange={setLimitInput}
-              onRunQuery={runQuery}
-              onSkipInputChange={setSkipInput}
-              onSortInputChange={setSortInput}
-              queryInputError={queryInputError}
-              skipInput={skipInput}
-              sortInput={sortInput}
-            />
-          )}
-          <ResultsSection
-            collectionLabel={selectedCollectionLabel ?? "Collection"}
-            documents={parsedDocuments}
-            error={documentsQuery.error}
-            hasMore={documentsQuery.data?.hasMore ?? false}
-            isFetching={documentsQuery.isFetching}
-            isInitialLoading={documentsQuery.isLoading}
-            onRefresh={() => void documentsQuery.refetch()}
-            onSelectedDocumentChange={onSelectedDocumentChange}
-            onTablePathChange={handleTablePathChange}
-            tablePath={tablePath}
-            viewMode={documentViewMode}
-            onViewModeChange={setDocumentViewMode}
-          />
-          <WorkspaceFooter
-            canGoNext={documentsQuery.data?.hasMore ?? false}
-            canGoPrevious={queryState.skip > 0}
-            executionTimeMs={documentsQuery.data?.executionTimeMs}
-            hasMore={documentsQuery.data?.hasMore ?? false}
-            healthLabel={healthLabel}
-            limit={queryState.limit}
-            onFirstPage={() => goToPage(1)}
-            onNextPage={() =>
-              goToPage(Math.floor(queryState.skip / queryState.limit) + 2)
-            }
-            onPageChange={goToPage}
-            onPageSizeChange={updatePageSize}
-            onPreviousPage={() =>
-              goToPage(
-                Math.max(Math.floor(queryState.skip / queryState.limit), 1),
-              )
-            }
-            resultCount={parsedDocuments.length}
-            skip={queryState.skip}
-          />
+          ) : null}
+          {!isMetadataWorkspace ? (
+            <>
+              <QuerySection
+                filterInput={filterInput}
+                isFetching={documentsQuery.isFetching}
+                limitInput={limitInput}
+                onFilterInputChange={setFilterInput}
+                onLimitInputChange={setLimitInput}
+                onRunQuery={runQuery}
+                onSkipInputChange={setSkipInput}
+                onSortInputChange={setSortInput}
+                queryInputError={queryInputError}
+                skipInput={skipInput}
+                sortInput={sortInput}
+              />
+              <ResultsSection
+                collectionLabel={selectedCollectionLabel ?? "Collection"}
+                documents={parsedDocuments}
+                error={documentsQuery.error}
+                hasMore={documentsQuery.data?.hasMore ?? false}
+                isFetching={documentsQuery.isFetching}
+                isInitialLoading={documentsQuery.isLoading}
+                onRefresh={() => void documentsQuery.refetch()}
+                onTablePathChange={handleTablePathChange}
+                tablePath={tablePath}
+                viewMode={documentViewMode}
+                onViewModeChange={setDocumentViewMode}
+              />
+              <WorkspaceFooter
+                canGoNext={documentsQuery.data?.hasMore ?? false}
+                canGoPrevious={queryState.skip > 0}
+                executionTimeMs={documentsQuery.data?.executionTimeMs}
+                hasMore={documentsQuery.data?.hasMore ?? false}
+                healthLabel={healthLabel}
+                limit={queryState.limit}
+                onFirstPage={() => goToPage(1)}
+                onNextPage={() =>
+                  goToPage(Math.floor(queryState.skip / queryState.limit) + 2)
+                }
+                onPageChange={goToPage}
+                onPageSizeChange={updatePageSize}
+                onPreviousPage={() =>
+                  goToPage(
+                    Math.max(Math.floor(queryState.skip / queryState.limit), 1),
+                  )
+                }
+                resultCount={parsedDocuments.length}
+                skip={queryState.skip}
+              />
+              {shouldShowQueryBuilderPanel ? (
+                <QueryBuilderSection
+                  fields={queryBuilderFields}
+                  isFetching={documentsQuery.isFetching}
+                  model={queryBuilderModel}
+                  onModelChange={setQueryBuilderModel}
+                  onRunQuery={runQueryBuilder}
+                  preview={queryBuilderPreview}
+                />
+              ) : null}
+            </>
+          ) : null}
         </>
       ) : isConnectionManager ? (
         <ConnectionManager
@@ -423,11 +456,15 @@ const CollectionTabBar = ({
 
 type WorkspaceTabsProps = {
   activeWorkspaceTab: WorkspaceTabLabel;
+  isQueryBuilderOpen: boolean;
+  onQueryBuilderToggle: () => void;
   onWorkspaceTabChange: (tab: WorkspaceTabLabel) => void;
 };
 
 const WorkspaceTabs = ({
   activeWorkspaceTab,
+  isQueryBuilderOpen,
+  onQueryBuilderToggle,
   onWorkspaceTabChange,
 }: WorkspaceTabsProps) => (
   <div className="workspace-tabs" role="tablist" aria-label="Collection views">
@@ -444,6 +481,20 @@ const WorkspaceTabs = ({
         {label}
       </button>
     ))}
+    <button
+      aria-label={
+        isQueryBuilderOpen ? "Close query builder" : "Open query builder"
+      }
+      aria-pressed={isQueryBuilderOpen}
+      data-tooltip="Query Builder"
+      className={`workspace-tool-button ${
+        isQueryBuilderOpen ? "is-active" : ""
+      }`}
+      onClick={onQueryBuilderToggle}
+      type="button"
+    >
+      <Icon name="query-builder" />
+    </button>
   </div>
 );
 
@@ -532,6 +583,36 @@ const QuerySection = ({
   </section>
 );
 
+type MetadataWorkspaceProps = {
+  activeWorkspaceTab: WorkspaceTabLabel;
+  indexRows: IndexSummary[];
+  indexesError: string | null;
+  isIndexesLoading: boolean;
+  schemaFields: SchemaFieldSummary[];
+};
+
+const MetadataWorkspace = ({
+  activeWorkspaceTab,
+  indexRows,
+  indexesError,
+  isIndexesLoading,
+  schemaFields,
+}: MetadataWorkspaceProps) => (
+  <section className="metadata-workspace">
+    <div className="metadata-workspace-body">
+      {activeWorkspaceTab === "Schema" ? (
+        <SchemaTree fields={schemaFields} />
+      ) : (
+        <IndexList
+          error={indexesError}
+          indexes={indexRows}
+          isLoading={isIndexesLoading}
+        />
+      )}
+    </div>
+  </section>
+);
+
 type QueryBuilderSectionProps = {
   fields: QueryBuilderFieldInference[];
   isFetching: boolean;
@@ -550,24 +631,32 @@ const QueryBuilderSection = ({
   preview,
 }: QueryBuilderSectionProps) => {
   const fieldOptionsId = "query-builder-fields";
+  const [activeBuilderTab, setActiveBuilderTab] = useState<"Preview" | "Query">(
+    "Query",
+  );
 
   return (
     <section className="query-builder-section">
-      <div className="query-builder-panel">
+      <div className="query-builder-shell">
         <div className="query-builder-header">
-          <div>
-            <strong>Query Builder</strong>
-            <span>{fields.length} inferred fields</span>
-          </div>
-          <button
-            className="run-button compact"
-            disabled={isFetching}
-            onClick={onRunQuery}
-            type="button"
+          <div
+            className="query-builder-tabs"
+            role="tablist"
+            aria-label="Query builder panels"
           >
-            <span className="play-icon" />
-            Run
-          </button>
+            {(["Query", "Preview"] as const).map((tab) => (
+              <button
+                aria-selected={activeBuilderTab === tab}
+                className={activeBuilderTab === tab ? "is-active" : ""}
+                key={tab}
+                onClick={() => setActiveBuilderTab(tab)}
+                role="tab"
+                type="button"
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
         </div>
 
         <datalist id={fieldOptionsId}>
@@ -580,22 +669,34 @@ const QueryBuilderSection = ({
           ))}
         </datalist>
 
-        <QueryBuilderGroup
-          fieldOptionsId={fieldOptionsId}
-          fields={fields}
-          group={model}
-          isRoot
-          root={model}
-          onRootChange={onModelChange}
-        />
-      </div>
+        {activeBuilderTab === "Query" ? (
+          <div className="query-builder-panel" role="tabpanel">
+            <QueryBuilderGroup
+              fieldOptionsId={fieldOptionsId}
+              fields={fields}
+              group={model}
+              isRoot
+              root={model}
+              onRootChange={onModelChange}
+            />
+          </div>
+        ) : (
+          <div className="query-builder-preview" role="tabpanel">
+            <pre>{preview}</pre>
+          </div>
+        )}
 
-      <div className="query-builder-preview">
-        <div className="query-builder-preview-header">
-          <strong>Preview</strong>
-          <span>MongoDB filter</span>
+        <div className="query-builder-footer">
+          <button
+            className="run-button compact"
+            disabled={isFetching}
+            onClick={onRunQuery}
+            type="button"
+          >
+            <span className="play-icon" />
+            Run
+          </button>
         </div>
-        <pre>{preview}</pre>
       </div>
     </section>
   );
@@ -822,7 +923,6 @@ type ResultsSectionProps = {
   isFetching: boolean;
   isInitialLoading: boolean;
   onRefresh: () => void;
-  onSelectedDocumentChange: (document: Record<string, unknown> | null) => void;
   onTablePathChange: (path: string[]) => void;
   tablePath: string[];
   onViewModeChange: (mode: DocumentViewMode) => void;
@@ -837,7 +937,6 @@ const ResultsSection = ({
   isFetching,
   isInitialLoading,
   onRefresh,
-  onSelectedDocumentChange,
   onTablePathChange,
   tablePath,
   onViewModeChange,
@@ -876,7 +975,6 @@ const ResultsSection = ({
           key={`${tablePath.join(".")}:${tableDocuments[0]?.id ?? "empty"}:${tableDocuments.length}`}
           documents={tableDocuments}
           onObjectOpen={handleObjectOpen}
-          onSelectedDocumentChange={onSelectedDocumentChange}
         />
       )}
     </section>
@@ -1005,7 +1103,6 @@ const DocumentBreadcrumbs = ({
 type DocumentTableProps = {
   documents: ParsedDocument[];
   onObjectOpen: (field: string) => void;
-  onSelectedDocumentChange: (document: Record<string, unknown> | null) => void;
 };
 
 type ObjectPreviewState = {
@@ -1019,11 +1116,7 @@ type SelectedDocumentCell = {
   rowId: string;
 };
 
-const DocumentTable = ({
-  documents,
-  onObjectOpen,
-  onSelectedDocumentChange,
-}: DocumentTableProps) => {
+const DocumentTable = ({ documents, onObjectOpen }: DocumentTableProps) => {
   const parentRef = useRef<HTMLDivElement | null>(null);
   const objectPreviewHideTimer = useRef<number | null>(null);
   const objectPreviewShowTimer = useRef<number | null>(null);
@@ -1219,7 +1312,6 @@ const DocumentTable = ({
                         cellId: cell.id,
                         rowId: row.id,
                       });
-                      onSelectedDocumentChange(row.original.rootValue);
                     }}
                   >
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}

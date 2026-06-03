@@ -148,7 +148,7 @@ type IndexListProps = {
   isLoading: boolean;
 };
 
-const IndexList = ({ error, indexes, isLoading }: IndexListProps) => {
+export const IndexList = ({ error, indexes, isLoading }: IndexListProps) => {
   if (isLoading) {
     return (
       <div className="inspector-empty-state inline">
@@ -200,7 +200,7 @@ type SchemaTreeProps = {
   fields: SchemaFieldSummary[];
 };
 
-const SchemaTree = ({ fields }: SchemaTreeProps) => {
+export const SchemaTree = ({ fields }: SchemaTreeProps) => {
   const nodes = buildSchemaTree(fields);
 
   if (nodes.length === 0) {

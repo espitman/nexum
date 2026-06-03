@@ -10,14 +10,9 @@ import { ConnectionRail } from "./components/ConnectionRail";
 import { DatabasePanel } from "./components/DatabasePanel";
 import { DocumentWorkspace } from "./components/DocumentWorkspace";
 import { ErrorToastSurface } from "./components/ErrorToastSurface";
-import { InspectorPanel } from "./components/InspectorPanel";
 import { PanelRestoreButton } from "./components/PanelRestoreButton";
 import { TopBar } from "./components/TopBar";
-import type {
-  InspectorTabLabel,
-  NavItemLabel,
-  WorkspaceTabLabel,
-} from "./mockData";
+import type { NavItemLabel, WorkspaceTabLabel } from "./mockData";
 import type {
   ConnectionProfile,
   ConnectionStatus,
@@ -38,7 +33,6 @@ export const App = () => {
     isReadOnly: true,
   });
   const [isConnectionRailOpen, setIsConnectionRailOpen] = useState(true);
-  const [isInspectorOpen, setIsInspectorOpen] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [activeSection, setActiveSection] =
     useState<NavItemLabel>("Connections");
@@ -47,17 +41,12 @@ export const App = () => {
   >(null);
   const [activeWorkspaceTab, setActiveWorkspaceTab] =
     useState<WorkspaceTabLabel>("Documents");
-  const [activeInspectorTab, setActiveInspectorTab] =
-    useState<InspectorTabLabel>("Schema");
-  const [selectedInspectorDocument, setSelectedInspectorDocument] =
-    useState<Record<string, unknown> | null>(null);
-  const [schemaFields, setSchemaFields] = useState<SchemaFieldSummary[]>([]);
+  const [, setSchemaFields] = useState<SchemaFieldSummary[]>([]);
   const [selectedConnectionId, setSelectedConnectionId] = useState<
     string | null
   >(null);
   const [columnWidths, setColumnWidths] = useState({
     database: 320,
-    inspector: 420,
     rail: 150,
   });
 
@@ -138,7 +127,6 @@ export const App = () => {
   const isDatabaseConnected = selectedConnection?.status === "connected";
   const isExploreSection = activeSection === "Explore";
   const shouldShowDatabasePanel = isExploreSection && isDatabaseConnected;
-  const shouldShowInspectorPanel = isExploreSection && isInspectorOpen;
   const visibleSelectedCollectionName = shouldShowDatabasePanel
     ? selectedCollectionName
     : null;
@@ -147,8 +135,7 @@ export const App = () => {
   );
   const indexesQuery = useQuery({
     enabled:
-      shouldShowInspectorPanel &&
-      activeInspectorTab === "Indexes" &&
+      activeWorkspaceTab === "Indexes" &&
       Boolean(selectedConnectionId) &&
       selectedCollectionPath !== null,
     queryKey: [
@@ -183,7 +170,6 @@ export const App = () => {
   const shellClassName = [
     "app-shell",
     isConnectionRailOpen ? "" : "is-connections-closed",
-    shouldShowInspectorPanel ? "" : "is-inspector-closed",
     shouldShowDatabasePanel ? "" : "is-database-hidden",
   ]
     .filter(Boolean)
@@ -191,9 +177,6 @@ export const App = () => {
   const shellStyle = {
     "--database-panel-width": shouldShowDatabasePanel
       ? `${columnWidths.database}px`
-      : "0px",
-    "--inspector-panel-width": shouldShowInspectorPanel
-      ? `${columnWidths.inspector}px`
       : "0px",
     "--rail-width": isConnectionRailOpen ? `${columnWidths.rail}px` : "0px",
   } as CSSProperties;
@@ -213,7 +196,6 @@ export const App = () => {
 
     if (section !== "Explore") {
       setSelectedCollectionName(null);
-      setSelectedInspectorDocument(null);
       setSchemaFields([]);
       return;
     }
@@ -224,14 +206,14 @@ export const App = () => {
     );
   };
   const startColumnResize = (
-    column: "database" | "inspector" | "rail",
+    column: "database" | "rail",
     event: PointerEvent<HTMLButtonElement>,
   ) => {
     event.preventDefault();
     const startX = event.clientX;
     const startWidth = columnWidths[column];
     const bounds = columnResizeBounds[column];
-    const direction = column === "inspector" ? -1 : 1;
+    const direction = 1;
 
     const handlePointerMove = (moveEvent: globalThis.PointerEvent) => {
       const delta = (moveEvent.clientX - startX) * direction;
@@ -265,14 +247,12 @@ export const App = () => {
             setActiveSection("Connections");
             setSelectedConnectionId(null);
             setSelectedCollectionName(null);
-            setSelectedInspectorDocument(null);
             setSchemaFields([]);
           }}
           onConnectionSelect={(connectionId) => {
             setActiveSection("Connections");
             setSelectedConnectionId(connectionId);
             setSelectedCollectionName(null);
-            setSelectedInspectorDocument(null);
             setSchemaFields([]);
           }}
           onSectionChange={handleSectionChange}
@@ -299,7 +279,6 @@ export const App = () => {
         connectionStatusLabel={connectionStatusLabel}
         environment={activeEnvironment}
         isReadOnly={activeReadOnly}
-        onToggleInspector={() => setIsInspectorOpen((isOpen) => !isOpen)}
       />
 
       {shouldShowDatabasePanel ? (
@@ -309,7 +288,7 @@ export const App = () => {
           selectedCollectionName={visibleSelectedCollectionName}
           onCollectionSelect={(collectionName) => {
             setSelectedCollectionName(collectionName);
-            setSelectedInspectorDocument(null);
+            setActiveWorkspaceTab("Documents");
             setSchemaFields([]);
           }}
         />
@@ -329,8 +308,15 @@ export const App = () => {
         connections={connections}
         isConnectionsLoading={connectionsQuery.isLoading}
         healthLabel={healthLabel}
+        indexRows={indexRows}
+        indexesError={
+          indexesQuery.error instanceof Error
+            ? indexesQuery.error.message
+            : null
+        }
         selectedConnectionId={selectedConnectionId}
         selectedCollectionName={visibleSelectedCollectionName}
+        isIndexesLoading={indexesQuery.isLoading}
         onConnectionError={(title, message) => {
           setToast({
             id: `${title}-${Date.now()}`,
@@ -344,57 +330,22 @@ export const App = () => {
         }
         onSelectedConnectionChange={(connectionId) => {
           setSelectedConnectionId(connectionId);
-          setSelectedInspectorDocument(null);
           setSchemaFields([]);
         }}
         onCollectionClose={() => {
           setSelectedCollectionName(null);
-          setSelectedInspectorDocument(null);
           setSchemaFields([]);
         }}
         onCollectionOpen={() => {
           if (shouldShowDatabasePanel) {
             setSelectedCollectionName("users");
-            setSelectedInspectorDocument(null);
             setSchemaFields([]);
           }
         }}
         onSectionChange={handleSectionChange}
         onSchemaChange={setSchemaFields}
-        onSelectedDocumentChange={setSelectedInspectorDocument}
         onWorkspaceTabChange={setActiveWorkspaceTab}
       />
-
-      {shouldShowInspectorPanel ? (
-        <InspectorPanel
-          activeInspectorTab={activeInspectorTab}
-          indexRows={indexRows}
-          indexesError={
-            indexesQuery.error instanceof Error
-              ? indexesQuery.error.message
-              : null
-          }
-          isIndexesLoading={indexesQuery.isLoading}
-          onClose={() => setIsInspectorOpen(false)}
-          onInspectorTabChange={setActiveInspectorTab}
-          schemaFields={schemaFields}
-          selectedDocument={selectedInspectorDocument}
-        />
-      ) : isExploreSection ? (
-        <PanelRestoreButton
-          direction="right"
-          label="Open document inspector"
-          onClick={() => setIsInspectorOpen(true)}
-        />
-      ) : null}
-
-      {shouldShowInspectorPanel ? (
-        <ColumnResizeHandle
-          label="Resize inspector column"
-          placement="inspector"
-          onPointerDown={(event) => startColumnResize("inspector", event)}
-        />
-      ) : null}
 
       <ErrorToastSurface
         toast={toast ?? connectionListToast}
@@ -411,7 +362,7 @@ export const App = () => {
 
 type ColumnResizeHandleProps = {
   label: string;
-  placement: "database" | "inspector" | "rail";
+  placement: "database" | "rail";
   onPointerDown: (event: PointerEvent<HTMLButtonElement>) => void;
 };
 
@@ -433,7 +384,6 @@ const clamp = (value: number, min: number, max: number): number =>
 
 const columnResizeBounds = {
   database: { max: 560, min: 220 },
-  inspector: { max: 620, min: 300 },
   rail: { max: 280, min: 120 },
 } as const;
 

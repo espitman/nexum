@@ -5,7 +5,6 @@ type TopBarProps = {
   connectionStatusLabel: string;
   environment: EnvironmentName;
   isReadOnly: boolean;
-  onToggleInspector: () => void;
 };
 
 export const TopBar = ({
@@ -13,7 +12,6 @@ export const TopBar = ({
   connectionStatusLabel,
   environment,
   isReadOnly,
-  onToggleInspector,
 }: TopBarProps) => (
   <header className="app-topbar">
     <div className="brand-lockup">
@@ -48,14 +46,6 @@ export const TopBar = ({
       </button>
       <button className="plain-icon" type="button" aria-label="More">
         ...
-      </button>
-      <button
-        className="layout-icon"
-        type="button"
-        aria-label="Toggle panel"
-        onClick={onToggleInspector}
-      >
-        ◧
       </button>
     </div>
   </header>

@@ -21,16 +21,15 @@ export type NavItemLabel = (typeof navItems)[number][1];
 
 export const workspaceTabs = [
   ["table", "Documents"],
-  ["query", "Query Builder"],
-  ["pipeline", "Aggregation Pipeline"],
-  ["indexes", "Indexes"],
   ["schema", "Schema"],
+  ["indexes", "Indexes"],
+  ["pipeline", "Aggregation Pipeline"],
   ["explain", "Explain"],
 ] as const;
 
 export type WorkspaceTabLabel = (typeof workspaceTabs)[number][1];
 
-export const inspectorTabs = ["Schema", "Indexes", "Document"] as const;
+export const inspectorTabs = ["Document"] as const;
 
 export type InspectorTabLabel = (typeof inspectorTabs)[number];
 
