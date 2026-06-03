@@ -25,6 +25,7 @@
     "mongodb-connection-string-url": "^7.0.1",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
+    "react-json-view-lite": "^2.5.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

@@ -8,6 +8,8 @@ import {
   type ColumnSizingState,
 } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { collapseAllNested, JsonView } from "react-json-view-lite";
+import type { Props as JsonViewProps } from "react-json-view-lite";
 import {
   workspaceTabs,
   type NavItemLabel,
@@ -56,6 +58,25 @@ const defaultQueryState: DocumentQueryState = {
   projection: {},
   skip: 0,
   sort: {},
+};
+
+const jsonViewerStyles: NonNullable<JsonViewProps["style"]> = {
+  basicChildStyle: "json-viewer-child",
+  booleanValue: "json-viewer-boolean",
+  childFieldsContainer: "json-viewer-children",
+  clickableLabel: "json-viewer-clickable-label",
+  collapsedContent: "json-viewer-collapsed-content",
+  collapseIcon: "json-viewer-collapse-icon",
+  container: "json-viewer",
+  expandIcon: "json-viewer-expand-icon",
+  label: "json-viewer-label",
+  nullValue: "json-viewer-null",
+  numberValue: "json-viewer-number",
+  otherValue: "json-viewer-other",
+  punctuation: "json-viewer-punctuation",
+  quotesForFieldNames: false,
+  stringValue: "json-viewer-string",
+  undefinedValue: "json-viewer-undefined",
 };
 
 const documentIdColumn = "{Document id}";
@@ -890,7 +911,7 @@ const JsonResults = ({ documents }: JsonResultsProps) => {
   // eslint-disable-next-line react-hooks/incompatible-library
   const rowVirtualizer = useVirtualizer({
     count: documents.length,
-    estimateSize: () => 176,
+    estimateSize: () => 260,
     getScrollElement: () => parentRef.current,
     overscan: 4,
   });
@@ -918,13 +939,25 @@ const JsonResults = ({ documents }: JsonResultsProps) => {
           }
 
           return (
-            <pre
-              className="json-document"
+            <article
+              className="json-document-card"
               key={document.id}
               style={{ transform: `translateY(${virtualRow.start}px)` }}
             >
-              {formatJson(document.ejson)}
-            </pre>
+              <header className="json-document-card-header">
+                <span>Document</span>
+                <strong>{document.id}</strong>
+              </header>
+              <div className="json-document-tree">
+                <JsonView
+                  clickToExpandNode
+                  compactTopLevel
+                  data={document.value}
+                  shouldExpandNode={collapseAllNested}
+                  style={jsonViewerStyles}
+                />
+              </div>
+            </article>
           );
         })}
       </div>
@@ -1547,14 +1580,6 @@ const unwrapEjsonScalar = (value: unknown): unknown => {
   }
 
   return value;
-};
-
-const formatJson = (value: string): string => {
-  try {
-    return JSON.stringify(JSON.parse(value), null, 2);
-  } catch {
-    return value;
-  }
 };
 
 const formatPreviewJson = (value: unknown): string =>

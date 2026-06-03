@@ -1592,22 +1592,121 @@ input:disabled {
   position: relative;
 }
 
-.json-document {
+.json-document-card {
   background: #ffffff;
+  border: 1px solid #dfe5ed;
+  border-radius: 7px;
   border-bottom: 1px solid #e6ebf1;
-  color: #00717d;
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  font-size: 13px;
   left: 0;
-  line-height: 1.6;
-  margin: 0;
-  min-height: 176px;
+  margin: 12px 18px;
+  min-height: 236px;
   overflow: hidden;
-  padding: 14px 22px;
   position: absolute;
   right: 0;
   top: 0;
-  white-space: pre;
+}
+
+.json-document-card-header {
+  align-items: center;
+  border-bottom: 1px solid #e6ebf1;
+  color: #687386;
+  display: flex;
+  font-size: 12px;
+  gap: 10px;
+  height: 42px;
+  padding: 0 16px;
+}
+
+.json-document-card-header strong {
+  color: #263142;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  font-weight: 700;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.json-document-tree {
+  max-height: 193px;
+  overflow: auto;
+  padding: 12px 16px 16px;
+}
+
+.json-viewer {
+  color: #2b3445;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.json-viewer-children {
+  margin: 0;
+  padding: 0 0 0 18px;
+}
+
+.json-viewer-child {
+  list-style: none;
+  margin: 0;
+}
+
+.json-viewer-label,
+.json-viewer-clickable-label {
+  color: #c2410c;
+  font-weight: 700;
+}
+
+.json-viewer-clickable-label {
+  cursor: pointer;
+}
+
+.json-viewer-string {
+  color: #00717d;
+}
+
+.json-viewer-number {
+  color: #2563eb;
+}
+
+.json-viewer-boolean {
+  color: #9333ea;
+}
+
+.json-viewer-null,
+.json-viewer-undefined,
+.json-viewer-other {
+  color: #647084;
+}
+
+.json-viewer-punctuation {
+  color: #4b5563;
+}
+
+.json-viewer-expand-icon,
+.json-viewer-collapse-icon {
+  color: #526071;
+  cursor: pointer;
+  display: inline-block;
+  margin-right: 5px;
+  width: 12px;
+}
+
+.json-viewer-expand-icon::after {
+  content: "›";
+}
+
+.json-viewer-collapse-icon::after {
+  content: "⌄";
+}
+
+.json-viewer-collapsed-content {
+  color: #8a94a6;
+  margin-left: 4px;
+}
+
+.json-viewer-collapsed-content::after {
+  content: "...";
 }
 
 .results-state {
