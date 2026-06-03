@@ -25,6 +25,13 @@ input {
   font: inherit;
 }
 
+button,
+input,
+select,
+textarea {
+  outline: 0;
+}
+
 button {
   -webkit-app-region: no-drag;
   align-items: center;
