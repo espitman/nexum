@@ -549,15 +549,14 @@ const QuerySection = ({
         <QueryFieldAutocompleteInput
           aria-label="MongoDB filter"
           canClear
+          copyLabel="Copy filter"
           fields={fieldSuggestions}
           mode="filter"
           value={filterInput}
           onChange={onFilterInputChange}
+          onCopy={() => void navigator.clipboard?.writeText(filterInput)}
           onEnter={onRunQuery}
         />
-        <button className="plain-icon" type="button" aria-label="Copy query">
-          ⧉
-        </button>
       </label>
 
       <div className="query-controls">
@@ -638,22 +637,26 @@ const QuerySection = ({
 type QueryFieldAutocompleteInputProps = {
   "aria-label": string;
   canClear?: boolean;
+  copyLabel?: string;
   fields: SchemaFieldSummary[];
   mode: "field" | "filter" | "projection";
   placeholder?: string;
   value: string;
   onChange: (value: string) => void;
+  onCopy?: () => void;
   onEnter?: () => void;
 };
 
 const QueryFieldAutocompleteInput = ({
   "aria-label": ariaLabel,
   canClear = false,
+  copyLabel,
   fields,
   mode,
   placeholder,
   value,
   onChange,
+  onCopy,
   onEnter,
 }: QueryFieldAutocompleteInputProps) => {
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -670,6 +673,7 @@ const QueryFieldAutocompleteInput = ({
   );
   const shouldShowSuggestions = isFocused && suggestions.length > 0;
   const canClearValue = canClear && value.trim() !== "{}";
+  const hasActions = canClear || onCopy;
 
   const syncCaret = () => {
     const input = inputRef.current;
@@ -723,7 +727,7 @@ const QueryFieldAutocompleteInput = ({
   };
 
   return (
-    <span className={`query-autocomplete ${canClear ? "has-clear" : ""}`}>
+    <span className={`query-autocomplete ${hasActions ? "has-actions" : ""}`}>
       <input
         aria-label={ariaLabel}
         autoComplete="off"
@@ -783,22 +787,39 @@ const QueryFieldAutocompleteInput = ({
         }}
         onSelect={syncCaret}
       />
-      {canClear ? (
-        <button
-          aria-label={`Clear ${ariaLabel}`}
-          className="query-autocomplete-clear"
-          disabled={!canClearValue}
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => {
-            onChange("{}");
-            setCaretIndex(1);
-            inputRef.current?.focus();
-            inputRef.current?.setSelectionRange(1, 1);
-          }}
-          type="button"
-        >
-          ×
-        </button>
+      {hasActions ? (
+        <span className="query-autocomplete-actions">
+          {onCopy ? (
+            <button
+              aria-label={copyLabel ?? "Copy"}
+              className="query-autocomplete-action"
+              data-tooltip={copyLabel ?? "Copy"}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={onCopy}
+              type="button"
+            >
+              ⧉
+            </button>
+          ) : null}
+          {canClear ? (
+            <button
+              aria-label={`Clear ${ariaLabel}`}
+              className="query-autocomplete-action query-autocomplete-clear"
+              data-tooltip="Clear"
+              disabled={!canClearValue}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                onChange("{}");
+                setCaretIndex(1);
+                inputRef.current?.focus();
+                inputRef.current?.setSelectionRange(1, 1);
+              }}
+              type="button"
+            >
+              ×
+            </button>
+          ) : null}
+        </span>
       ) : null}
       {shouldShowSuggestions ? (
         <div className="query-autocomplete-menu" role="listbox">
