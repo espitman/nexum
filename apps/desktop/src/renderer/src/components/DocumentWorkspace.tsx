@@ -319,6 +319,26 @@ export const DocumentWorkspace = ({
     }));
   };
 
+  const applyCellProjection = ({ mode, path }: CellProjectionRequest) => {
+    const parsedProjection = parseJsonObject(projectionInput, "Projection");
+    const baseProjection = parsedProjection.ok
+      ? parsedProjection.value
+      : queryState.projection;
+    const nextProjection = {
+      ...baseProjection,
+      [path]: mode === "include" ? 1 : 0,
+    };
+
+    setQueryInputError(null);
+    setProjectionInput(JSON.stringify(nextProjection));
+    setSkipInput("0");
+    setQueryState((currentState) => ({
+      ...currentState,
+      projection: nextProjection,
+      skip: 0,
+    }));
+  };
+
   useEffect(() => {
     onSchemaChange(isCollectionWorkspace ? schemaFields : []);
   }, [isCollectionWorkspace, onSchemaChange, schemaFields]);
@@ -428,6 +448,7 @@ export const DocumentWorkspace = ({
                 isFetching={documentsQuery.isFetching}
                 isInitialLoading={documentsQuery.isLoading}
                 onCellFilter={applyCellFilter}
+                onCellProjection={applyCellProjection}
                 onRefresh={() => void documentsQuery.refetch()}
                 onTablePathChange={handleTablePathChange}
                 tablePath={tablePath}
@@ -1258,6 +1279,7 @@ type ResultsSectionProps = {
   isFetching: boolean;
   isInitialLoading: boolean;
   onCellFilter: (request: CellFilterRequest) => void;
+  onCellProjection: (request: CellProjectionRequest) => void;
   onRefresh: () => void;
   onTablePathChange: (path: string[]) => void;
   tablePath: string[];
@@ -1273,6 +1295,7 @@ const ResultsSection = ({
   isFetching,
   isInitialLoading,
   onCellFilter,
+  onCellProjection,
   onRefresh,
   onTablePathChange,
   tablePath,
@@ -1312,6 +1335,7 @@ const ResultsSection = ({
           key={`${tablePath.join(".")}:${tableDocuments[0]?.id ?? "empty"}:${tableDocuments.length}`}
           documents={tableDocuments}
           onCellFilter={onCellFilter}
+          onCellProjection={onCellProjection}
           onObjectOpen={handleObjectOpen}
           tablePath={tablePath}
         />
@@ -1432,6 +1456,7 @@ const DocumentBreadcrumbs = ({
 type DocumentTableProps = {
   documents: ParsedDocument[];
   onCellFilter: (request: CellFilterRequest) => void;
+  onCellProjection: (request: CellProjectionRequest) => void;
   onObjectOpen: (field: string) => void;
   tablePath: string[];
 };
@@ -1476,9 +1501,15 @@ type CellFilterRequest = {
   value: unknown;
 };
 
+type CellProjectionRequest = {
+  mode: "exclude" | "include";
+  path: string;
+};
+
 const DocumentTable = ({
   documents,
   onCellFilter,
+  onCellProjection,
   onObjectOpen,
   tablePath,
 }: DocumentTableProps) => {
@@ -1771,6 +1802,10 @@ const DocumentTable = ({
             onCellFilter(request);
             closeCellContextMenu();
           }}
+          onApplyProjection={(request) => {
+            onCellProjection(request);
+            closeCellContextMenu();
+          }}
           onClose={closeCellContextMenu}
         />
       ) : null}
@@ -1781,15 +1816,18 @@ const DocumentTable = ({
 type CellContextMenuProps = {
   menu: CellContextMenuState;
   onApplyFilter: (request: CellFilterRequest) => void;
+  onApplyProjection: (request: CellProjectionRequest) => void;
   onClose: () => void;
 };
 
 const CellContextMenu = ({
   menu,
   onApplyFilter,
+  onApplyProjection,
   onClose,
 }: CellContextMenuProps) => {
   const items = getCellFilterMenuItems(menu.fieldPath, menu.value);
+  const canProject = Boolean(menu.fieldPath);
 
   return (
     <div
@@ -1830,6 +1868,38 @@ const CellContextMenu = ({
           Filter unavailable for nested value
         </button>
       )}
+      {canProject ? (
+        <div className="cell-context-submenu-item">
+          <button type="button">
+            <span>Project by &quot;{menu.fieldPath}&quot;</span>
+            <span aria-hidden="true">›</span>
+          </button>
+          <div className="cell-context-submenu">
+            <button
+              type="button"
+              onClick={() =>
+                onApplyProjection({
+                  mode: "include",
+                  path: menu.fieldPath,
+                })
+              }
+            >
+              Include Selected &quot;{menu.fieldPath}&quot;
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                onApplyProjection({
+                  mode: "exclude",
+                  path: menu.fieldPath,
+                })
+              }
+            >
+              Exclude Selected &quot;{menu.fieldPath}&quot;
+            </button>
+          </div>
+        </div>
+      ) : null}
       <span className="cell-context-menu-separator" />
       <button type="button" onClick={onClose}>
         Close
@@ -2148,7 +2218,7 @@ const getProjectedTableValue = (
 };
 
 const contextMenuWidth = 300;
-const contextMenuEstimatedHeight = 366;
+const contextMenuEstimatedHeight = 420;
 
 const getContextMenuLeft = (clientX: number): number =>
   Math.max(10, Math.min(clientX, window.innerWidth - contextMenuWidth - 10));
