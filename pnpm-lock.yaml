@@ -46,6 +46,12 @@ importers:
       "@tanstack/react-router":
         specifier: ^1.170.10
         version: 1.170.10(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      "@tanstack/react-table":
+        specifier: ^8.21.3
+        version: 8.21.3(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      "@tanstack/react-virtual":
+        specifier: ^3.13.26
+        version: 3.13.26(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       electron-store:
         specifier: ^11.0.2
         version: 11.0.2
@@ -943,6 +949,7 @@ packages:
       }
     cpu: [arm]
     os: [linux]
+    libc: [glibc]
 
   "@rollup/rollup-linux-arm-musleabihf@4.60.4":
     resolution:
@@ -951,6 +958,7 @@ packages:
       }
     cpu: [arm]
     os: [linux]
+    libc: [musl]
 
   "@rollup/rollup-linux-arm64-gnu@4.60.4":
     resolution:
@@ -959,6 +967,7 @@ packages:
       }
     cpu: [arm64]
     os: [linux]
+    libc: [glibc]
 
   "@rollup/rollup-linux-arm64-musl@4.60.4":
     resolution:
@@ -967,6 +976,7 @@ packages:
       }
     cpu: [arm64]
     os: [linux]
+    libc: [musl]
 
   "@rollup/rollup-linux-loong64-gnu@4.60.4":
     resolution:
@@ -975,6 +985,7 @@ packages:
       }
     cpu: [loong64]
     os: [linux]
+    libc: [glibc]
 
   "@rollup/rollup-linux-loong64-musl@4.60.4":
     resolution:
@@ -983,6 +994,7 @@ packages:
       }
     cpu: [loong64]
     os: [linux]
+    libc: [musl]
 
   "@rollup/rollup-linux-ppc64-gnu@4.60.4":
     resolution:
@@ -991,6 +1003,7 @@ packages:
       }
     cpu: [ppc64]
     os: [linux]
+    libc: [glibc]
 
   "@rollup/rollup-linux-ppc64-musl@4.60.4":
     resolution:
@@ -999,6 +1012,7 @@ packages:
       }
     cpu: [ppc64]
     os: [linux]
+    libc: [musl]
 
   "@rollup/rollup-linux-riscv64-gnu@4.60.4":
     resolution:
@@ -1007,6 +1021,7 @@ packages:
       }
     cpu: [riscv64]
     os: [linux]
+    libc: [glibc]
 
   "@rollup/rollup-linux-riscv64-musl@4.60.4":
     resolution:
@@ -1015,6 +1030,7 @@ packages:
       }
     cpu: [riscv64]
     os: [linux]
+    libc: [musl]
 
   "@rollup/rollup-linux-s390x-gnu@4.60.4":
     resolution:
@@ -1023,6 +1039,7 @@ packages:
       }
     cpu: [s390x]
     os: [linux]
+    libc: [glibc]
 
   "@rollup/rollup-linux-x64-gnu@4.60.4":
     resolution:
@@ -1031,6 +1048,7 @@ packages:
       }
     cpu: [x64]
     os: [linux]
+    libc: [glibc]
 
   "@rollup/rollup-linux-x64-musl@4.60.4":
     resolution:
@@ -1039,6 +1057,7 @@ packages:
       }
     cpu: [x64]
     os: [linux]
+    libc: [musl]
 
   "@rollup/rollup-openbsd-x64@4.60.4":
     resolution:
@@ -1148,6 +1167,25 @@ packages:
       react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
       react-dom: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
 
+  "@tanstack/react-table@8.21.3":
+    resolution:
+      {
+        integrity: sha512-5nNMTSETP4ykGegmVkhjcS8tTLW6Vl4axfEGQN3v0zdHYbK4UfoqfPChclTrJ4EoK9QynqAu9oUf8VEmrpZ5Ww==,
+      }
+    engines: { node: ">=12" }
+    peerDependencies:
+      react: ">=16.8"
+      react-dom: ">=16.8"
+
+  "@tanstack/react-virtual@3.13.26":
+    resolution:
+      {
+        integrity: sha512-DosdgjOxCLahkn0o+ilmZYwEjo1glfMGuRT/j3PQ18yr5XqA8N/BCaL9IJ3B5TRl+nnzyK2IOFgAILwzN3a9xQ==,
+      }
+    peerDependencies:
+      react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+      react-dom: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+
   "@tanstack/router-core@1.171.8":
     resolution:
       {
@@ -1159,6 +1197,19 @@ packages:
     resolution:
       {
         integrity: sha512-8reSzl/qGWGGVKhBoxXPMWzATSbZLZFWhwBAFO9NAyp0TxzfBP0mIrGb8CP8KrQTmvzXlR/vFPPUrHTLBGyFyw==,
+      }
+
+  "@tanstack/table-core@8.21.3":
+    resolution:
+      {
+        integrity: sha512-ldZXEhOBb8Is7xLs01fR3YEc3DERiz5silj8tnGkFZytt1abEvl/GhUmCE0PMLaMPTa3Jk4HbKmRlHmu+gCftg==,
+      }
+    engines: { node: ">=12" }
+
+  "@tanstack/virtual-core@3.16.0":
+    resolution:
+      {
+        integrity: sha512-Er2N7q3WOiH6y2JLxsxNX+u2/sLqSsL0bxFgDjuiPiA7vKhZRm+IzcS17vRee3GNXr64UsesA5CAp9yTiIYw9A==,
       }
 
   "@turbo/darwin-64@2.9.16":
@@ -3796,6 +3847,18 @@ snapshots:
       react-dom: 19.2.6(react@19.2.6)
       use-sync-external-store: 1.6.0(react@19.2.6)
 
+  "@tanstack/react-table@8.21.3(react-dom@19.2.6(react@19.2.6))(react@19.2.6)":
+    dependencies:
+      "@tanstack/table-core": 8.21.3
+      react: 19.2.6
+      react-dom: 19.2.6(react@19.2.6)
+
+  "@tanstack/react-virtual@3.13.26(react-dom@19.2.6(react@19.2.6))(react@19.2.6)":
+    dependencies:
+      "@tanstack/virtual-core": 3.16.0
+      react: 19.2.6
+      react-dom: 19.2.6(react@19.2.6)
+
   "@tanstack/router-core@1.171.8":
     dependencies:
       "@tanstack/history": 1.162.0
@@ -3804,6 +3867,10 @@ snapshots:
       seroval-plugins: 1.5.4(seroval@1.5.4)
 
   "@tanstack/store@0.9.3": {}
+
+  "@tanstack/table-core@8.21.3": {}
+
+  "@tanstack/virtual-core@3.16.0": {}
 
   "@turbo/darwin-64@2.9.16":
     optional: true

@@ -1,11 +1,18 @@
+import { useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
-  rows,
+  flexRender,
+  getCoreRowModel,
+  useReactTable,
+  type ColumnDef,
+} from "@tanstack/react-table";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import {
   workspaceTabs,
   type NavItemLabel,
   type WorkspaceTabLabel,
 } from "../mockData";
-import type { HealthState } from "../types";
-import type { ConnectionProfile } from "../types";
+import type { ConnectionProfile, HealthState } from "../types";
 import { ConnectionManager } from "./ConnectionManager";
 import { Icon } from "./Icon";
 
@@ -25,6 +32,30 @@ type DocumentWorkspaceProps = {
   onCollectionOpen: () => void;
   onSectionChange: (section: NavItemLabel) => void;
   onWorkspaceTabChange: (tab: WorkspaceTabLabel) => void;
+};
+
+type DocumentViewMode = "table" | "json";
+
+type ParsedDocument = {
+  ejson: string;
+  id: string;
+  value: Record<string, unknown>;
+};
+
+type DocumentQueryState = {
+  filter: Record<string, unknown>;
+  limit: number;
+  projection: Record<string, unknown>;
+  skip: number;
+  sort: Record<string, 1 | -1>;
+};
+
+const defaultQueryState: DocumentQueryState = {
+  filter: {},
+  limit: 50,
+  projection: {},
+  skip: 0,
+  sort: {},
 };
 
 export const DocumentWorkspace = ({
@@ -47,10 +78,60 @@ export const DocumentWorkspace = ({
   const selectedConnection =
     connections.find((connection) => connection.id === selectedConnectionId) ??
     null;
+  const selectedCollectionPath = useMemo(
+    () => parseCollectionPath(selectedCollectionName),
+    [selectedCollectionName],
+  );
+  const [documentViewMode, setDocumentViewMode] =
+    useState<DocumentViewMode>("table");
+  const [filterInput, setFilterInput] = useState("{}");
+  const [limitInput, setLimitInput] = useState("50");
+  const [queryState, setQueryState] =
+    useState<DocumentQueryState>(defaultQueryState);
+  const [skipInput, setSkipInput] = useState("0");
+  const [sortInput, setSortInput] = useState("{}");
+  const [queryInputError, setQueryInputError] = useState<string | null>(null);
   const isCollectionWorkspace =
     activeSection === "Explore" && selectedCollectionName !== null;
   const isConnectionManager =
     activeSection === "Connections" && selectedCollectionName === null;
+  const documentsQuery = useQuery({
+    enabled:
+      isCollectionWorkspace &&
+      Boolean(selectedConnectionId) &&
+      selectedCollectionPath !== null,
+    queryKey: [
+      "documents",
+      selectedConnectionId,
+      selectedCollectionPath?.database,
+      selectedCollectionPath?.collection,
+      queryState,
+    ],
+    queryFn: async () => {
+      if (!window.nexum) {
+        throw new Error("Preload API is unavailable");
+      }
+
+      if (!selectedConnectionId || !selectedCollectionPath) {
+        throw new Error("No collection selected");
+      }
+
+      return window.nexum.mongodb.findDocuments({
+        collection: selectedCollectionPath.collection,
+        connectionId: selectedConnectionId,
+        database: selectedCollectionPath.database,
+        filter: queryState.filter,
+        limit: queryState.limit,
+        projection: queryState.projection,
+        skip: queryState.skip,
+        sort: queryState.sort,
+      });
+    },
+  });
+  const parsedDocuments = useMemo(
+    () => parseEjsonDocuments(documentsQuery.data?.documents ?? []),
+    [documentsQuery.data?.documents],
+  );
   const exploreEmptyState = getExploreEmptyState(
     selectedConnection,
     onCollectionOpen,
@@ -62,6 +143,24 @@ export const DocumentWorkspace = ({
     activeSection === "Explore"
       ? exploreEmptyState.label
       : "This workspace is ready for the next shell route";
+
+  const runQuery = () => {
+    const nextState = parseDocumentQueryInputs({
+      filterInput,
+      limitInput,
+      skipInput,
+      sortInput,
+    });
+
+    if (!nextState.ok) {
+      setQueryInputError(nextState.message);
+      onConnectionError("Query input is invalid", nextState.message);
+      return;
+    }
+
+    setQueryInputError(null);
+    setQueryState(nextState.value);
+  };
 
   return (
     <section className="document-workspace">
@@ -82,9 +181,37 @@ export const DocumentWorkspace = ({
 
       {isCollectionWorkspace ? (
         <>
-          <QuerySection />
-          <ResultsSection />
-          <WorkspaceFooter health={health} healthLabel={healthLabel} />
+          <QuerySection
+            filterInput={filterInput}
+            isFetching={documentsQuery.isFetching}
+            limitInput={limitInput}
+            onFilterInputChange={setFilterInput}
+            onLimitInputChange={setLimitInput}
+            onRunQuery={runQuery}
+            onSkipInputChange={setSkipInput}
+            onSortInputChange={setSortInput}
+            queryInputError={queryInputError}
+            skipInput={skipInput}
+            sortInput={sortInput}
+          />
+          <ResultsSection
+            documents={parsedDocuments}
+            error={documentsQuery.error}
+            hasMore={documentsQuery.data?.hasMore ?? false}
+            isFetching={documentsQuery.isFetching}
+            onRefresh={() => void documentsQuery.refetch()}
+            viewMode={documentViewMode}
+            onViewModeChange={setDocumentViewMode}
+          />
+          <WorkspaceFooter
+            executionTimeMs={documentsQuery.data?.executionTimeMs}
+            hasMore={documentsQuery.data?.hasMore ?? false}
+            health={health}
+            healthLabel={healthLabel}
+            limit={queryState.limit}
+            resultCount={parsedDocuments.length}
+            skip={queryState.skip}
+          />
         </>
       ) : isConnectionManager ? (
         <ConnectionManager
@@ -175,34 +302,79 @@ const WorkspaceTabs = ({
   </div>
 );
 
-const QuerySection = () => (
+type QuerySectionProps = {
+  filterInput: string;
+  isFetching: boolean;
+  limitInput: string;
+  onFilterInputChange: (value: string) => void;
+  onLimitInputChange: (value: string) => void;
+  onRunQuery: () => void;
+  onSkipInputChange: (value: string) => void;
+  onSortInputChange: (value: string) => void;
+  queryInputError: string | null;
+  skipInput: string;
+  sortInput: string;
+};
+
+const QuerySection = ({
+  filterInput,
+  isFetching,
+  limitInput,
+  onFilterInputChange,
+  onLimitInputChange,
+  onRunQuery,
+  onSkipInputChange,
+  onSortInputChange,
+  queryInputError,
+  skipInput,
+  sortInput,
+}: QuerySectionProps) => (
   <section className="query-section">
-    <div className="query-line">
-      <code>
-        {
-          '{ status: { $in: ["active", "pending"] }, createdAt: { $gte: ISODate("2024-01-01T00:00:00Z") } }'
-        }
-      </code>
-      <span className="raw-toggle">Raw ›</span>
+    <label className="query-line">
+      <span className="query-label">Filter</span>
+      <input
+        aria-label="MongoDB filter"
+        value={filterInput}
+        onChange={(event) => onFilterInputChange(event.target.value)}
+      />
       <button className="plain-icon" type="button" aria-label="Copy query">
         ⧉
       </button>
-    </div>
+    </label>
 
     <div className="query-controls">
       <label>
         <span>Limit</span>
-        <input value="50" readOnly />
+        <input
+          aria-label="Limit"
+          inputMode="numeric"
+          value={limitInput}
+          onChange={(event) => onLimitInputChange(event.target.value)}
+        />
       </label>
       <label>
         <span>Skip</span>
-        <input value="0" readOnly />
+        <input
+          aria-label="Skip"
+          inputMode="numeric"
+          value={skipInput}
+          onChange={(event) => onSkipInputChange(event.target.value)}
+        />
       </label>
       <label className="sort-control">
         <span>Sort</span>
-        <input value="createdAt: -1" readOnly />
+        <input
+          aria-label="Sort"
+          value={sortInput}
+          onChange={(event) => onSortInputChange(event.target.value)}
+        />
       </label>
-      <button className="run-button compact" type="button">
+      <button
+        className="run-button compact"
+        type="button"
+        disabled={isFetching}
+        onClick={onRunQuery}
+      >
         <span className="play-icon" />
         Run
       </button>
@@ -211,26 +383,103 @@ const QuerySection = () => (
         <span className="select-caret" />
       </button>
     </div>
+    {queryInputError ? <p className="query-error">{queryInputError}</p> : null}
   </section>
 );
 
-const ResultsSection = () => (
+type ResultsSectionProps = {
+  documents: ParsedDocument[];
+  error: Error | null;
+  hasMore: boolean;
+  isFetching: boolean;
+  onRefresh: () => void;
+  onViewModeChange: (mode: DocumentViewMode) => void;
+  viewMode: DocumentViewMode;
+};
+
+const ResultsSection = ({
+  documents,
+  error,
+  hasMore,
+  isFetching,
+  onRefresh,
+  onViewModeChange,
+  viewMode,
+}: ResultsSectionProps) => (
   <section className="results-section">
-    <ResultsHeader />
-    <ResultsGrid />
+    <ResultsHeader
+      count={documents.length}
+      hasMore={hasMore}
+      isFetching={isFetching}
+      onRefresh={onRefresh}
+      onViewModeChange={onViewModeChange}
+      viewMode={viewMode}
+    />
+    {error ? (
+      <ResultsState title="Unable to load documents" label={error.message} />
+    ) : viewMode === "json" ? (
+      <JsonResults documents={documents} />
+    ) : (
+      <DocumentTable documents={documents} />
+    )}
   </section>
 );
 
-const ResultsHeader = () => (
+type ResultsHeaderProps = {
+  count: number;
+  hasMore: boolean;
+  isFetching: boolean;
+  onRefresh: () => void;
+  onViewModeChange: (mode: DocumentViewMode) => void;
+  viewMode: DocumentViewMode;
+};
+
+const ResultsHeader = ({
+  count,
+  hasMore,
+  isFetching,
+  onRefresh,
+  onViewModeChange,
+  viewMode,
+}: ResultsHeaderProps) => (
   <div className="results-header">
     <div>
-      <strong>50 documents</strong>
-      <button className="plain-icon" type="button" aria-label="Refresh results">
+      <strong>
+        {count}
+        {hasMore ? "+" : ""} documents
+      </strong>
+      <button
+        className="plain-icon"
+        type="button"
+        aria-label="Refresh results"
+        disabled={isFetching}
+        onClick={onRefresh}
+      >
         ↻
       </button>
     </div>
     <div className="result-tools">
-      {["grid", "split", "export", "download", "upload", "link"].map((tool) => (
+      <div className="view-mode-toggle" role="tablist" aria-label="View mode">
+        <button
+          aria-selected={viewMode === "table"}
+          className={viewMode === "table" ? "is-active" : ""}
+          onClick={() => onViewModeChange("table")}
+          role="tab"
+          type="button"
+        >
+          Table
+        </button>
+        <button
+          aria-selected={viewMode === "json"}
+          className={viewMode === "json" ? "is-active" : ""}
+          onClick={() => onViewModeChange("json")}
+          role="tab"
+          type="button"
+        >
+          JSON
+        </button>
+      </div>
+      {["export", "download", "upload", "link"].map((tool) => (
         <button
           className="tool-button"
           key={tool}
@@ -244,60 +493,192 @@ const ResultsHeader = () => (
   </div>
 );
 
-const ResultsGrid = () => (
-  <div className="data-grid">
-    <div className="grid-row grid-head">
-      <span className="checkbox" />
-      <span>_id</span>
-      <span>email</span>
-      <span>status</span>
-      <span>createdAt</span>
-      <span>total</span>
-    </div>
-    {rows.map((row) => (
-      <div className="grid-row" key={row.id}>
-        <span className="checkbox" />
-        <span className="mono">{row.id}</span>
-        <span>{row.email}</span>
-        <span>
-          <mark className={`status-badge status-${row.status}`}>
-            {row.status}
-          </mark>
-        </span>
-        <span>{row.createdAt}</span>
-        <span>{row.total}</span>
+type DocumentTableProps = {
+  documents: ParsedDocument[];
+};
+
+const DocumentTable = ({ documents }: DocumentTableProps) => {
+  const parentRef = useRef<HTMLDivElement | null>(null);
+  const columns = useMemo<ColumnDef<ParsedDocument>[]>(
+    () => createDocumentColumns(documents),
+    [documents],
+  );
+  // eslint-disable-next-line react-hooks/incompatible-library
+  const table = useReactTable({
+    columns,
+    data: documents,
+    getCoreRowModel: getCoreRowModel(),
+  });
+  const rows = table.getRowModel().rows;
+  const columnTemplate = `42px repeat(${Math.max(columns.length - 1, 1)}, minmax(164px, 1fr))`;
+  const rowVirtualizer = useVirtualizer({
+    count: rows.length,
+    estimateSize: () => 46,
+    getScrollElement: () => parentRef.current,
+    overscan: 8,
+  });
+
+  if (documents.length === 0) {
+    return (
+      <ResultsState
+        title="No documents"
+        label="This query returned no documents."
+      />
+    );
+  }
+
+  return (
+    <div className="data-grid" ref={parentRef}>
+      <div className="document-table">
+        <div
+          className="document-table-head"
+          style={{ gridTemplateColumns: columnTemplate }}
+        >
+          {table.getFlatHeaders().map((header) => (
+            <div className="document-table-cell" key={header.id}>
+              {flexRender(header.column.columnDef.header, header.getContext())}
+            </div>
+          ))}
+        </div>
+        <div
+          className="document-table-body"
+          style={{ height: `${rowVirtualizer.getTotalSize()}px` }}
+        >
+          {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+            const row = rows[virtualRow.index];
+
+            if (!row) {
+              return null;
+            }
+
+            return (
+              <div
+                className="document-table-row"
+                key={row.id}
+                style={{
+                  gridTemplateColumns: columnTemplate,
+                  transform: `translateY(${virtualRow.start}px)`,
+                }}
+              >
+                {row.getVisibleCells().map((cell) => (
+                  <div className="document-table-cell" key={cell.id}>
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+        </div>
       </div>
-    ))}
+    </div>
+  );
+};
+
+type JsonResultsProps = {
+  documents: ParsedDocument[];
+};
+
+const JsonResults = ({ documents }: JsonResultsProps) => {
+  const parentRef = useRef<HTMLDivElement | null>(null);
+  // eslint-disable-next-line react-hooks/incompatible-library
+  const rowVirtualizer = useVirtualizer({
+    count: documents.length,
+    estimateSize: () => 176,
+    getScrollElement: () => parentRef.current,
+    overscan: 4,
+  });
+
+  if (documents.length === 0) {
+    return (
+      <ResultsState
+        title="No documents"
+        label="This query returned no documents."
+      />
+    );
+  }
+
+  return (
+    <div className="json-results" ref={parentRef}>
+      <div
+        className="json-results-inner"
+        style={{ height: `${rowVirtualizer.getTotalSize()}px` }}
+      >
+        {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+          const document = documents[virtualRow.index];
+
+          if (!document) {
+            return null;
+          }
+
+          return (
+            <pre
+              className="json-document"
+              key={document.id}
+              style={{ transform: `translateY(${virtualRow.start}px)` }}
+            >
+              {formatJson(document.ejson)}
+            </pre>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+type ResultsStateProps = {
+  label: string;
+  title: string;
+};
+
+const ResultsState = ({ label, title }: ResultsStateProps) => (
+  <div className="results-state">
+    <Icon name="table" />
+    <strong>{title}</strong>
+    <span>{label}</span>
   </div>
 );
 
 type WorkspaceFooterProps = {
+  executionTimeMs: number | undefined;
+  hasMore: boolean;
   health: HealthState;
   healthLabel: string;
+  limit: number;
+  resultCount: number;
+  skip: number;
 };
 
-const WorkspaceFooter = ({ health, healthLabel }: WorkspaceFooterProps) => (
+const WorkspaceFooter = ({
+  executionTimeMs,
+  hasMore,
+  health,
+  healthLabel,
+  limit,
+  resultCount,
+  skip,
+}: WorkspaceFooterProps) => (
   <footer className="workspace-footer">
     <div className="pager-group">
       <button className="page-icon muted" type="button" aria-label="First page">
         <span className="pagination-icon pagination-first" />
       </button>
-      <span>Page</span>
-      <input value="1" readOnly />
-      <span>of 10</span>
+      <span>Skip</span>
+      <input value={skip} readOnly />
+      <span>Limit</span>
+      <input value={limit} readOnly />
       <button className="page-icon" type="button" aria-label="Next page">
         <span className="pagination-icon pagination-next" />
       </button>
-      <button className="page-icon" type="button" aria-label="Last page">
-        <span className="pagination-icon pagination-last" />
-      </button>
       <button className="page-size" type="button">
-        <span>50 / page</span>
+        <span>{limit} / page</span>
         <span className="select-caret" />
       </button>
     </div>
     <div className="range-status">
-      <span>1 – 50 of 462</span>
+      <span>
+        {resultCount} shown{hasMore ? "+" : ""}
+      </span>
+      {executionTimeMs !== undefined ? <span>{executionTimeMs} ms</span> : null}
       <span className={`health-dot health-${health.status}`} />
       <span>{healthLabel}</span>
     </div>
@@ -328,6 +709,208 @@ const WorkspaceEmptyState = ({
     </div>
   </section>
 );
+
+const createDocumentColumns = (
+  documents: ParsedDocument[],
+): ColumnDef<ParsedDocument>[] => {
+  const keys = [
+    ...new Set(documents.flatMap((document) => Object.keys(document.value))),
+  ].slice(0, 24);
+  const visibleKeys = keys.length > 0 ? keys : ["document"];
+
+  return [
+    {
+      cell: ({ row }) => (
+        <span className="checkbox" aria-label={`Row ${row.index + 1}`} />
+      ),
+      header: "",
+      id: "select",
+    },
+    ...visibleKeys.map(
+      (key): ColumnDef<ParsedDocument> => ({
+        accessorFn: (document) =>
+          key === "document" ? document.value : document.value[key],
+        cell: ({ getValue }) => (
+          <span className={key === "_id" ? "mono" : ""}>
+            {formatCellValue(getValue())}
+          </span>
+        ),
+        header: key,
+        id: key,
+      }),
+    ),
+  ];
+};
+
+const parseCollectionPath = (
+  selectedCollectionName: string | null,
+): { collection: string; database: string } | null => {
+  if (!selectedCollectionName) {
+    return null;
+  }
+
+  const [database, ...collectionParts] = selectedCollectionName.split(".");
+  const collection = collectionParts.join(".");
+
+  if (!database || !collection) {
+    return null;
+  }
+
+  return { collection, database };
+};
+
+const parseDocumentQueryInputs = ({
+  filterInput,
+  limitInput,
+  skipInput,
+  sortInput,
+}: {
+  filterInput: string;
+  limitInput: string;
+  skipInput: string;
+  sortInput: string;
+}):
+  | { ok: true; value: DocumentQueryState }
+  | { message: string; ok: false } => {
+  const filter = parseJsonObject(filterInput, "Filter");
+  const sort = parseSortInput(sortInput);
+  const limit = Number(limitInput);
+  const skip = Number(skipInput);
+
+  if (!filter.ok) {
+    return filter;
+  }
+
+  if (!sort.ok) {
+    return sort;
+  }
+
+  if (!Number.isInteger(limit) || limit < 1 || limit > 500) {
+    return {
+      message: "Limit must be an integer between 1 and 500.",
+      ok: false,
+    };
+  }
+
+  if (!Number.isInteger(skip) || skip < 0) {
+    return { message: "Skip must be a non-negative integer.", ok: false };
+  }
+
+  return {
+    ok: true,
+    value: {
+      filter: filter.value,
+      limit,
+      projection: {},
+      skip,
+      sort: sort.value,
+    },
+  };
+};
+
+const parseJsonObject = (
+  value: string,
+  label: string,
+):
+  | { ok: true; value: Record<string, unknown> }
+  | { message: string; ok: false } => {
+  try {
+    const parsed = JSON.parse(value.trim() || "{}") as unknown;
+
+    if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") {
+      return { message: `${label} must be a JSON object.`, ok: false };
+    }
+
+    return { ok: true, value: parsed as Record<string, unknown> };
+  } catch {
+    return { message: `${label} must be valid JSON.`, ok: false };
+  }
+};
+
+const parseSortInput = (
+  value: string,
+):
+  | { ok: true; value: Record<string, 1 | -1> }
+  | { message: string; ok: false } => {
+  const parsed = parseJsonObject(value, "Sort");
+
+  if (!parsed.ok) {
+    return parsed;
+  }
+
+  const sort: Record<string, 1 | -1> = {};
+
+  for (const [key, direction] of Object.entries(parsed.value)) {
+    if (direction !== 1 && direction !== -1) {
+      return {
+        message: "Sort values must be 1 or -1.",
+        ok: false,
+      };
+    }
+
+    sort[key] = direction;
+  }
+
+  return { ok: true, value: sort };
+};
+
+const parseEjsonDocuments = (documents: string[]): ParsedDocument[] =>
+  documents.map((document, index) => {
+    const value = parseEjsonDocument(document);
+
+    return {
+      ejson: document,
+      id: getDocumentId(value, index),
+      value,
+    };
+  });
+
+const parseEjsonDocument = (document: string): Record<string, unknown> => {
+  try {
+    const parsed = JSON.parse(document) as unknown;
+
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    return { document };
+  }
+
+  return { document };
+};
+
+const getDocumentId = (
+  document: Record<string, unknown>,
+  index: number,
+): string => {
+  const id = document._id;
+
+  return id === undefined ? `document-${index}` : JSON.stringify(id);
+};
+
+const formatCellValue = (value: unknown): string => {
+  if (value === null) {
+    return "null";
+  }
+
+  if (value === undefined) {
+    return "";
+  }
+
+  if (typeof value === "object") {
+    return JSON.stringify(value);
+  }
+
+  return String(value);
+};
+
+const formatJson = (value: string): string => {
+  try {
+    return JSON.stringify(JSON.parse(value), null, 2);
+  } catch {
+    return value;
+  }
+};
 
 const getExploreEmptyState = (
   selectedConnection: ConnectionProfile | null,

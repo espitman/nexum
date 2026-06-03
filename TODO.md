@@ -191,15 +191,15 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
   - [x] Support projection
   - [x] Add 30 second max query time
   - [x] Serialize documents with EJSON
-- [ ] Build document views
-  - [ ] Add documents tab
-  - [ ] Add raw filter preview
-  - [ ] Add run action
-  - [ ] Add limit control
-  - [ ] Add skip control
-  - [ ] Add TanStack Table view
-  - [ ] Add JSON view
-  - [ ] Add TanStack Virtual for large result sets
+- [x] Build document views
+  - [x] Add documents tab
+  - [x] Add raw filter preview
+  - [x] Add run action
+  - [x] Add limit control
+  - [x] Add skip control
+  - [x] Add TanStack Table view
+  - [x] Add JSON view
+  - [x] Add TanStack Virtual for large result sets
 - [ ] Verify document viewer
   - [ ] View first 50 documents
   - [ ] Switch table and JSON modes
