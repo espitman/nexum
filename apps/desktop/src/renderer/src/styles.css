@@ -1447,13 +1447,40 @@ input:disabled {
 }
 
 .document-table-header-cell {
-  padding-right: 22px;
+  gap: 7px;
+  padding-right: 28px;
   position: relative;
 }
 
 .document-table-cell-content {
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
+}
+
+.document-table-autofit {
+  align-items: center;
+  border: 1px solid #cfd7e2;
+  border-radius: 4px;
+  color: #647084;
+  display: inline-flex;
+  flex: 0 0 20px;
+  font-size: 12px;
+  height: 20px;
+  justify-content: center;
+  line-height: 1;
+  opacity: 0;
+  width: 20px;
+}
+
+.document-table-header-cell:hover .document-table-autofit,
+.document-table-autofit:focus-visible {
+  opacity: 1;
+}
+
+.document-table-autofit:hover {
+  border-color: #00717d;
+  color: #00717d;
 }
 
 .document-table-resizer {

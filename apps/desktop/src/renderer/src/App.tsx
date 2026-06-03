@@ -36,7 +36,7 @@ export const App = () => {
     isReadOnly: true,
   });
   const [isConnectionRailOpen, setIsConnectionRailOpen] = useState(true);
-  const [isInspectorOpen, setIsInspectorOpen] = useState(true);
+  const [isInspectorOpen, setIsInspectorOpen] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [activeSection, setActiveSection] =
     useState<NavItemLabel>("Connections");

@@ -60,6 +60,8 @@ const defaultQueryState: DocumentQueryState = {
 };
 
 const documentIdColumn = "{Document id}";
+const maxAutoColumnWidth = 1400;
+const maxInitialColumnWidth = 360;
 
 export const DocumentWorkspace = ({
   activeSection,
@@ -594,6 +596,14 @@ const DocumentTable = ({ documents, onObjectOpen }: DocumentTableProps) => {
     () => createDocumentColumns(documents, onObjectOpen),
     [documents, onObjectOpen],
   );
+  const autoColumnSizes = useMemo(
+    () => getAutoColumnSizes(documents),
+    [documents],
+  );
+  const initialColumnSizes = useMemo(
+    () => getInitialColumnSizes(documents),
+    [documents],
+  );
   // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     columnResizeMode: "onChange",
@@ -647,13 +657,38 @@ const DocumentTable = ({ documents, onObjectOpen }: DocumentTableProps) => {
                 )}
               </span>
               {header.column.getCanResize() ? (
-                <button
-                  aria-label={`Resize ${header.column.id} column`}
-                  className="document-table-resizer"
-                  onMouseDown={header.getResizeHandler()}
-                  onTouchStart={header.getResizeHandler()}
-                  type="button"
-                />
+                <>
+                  <button
+                    aria-label={`Auto fit ${header.column.id} column`}
+                    className="document-table-autofit"
+                    onClick={() => {
+                      const autoSize = autoColumnSizes[header.column.id];
+                      const initialSize = initialColumnSizes[header.column.id];
+
+                      if (autoSize !== undefined && initialSize !== undefined) {
+                        const isAutoFit =
+                          Math.abs(header.column.getSize() - autoSize) < 1;
+                        const nextSize = isAutoFit ? initialSize : autoSize;
+
+                        setColumnSizing((currentSizing) => ({
+                          ...currentSizing,
+                          [header.column.id]: nextSize,
+                        }));
+                      }
+                    }}
+                    title="Toggle fit to content"
+                    type="button"
+                  >
+                    ↔
+                  </button>
+                  <button
+                    aria-label={`Resize ${header.column.id} column`}
+                    className="document-table-resizer"
+                    onMouseDown={header.getResizeHandler()}
+                    onTouchStart={header.getResizeHandler()}
+                    type="button"
+                  />
+                </>
               ) : null}
             </div>
           ))}
@@ -837,52 +872,39 @@ const createDocumentColumns = (
   ]);
   const visibleKeys = keys.length > 0 ? keys : ["document"];
 
-  return [
-    {
-      cell: ({ row }) => (
-        <span className="checkbox" aria-label={`Row ${row.index + 1}`} />
-      ),
-      enableResizing: false,
-      header: "",
-      id: "select",
-      maxSize: 42,
-      minSize: 42,
-      size: 42,
-    },
-    ...visibleKeys.map(
-      (key): ColumnDef<ParsedDocument> => ({
-        accessorFn: (document) =>
-          key === "document" ? document.value : document.value[key],
-        cell: ({ getValue }) => {
-          const value = getValue();
-          const displayValue = formatTableCellValue(value);
-          const canOpenObject =
-            key !== documentIdColumn && isDrillableTableValue(value);
+  return visibleKeys.map(
+    (key): ColumnDef<ParsedDocument> => ({
+      accessorFn: (document) =>
+        key === "document" ? document.value : document.value[key],
+      cell: ({ getValue }) => {
+        const value = getValue();
+        const displayValue = formatTableCellValue(value);
+        const canOpenObject =
+          key !== documentIdColumn && isDrillableTableValue(value);
 
-          return canOpenObject ? (
-            <button
-              className="object-cell"
-              onDoubleClick={() => onObjectOpen(key)}
-              title={formatCellValue(value)}
-              type="button"
-            >
-              <span className="object-cell-icon" />
-              <span>{displayValue}</span>
-            </button>
-          ) : (
-            <span className={key === "_id" ? "mono" : ""} title={displayValue}>
-              {displayValue}
-            </span>
-          );
-        },
-        header: key,
-        id: key,
-        maxSize: 1400,
-        minSize: key === "_id" ? 230 : 92,
-        size: getInitialColumnSize(key, documents),
-      }),
-    ),
-  ];
+        return canOpenObject ? (
+          <button
+            className="object-cell"
+            onDoubleClick={() => onObjectOpen(key)}
+            title={formatCellValue(value)}
+            type="button"
+          >
+            <span className="object-cell-icon" />
+            <span>{displayValue}</span>
+          </button>
+        ) : (
+          <span className={key === "_id" ? "mono" : ""} title={displayValue}>
+            {displayValue}
+          </span>
+        );
+      },
+      header: key,
+      id: key,
+      maxSize: maxAutoColumnWidth,
+      minSize: key === "_id" ? 230 : 92,
+      size: getInitialColumnSize(key, documents),
+    }),
+  );
 };
 
 const orderDocumentColumnKeys = (keys: string[]): string[] => {
@@ -965,6 +987,38 @@ const getInitialColumnSize = (
   key: string,
   documents: ParsedDocument[],
 ): number => {
+  const autoSize = getAutoColumnSize(key, documents);
+  const headerWidth = getDisplayWidth(key) + 86;
+  const minWidth = key === "_id" ? 250 : 112;
+
+  return Math.max(
+    Math.min(Math.max(autoSize, minWidth), maxInitialColumnWidth),
+    headerWidth,
+  );
+};
+
+const getInitialColumnSizes = (
+  documents: ParsedDocument[],
+): Record<string, number> =>
+  Object.fromEntries(
+    orderDocumentColumnKeys([
+      ...new Set(documents.flatMap((document) => Object.keys(document.value))),
+    ]).map((key) => [key, getInitialColumnSize(key, documents)]),
+  );
+
+const getAutoColumnSizes = (
+  documents: ParsedDocument[],
+): Record<string, number> =>
+  Object.fromEntries(
+    orderDocumentColumnKeys([
+      ...new Set(documents.flatMap((document) => Object.keys(document.value))),
+    ]).map((key) => [key, getAutoColumnSize(key, documents)]),
+  );
+
+const getAutoColumnSize = (
+  key: string,
+  documents: ParsedDocument[],
+): number => {
   const samples = [
     key,
     ...documents
@@ -982,7 +1036,7 @@ const getInitialColumnSize = (
   const paddedWidth = widestText + 42;
   const minWidth = key === "_id" ? 250 : 112;
 
-  return Math.min(Math.max(paddedWidth, minWidth), 1400);
+  return Math.min(Math.max(paddedWidth, minWidth), maxAutoColumnWidth);
 };
 
 const getDisplayWidth = (value: string): number =>
