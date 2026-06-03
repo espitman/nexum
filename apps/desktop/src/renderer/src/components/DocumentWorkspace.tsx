@@ -186,20 +186,64 @@ export const DocumentWorkspace = ({
       });
     },
   });
+  const schemaDocumentsQuery = useQuery({
+    enabled:
+      isCollectionWorkspace &&
+      Boolean(selectedConnectionId) &&
+      selectedCollectionPath !== null,
+    queryKey: [
+      "schema-documents",
+      selectedConnectionId,
+      selectedCollectionPath?.database,
+      selectedCollectionPath?.collection,
+    ],
+    queryFn: async () => {
+      if (!window.nexum) {
+        throw new Error("Preload API is unavailable");
+      }
+
+      if (!selectedConnectionId || !selectedCollectionPath) {
+        throw new Error("No collection selected");
+      }
+
+      return window.nexum.mongodb.findDocuments({
+        collection: selectedCollectionPath.collection,
+        connectionId: selectedConnectionId,
+        database: selectedCollectionPath.database,
+        filter: {},
+        limit: 100,
+        projection: {},
+        skip: 0,
+        sort: {},
+      });
+    },
+  });
   const parsedDocuments = useMemo(
     () => parseEjsonDocuments(documentsQuery.data?.documents ?? []),
     [documentsQuery.data?.documents],
   );
+  const schemaParsedDocuments = useMemo(
+    () => parseEjsonDocuments(schemaDocumentsQuery.data?.documents ?? []),
+    [schemaDocumentsQuery.data?.documents],
+  );
   const schemaFields = useMemo(
-    () => inferDocumentSchema(parsedDocuments),
-    [parsedDocuments],
+    () =>
+      inferDocumentSchema(
+        schemaParsedDocuments.length > 0
+          ? schemaParsedDocuments
+          : parsedDocuments,
+      ),
+    [parsedDocuments, schemaParsedDocuments],
   );
   const queryBuilderFields = useMemo(
     () =>
       inferQueryBuilderFields(
-        parsedDocuments.map((document) => document.rootValue),
+        (schemaParsedDocuments.length > 0
+          ? schemaParsedDocuments
+          : parsedDocuments
+        ).map((document) => document.rootValue),
       ),
-    [parsedDocuments],
+    [parsedDocuments, schemaParsedDocuments],
   );
   const queryBuilderFilter = useMemo(
     () => buildMongoFilterFromQueryBuilder(queryBuilderModel),
