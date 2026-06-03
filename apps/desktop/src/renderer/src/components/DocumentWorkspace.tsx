@@ -548,6 +548,7 @@ const QuerySection = ({
         <span className="query-label">Filter</span>
         <QueryFieldAutocompleteInput
           aria-label="MongoDB filter"
+          canClear
           fields={fieldSuggestions}
           mode="filter"
           value={filterInput}
@@ -564,6 +565,7 @@ const QuerySection = ({
           <span>Projection</span>
           <QueryFieldAutocompleteInput
             aria-label="Projection"
+            canClear
             fields={fieldSuggestions}
             mode="projection"
             placeholder='{ "email": 1 }'
@@ -635,6 +637,7 @@ const QuerySection = ({
 
 type QueryFieldAutocompleteInputProps = {
   "aria-label": string;
+  canClear?: boolean;
   fields: SchemaFieldSummary[];
   mode: "field" | "filter" | "projection";
   placeholder?: string;
@@ -645,6 +648,7 @@ type QueryFieldAutocompleteInputProps = {
 
 const QueryFieldAutocompleteInput = ({
   "aria-label": ariaLabel,
+  canClear = false,
   fields,
   mode,
   placeholder,
@@ -665,6 +669,7 @@ const QueryFieldAutocompleteInput = ({
     [context, fields],
   );
   const shouldShowSuggestions = isFocused && suggestions.length > 0;
+  const canClearValue = canClear && value.trim() !== "{}";
 
   const syncCaret = () => {
     const input = inputRef.current;
@@ -718,7 +723,7 @@ const QueryFieldAutocompleteInput = ({
   };
 
   return (
-    <span className="query-autocomplete">
+    <span className={`query-autocomplete ${canClear ? "has-clear" : ""}`}>
       <input
         aria-label={ariaLabel}
         autoComplete="off"
@@ -778,6 +783,23 @@ const QueryFieldAutocompleteInput = ({
         }}
         onSelect={syncCaret}
       />
+      {canClear ? (
+        <button
+          aria-label={`Clear ${ariaLabel}`}
+          className="query-autocomplete-clear"
+          disabled={!canClearValue}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => {
+            onChange("{}");
+            setCaretIndex(1);
+            inputRef.current?.focus();
+            inputRef.current?.setSelectionRange(1, 1);
+          }}
+          type="button"
+        >
+          ×
+        </button>
+      ) : null}
       {shouldShowSuggestions ? (
         <div className="query-autocomplete-menu" role="listbox">
           {suggestions.map((suggestion, index) => (

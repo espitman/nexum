@@ -862,6 +862,34 @@ button {
   width: 100%;
 }
 
+.query-autocomplete.has-clear input {
+  padding-right: 30px;
+}
+
+.query-autocomplete-clear {
+  border-radius: 5px;
+  color: #687386;
+  font-size: 17px;
+  height: 24px;
+  line-height: 1;
+  opacity: 0.85;
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+}
+
+.query-autocomplete-clear:disabled {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.query-autocomplete-clear:hover {
+  background: #edf2f6;
+  color: #263142;
+}
+
 .query-autocomplete-menu {
   background: #263142;
   border: 1px solid #111827;
