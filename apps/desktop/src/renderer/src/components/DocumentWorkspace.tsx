@@ -645,10 +645,13 @@ const DocumentTable = ({ documents, onObjectOpen }: DocumentTableProps) => {
           const rect = event.currentTarget.getBoundingClientRect();
 
           objectPreviewShowTimer.current = window.setTimeout(() => {
+            const content = formatPreviewJson(value);
+            const previewHeight = getObjectPreviewHeight(content);
+
             setObjectPreview({
-              content: formatPreviewJson(value),
+              content,
               left: getObjectPreviewLeft(rect),
-              top: getObjectPreviewTop(rect),
+              top: getObjectPreviewTop(rect, previewHeight),
             });
             objectPreviewShowTimer.current = null;
           }, 1000);
@@ -743,7 +746,6 @@ const DocumentTable = ({ documents, onObjectOpen }: DocumentTableProps) => {
                         }));
                       }
                     }}
-                    title="Toggle fit to content"
                     type="button"
                   >
                     ↔
@@ -994,9 +996,7 @@ const createDocumentColumns = (
             <span>{displayValue}</span>
           </button>
         ) : (
-          <span className={key === "_id" ? "mono" : ""} title={displayValue}>
-            {displayValue}
-          </span>
+          <span className={key === "_id" ? "mono" : ""}>{displayValue}</span>
         );
       },
       header: key,
@@ -1069,38 +1069,33 @@ const getProjectedTableValue = (
 };
 
 const getObjectPreviewLeft = (rect: DOMRect): number => {
-  const rightSideLeft = rect.right + objectPreviewGap;
-
-  if (rightSideLeft + objectPreviewWidth <= window.innerWidth - 12) {
-    return rightSideLeft;
-  }
-
-  const leftSideLeft = rect.left - objectPreviewWidth - objectPreviewGap;
-
-  if (leftSideLeft >= 12) {
-    return leftSideLeft;
-  }
-
   return Math.max(
     12,
     Math.min(rect.left, window.innerWidth - objectPreviewWidth - 12),
   );
 };
 
-const getObjectPreviewTop = (rect: DOMRect): number => {
+const getObjectPreviewTop = (rect: DOMRect, previewHeight: number): number => {
   const belowTop = rect.bottom + objectPreviewGap;
 
-  if (belowTop + objectPreviewHeight <= window.innerHeight - 12) {
+  if (belowTop + previewHeight <= window.innerHeight - 12) {
     return belowTop;
   }
 
-  const aboveTop = rect.top - objectPreviewHeight - objectPreviewGap;
+  const aboveTop = rect.top - previewHeight - objectPreviewGap;
 
   if (aboveTop >= 12) {
     return aboveTop;
   }
 
-  return Math.max(12, window.innerHeight - objectPreviewHeight - 12);
+  return Math.max(12, window.innerHeight - previewHeight - 12);
+};
+
+const getObjectPreviewHeight = (content: string): number => {
+  const lineCount = content.split("\n").length;
+  const estimatedContentHeight = lineCount * 18.6 + 26;
+
+  return Math.min(Math.max(estimatedContentHeight, 58), objectPreviewHeight);
 };
 
 const getValueAtPath = (
