@@ -865,7 +865,7 @@ button {
   align-items: center;
   display: flex;
   gap: 16px;
-  min-width: 820px;
+  min-width: 1040px;
 }
 
 .query-controls label {
@@ -886,8 +886,19 @@ button {
   width: 96px;
 }
 
-.query-controls .sort-control input {
+.query-controls .sort-control input,
+.query-controls .projection-control input {
   width: 180px;
+}
+
+.query-controls .projection-control {
+  flex: 1 1 320px;
+  min-width: 260px;
+}
+
+.query-controls .projection-control input {
+  flex: 1;
+  width: auto;
 }
 
 .options-button {

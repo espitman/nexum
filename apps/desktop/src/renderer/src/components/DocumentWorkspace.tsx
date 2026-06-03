@@ -125,6 +125,7 @@ export const DocumentWorkspace = ({
     useState<DocumentViewMode>("table");
   const [filterInput, setFilterInput] = useState("{}");
   const [limitInput, setLimitInput] = useState("50");
+  const [projectionInput, setProjectionInput] = useState("{}");
   const [queryState, setQueryState] =
     useState<DocumentQueryState>(defaultQueryState);
   const [queryBuilderModel, setQueryBuilderModel] =
@@ -222,6 +223,7 @@ export const DocumentWorkspace = ({
     const nextState = parseDocumentQueryInputs({
       filterInput,
       limitInput,
+      projectionInput,
       skipInput,
       sortInput,
     });
@@ -338,9 +340,11 @@ export const DocumentWorkspace = ({
                 limitInput={limitInput}
                 onFilterInputChange={setFilterInput}
                 onLimitInputChange={setLimitInput}
+                onProjectionInputChange={setProjectionInput}
                 onRunQuery={runQuery}
                 onSkipInputChange={setSkipInput}
                 onSortInputChange={setSortInput}
+                projectionInput={projectionInput}
                 queryInputError={queryInputError}
                 skipInput={skipInput}
                 sortInput={sortInput}
@@ -505,9 +509,11 @@ type QuerySectionProps = {
   limitInput: string;
   onFilterInputChange: (value: string) => void;
   onLimitInputChange: (value: string) => void;
+  onProjectionInputChange: (value: string) => void;
   onRunQuery: () => void;
   onSkipInputChange: (value: string) => void;
   onSortInputChange: (value: string) => void;
+  projectionInput: string;
   queryInputError: string | null;
   skipInput: string;
   sortInput: string;
@@ -519,9 +525,11 @@ const QuerySection = ({
   limitInput,
   onFilterInputChange,
   onLimitInputChange,
+  onProjectionInputChange,
   onRunQuery,
   onSkipInputChange,
   onSortInputChange,
+  projectionInput,
   queryInputError,
   skipInput,
   sortInput,
@@ -540,6 +548,15 @@ const QuerySection = ({
     </label>
 
     <div className="query-controls">
+      <label className="projection-control">
+        <span>Projection</span>
+        <input
+          aria-label="Projection"
+          placeholder='{ "email": 1 }'
+          value={projectionInput}
+          onChange={(event) => onProjectionInputChange(event.target.value)}
+        />
+      </label>
       <label>
         <span>Limit</span>
         <input
@@ -574,10 +591,6 @@ const QuerySection = ({
       >
         <span className="play-icon" />
         Run
-      </button>
-      <button className="options-button" type="button">
-        <span>Options</span>
-        <span className="select-caret" />
       </button>
     </div>
     {queryInputError ? <p className="query-error">{queryInputError}</p> : null}
@@ -1774,23 +1787,30 @@ const parseCollectionPath = (
 const parseDocumentQueryInputs = ({
   filterInput,
   limitInput,
+  projectionInput,
   skipInput,
   sortInput,
 }: {
   filterInput: string;
   limitInput: string;
+  projectionInput: string;
   skipInput: string;
   sortInput: string;
 }):
   | { ok: true; value: DocumentQueryState }
   | { message: string; ok: false } => {
   const filter = parseJsonObject(filterInput, "Filter");
+  const projection = parseJsonObject(projectionInput, "Projection");
   const sort = parseSortInput(sortInput);
   const limit = Number(limitInput);
   const skip = Number(skipInput);
 
   if (!filter.ok) {
     return filter;
+  }
+
+  if (!projection.ok) {
+    return projection;
   }
 
   if (!sort.ok) {
@@ -1813,7 +1833,7 @@ const parseDocumentQueryInputs = ({
     value: {
       filter: filter.value,
       limit,
-      projection: {},
+      projection: projection.value,
       skip,
       sort: sort.value,
     },
