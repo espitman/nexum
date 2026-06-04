@@ -2109,6 +2109,7 @@ input:disabled {
 }
 
 .cell-context-menu button > span:first-child {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -2149,6 +2150,11 @@ input:disabled {
   width: 8px;
 }
 
+.cell-context-submenu-item.opens-left::after {
+  left: auto;
+  right: 100%;
+}
+
 .cell-context-submenu {
   background: #121416;
   border: 1px solid #3a3f46;
@@ -2156,11 +2162,24 @@ input:disabled {
   box-shadow: 0 14px 34px rgb(15 23 42 / 24%);
   display: none;
   left: calc(100% - 1px);
+  max-width: min(420px, calc(100vw - 24px));
   min-width: 286px;
   padding: 4px;
   position: absolute;
   top: -4px;
+  width: 380px;
   z-index: 221;
+}
+
+.cell-context-submenu-item.opens-left .cell-context-submenu {
+  left: auto;
+  right: calc(100% - 1px);
+}
+
+.cell-context-submenu button {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .cell-context-submenu-item:hover .cell-context-submenu,

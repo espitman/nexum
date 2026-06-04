@@ -1475,6 +1475,7 @@ type SelectedDocumentCell = {
 type CellContextMenuState = {
   fieldPath: string;
   left: number;
+  submenuDirection: "left" | "right";
   top: number;
   value: unknown;
 };
@@ -1562,10 +1563,13 @@ const DocumentTable = ({
       cancelObjectPreviewHide();
       setObjectPreview(null);
       setSelectedCell({ cellId, rowId });
+      const rect = event.currentTarget.getBoundingClientRect();
+      const left = getContextMenuLeft(rect.left);
       setCellContextMenu({
         fieldPath: getCellFilterPath(tablePath, fieldKey),
-        left: getContextMenuLeft(event.clientX),
-        top: getContextMenuTop(event.clientY),
+        left,
+        submenuDirection: getContextSubmenuDirection(left),
+        top: getContextMenuTop(rect.top),
         value,
       });
     },
@@ -1840,7 +1844,9 @@ const CellContextMenu = ({
       }}
     >
       {items.length > 0 ? (
-        <div className="cell-context-submenu-item">
+        <div
+          className={`cell-context-submenu-item opens-${menu.submenuDirection}`}
+        >
           <button type="button">
             <span>Filter by &quot;{menu.fieldPath}&quot;</span>
             <span aria-hidden="true">›</span>
@@ -1869,7 +1875,9 @@ const CellContextMenu = ({
         </button>
       )}
       {canProject ? (
-        <div className="cell-context-submenu-item">
+        <div
+          className={`cell-context-submenu-item opens-${menu.submenuDirection}`}
+        >
           <button type="button">
             <span>Project by &quot;{menu.fieldPath}&quot;</span>
             <span aria-hidden="true">›</span>
@@ -2218,7 +2226,8 @@ const getProjectedTableValue = (
 };
 
 const contextMenuWidth = 300;
-const contextMenuEstimatedHeight = 420;
+const contextMenuEstimatedHeight = 112;
+const contextSubmenuWidth = 380;
 
 const getContextMenuLeft = (clientX: number): number =>
   Math.max(10, Math.min(clientX, window.innerWidth - contextMenuWidth - 10));
@@ -2228,6 +2237,11 @@ const getContextMenuTop = (clientY: number): number =>
     10,
     Math.min(clientY, window.innerHeight - contextMenuEstimatedHeight - 10),
   );
+
+const getContextSubmenuDirection = (menuLeft: number): "left" | "right" =>
+  menuLeft + contextMenuWidth + contextSubmenuWidth + 10 > window.innerWidth
+    ? "left"
+    : "right";
 
 const getCellFilterPath = (tablePath: string[], fieldKey: string): string => {
   if (fieldKey === documentIdColumn) {
