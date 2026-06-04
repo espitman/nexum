@@ -14,6 +14,7 @@
     "verify:connections": "node scripts/verify-connection-manager.mjs"
   },
   "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
     "@nexum/core": "workspace:*",
     "@nexum/shared": "workspace:*",
     "@tanstack/react-query": "^5.100.14",
@@ -23,6 +24,7 @@
     "electron-store": "^11.0.2",
     "keytar": "^7.9.0",
     "lucide-react": "^1.17.0",
+    "monaco-editor": "^0.55.1",
     "mongodb": "^7.2.0",
     "mongodb-connection-string-url": "^7.0.1",
     "react": "^19.2.3",

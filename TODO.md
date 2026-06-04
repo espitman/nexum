@@ -254,11 +254,11 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
   - [x] Block writes on read-only connections
   - [x] Require confirmation for production writes
   - [x] Audit write attempts
-- [ ] Build editor UI
-  - [ ] Open single-document editor
-  - [ ] Edit EJSON in Monaco
-  - [ ] Show validation errors
-  - [ ] Add save confirmation
+- [x] Build editor UI
+  - [x] Open single-document editor
+  - [x] Edit EJSON in Monaco
+  - [x] Show validation errors
+  - [x] Add save confirmation
 - [ ] Verify editor
   - [ ] Save one document safely
   - [ ] Confirm `_id` changes are rejected

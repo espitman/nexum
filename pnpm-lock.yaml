@@ -37,6 +37,9 @@ importers:
 
   apps/desktop:
     dependencies:
+      "@monaco-editor/react":
+        specifier: ^4.7.0
+        version: 4.7.0(monaco-editor@0.55.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       "@nexum/core":
         specifier: workspace:*
         version: link:../../packages/core
@@ -64,6 +67,9 @@ importers:
       lucide-react:
         specifier: ^1.17.0
         version: 1.17.0(react@19.2.6)
+      monaco-editor:
+        specifier: ^0.55.1
+        version: 0.55.1
       mongodb:
         specifier: ^7.2.0
         version: 7.2.0
@@ -891,6 +897,22 @@ packages:
         integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==,
       }
 
+  "@monaco-editor/loader@1.7.0":
+    resolution:
+      {
+        integrity: sha512-gIwR1HrJrrx+vfyOhYmCZ0/JcWqG5kbfG7+d3f/C1LXk2EvzAbHSg3MQ5lO2sMlo9izoAZ04shohfKLVT6crVA==,
+      }
+
+  "@monaco-editor/react@4.7.0":
+    resolution:
+      {
+        integrity: sha512-cyzXQCtO47ydzxpQtCGSQGOC8Gk3ZUeBXFAxD+CWXYFo5OqZyZUonFl0DwUlTyAfRHntBfw2p3w4s9R6oe1eCA==,
+      }
+    peerDependencies:
+      monaco-editor: ">= 0.25.0 < 1"
+      react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+      react-dom: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+
   "@mongodb-js/saslprep@1.4.11":
     resolution:
       {
@@ -1365,6 +1387,12 @@ packages:
     resolution:
       {
         integrity: sha512-H/+L+UkTV33uf49PH5pCAUBVPNj2nDBXTN+qS1dOwyyg24l3CcicicCA7ca+HMvJBZcFgl5r8e+RR6elsb4Lyw==,
+      }
+
+  "@types/trusted-types@2.0.7":
+    resolution:
+      {
+        integrity: sha512-ScaPdn1dQczgbl0QFTeTOmVHFULt394XJgOQNoyVhZ6r2vLnMLJfBPd53SB52T/3G36VI1/g2MZaX0cwDuXsfw==,
       }
 
   "@types/webidl-conversions@7.0.3":
@@ -1860,6 +1888,12 @@ packages:
     resolution:
       {
         integrity: sha512-T0NIuQpnTvFDATNuHN5roPwSBG83rFsuO+MXXH9/3N1eFbn4wcPjttvjMLEPWJ0RGUYgQE7cGgS3tNxbqCGM7g==,
+      }
+
+  dompurify@3.2.7:
+    resolution:
+      {
+        integrity: sha512-WhL/YuveyGXJaerVlMYGWhvQswa7myDG17P7Vu65EWC05o8vfeNbvNf4d/BOvH99+ZW+LlQsc1GDKMa1vNK6dw==,
       }
 
   dot-prop@10.1.0:
@@ -2499,6 +2533,14 @@ packages:
         integrity: sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==,
       }
 
+  marked@14.0.0:
+    resolution:
+      {
+        integrity: sha512-uIj4+faQ+MgHgwUW1l2PsPglZLOLOT1uErt06dAPtx2kjteLAkbsd/0FiYg/MGS+i7ZKLb7w2WClxHkzOOuryQ==,
+      }
+    engines: { node: ">= 18" }
+    hasBin: true
+
   matcher@3.0.0:
     resolution:
       {
@@ -2556,6 +2598,12 @@ packages:
     resolution:
       {
         integrity: sha512-gKLcREMhtuZRwRAfqP3RFW+TK4JqApVBtOIftVgjuABpAtpxhPGaDcfvbhNvD0B8iD1oUr/txX35NjcaY6Ns/A==,
+      }
+
+  monaco-editor@0.55.1:
+    resolution:
+      {
+        integrity: sha512-jz4x+TJNFHwHtwuV9vA9rMujcZRb0CEilTEwG2rRSpe/A7Jdkuj8xPKttCgOh+v/lkHy7HsZ64oj+q3xoAFl9A==,
       }
 
   mongodb-connection-string-url@7.0.1:
@@ -2996,6 +3044,12 @@ packages:
     resolution:
       {
         integrity: sha512-1XMJE5fQo1jGH6Y/7ebnwPOBEkIEnT4QF32d5R1+VXdXveM0IBMJt8zfaxX1P3QhVwrYe+576+jkANtSS2mBbw==,
+      }
+
+  state-local@1.0.7:
+    resolution:
+      {
+        integrity: sha512-HTEHMNieakEnoe33shBYcZ7NX83ACUjCu8c40iOGEZsngj9zRnkqS9j1pqQPXwobB0ZcVTk27REb7COQ0UR59w==,
       }
 
   std-env@4.1.0:
@@ -3759,6 +3813,17 @@ snapshots:
       "@jridgewell/resolve-uri": 3.1.2
       "@jridgewell/sourcemap-codec": 1.5.5
 
+  "@monaco-editor/loader@1.7.0":
+    dependencies:
+      state-local: 1.0.7
+
+  "@monaco-editor/react@4.7.0(monaco-editor@0.55.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)":
+    dependencies:
+      "@monaco-editor/loader": 1.7.0
+      monaco-editor: 0.55.1
+      react: 19.2.6
+      react-dom: 19.2.6(react@19.2.6)
+
   "@mongodb-js/saslprep@1.4.11":
     dependencies:
       sparse-bitfield: 3.0.3
@@ -3980,6 +4045,9 @@ snapshots:
   "@types/responselike@1.0.3":
     dependencies:
       "@types/node": 24.12.4
+
+  "@types/trusted-types@2.0.7":
+    optional: true
 
   "@types/webidl-conversions@7.0.3": {}
 
@@ -4315,6 +4383,10 @@ snapshots:
 
   detect-node@2.1.0:
     optional: true
+
+  dompurify@3.2.7:
+    optionalDependencies:
+      "@types/trusted-types": 2.0.7
 
   dot-prop@10.1.0:
     dependencies:
@@ -4727,6 +4799,8 @@ snapshots:
     dependencies:
       "@jridgewell/sourcemap-codec": 1.5.5
 
+  marked@14.0.0: {}
+
   matcher@3.0.0:
     dependencies:
       escape-string-regexp: 4.0.0
@@ -4751,6 +4825,11 @@ snapshots:
   minimist@1.2.8: {}
 
   mkdirp-classic@0.5.3: {}
+
+  monaco-editor@0.55.1:
+    dependencies:
+      dompurify: 3.2.7
+      marked: 14.0.0
 
   mongodb-connection-string-url@7.0.1:
     dependencies:
@@ -4986,6 +5065,8 @@ snapshots:
     optional: true
 
   stackback@0.0.2: {}
+
+  state-local@1.0.7: {}
 
   std-env@4.1.0: {}
 

@@ -6,7 +6,9 @@ import {
   useState,
   type MouseEvent as ReactMouseEvent,
 } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import Editor, { loader } from "@monaco-editor/react";
+import * as monaco from "monaco-editor";
 import {
   flexRender,
   getCoreRowModel,
@@ -46,6 +48,8 @@ import { ConnectionManager } from "./ConnectionManager";
 import { Icon } from "./Icon";
 import { IndexList, SchemaTree } from "./InspectorPanel";
 import { JsonTreeView } from "./JsonTreeView";
+
+loader.config({ monaco });
 
 type DocumentWorkspaceProps = {
   activeSection: NavItemLabel;
@@ -141,6 +145,11 @@ export const DocumentWorkspace = ({
   const [sortInput, setSortInput] = useState("{}");
   const [queryInputError, setQueryInputError] = useState<string | null>(null);
   const [isQueryBuilderOpen, setIsQueryBuilderOpen] = useState(false);
+  const [selectedDocument, setSelectedDocument] =
+    useState<ParsedDocument | null>(null);
+  const [editorDocument, setEditorDocument] = useState<ParsedDocument | null>(
+    null,
+  );
   const [tableDrillState, setTableDrillState] = useState<{
     collectionName: string | null;
     path: string[];
@@ -286,6 +295,8 @@ export const DocumentWorkspace = ({
     }
 
     setQueryInputError(null);
+    setSelectedDocument(null);
+    setEditorDocument(null);
     setFilterInput(JSON.stringify(nextState.value.filter));
     setProjectionInput(JSON.stringify(nextState.value.projection));
     setSortInput(JSON.stringify(nextState.value.sort));
@@ -294,6 +305,8 @@ export const DocumentWorkspace = ({
 
   const runQueryBuilder = () => {
     setQueryInputError(null);
+    setSelectedDocument(null);
+    setEditorDocument(null);
     setFilterInput(queryBuilderPreview);
     setSkipInput("0");
     setQueryState((currentState) => ({
@@ -302,6 +315,43 @@ export const DocumentWorkspace = ({
       skip: 0,
     }));
   };
+
+  const updateDocumentMutation = useMutation({
+    mutationFn: async ({
+      editedDocument,
+      originalDocument,
+    }: {
+      editedDocument: string;
+      originalDocument: string;
+    }) => {
+      if (!window.nexum) {
+        throw new Error("Preload API is unavailable");
+      }
+
+      if (!selectedConnectionId || !selectedCollectionPath) {
+        throw new Error("No collection selected");
+      }
+
+      return window.nexum.mongodb.updateDocument({
+        collection: selectedCollectionPath.collection,
+        confirmedProductionWrite:
+          selectedConnection?.environment === "production",
+        connectionId: selectedConnectionId,
+        database: selectedCollectionPath.database,
+        editedDocument,
+        originalDocument,
+      });
+    },
+    onError(error) {
+      const message =
+        error instanceof Error ? error.message : "Unable to save document";
+      onConnectionError("Save document failed", message);
+    },
+    async onSuccess() {
+      setEditorDocument(null);
+      await documentsQuery.refetch();
+    },
+  });
 
   const applyCellFilter = ({ operation, path, value }: CellFilterRequest) => {
     const parsedFilter = parseJsonObject(filterInput, "Filter");
@@ -449,8 +499,11 @@ export const DocumentWorkspace = ({
                 isInitialLoading={documentsQuery.isLoading}
                 onCellFilter={applyCellFilter}
                 onCellProjection={applyCellProjection}
+                onDocumentOpen={setEditorDocument}
+                onDocumentSelect={setSelectedDocument}
                 onRefresh={() => void documentsQuery.refetch()}
                 onTablePathChange={handleTablePathChange}
+                selectedDocumentId={selectedDocument?.id ?? null}
                 tablePath={tablePath}
                 viewMode={documentViewMode}
                 onViewModeChange={setDocumentViewMode}
@@ -487,6 +540,22 @@ export const DocumentWorkspace = ({
                 />
               ) : null}
             </>
+          ) : null}
+          {editorDocument ? (
+            <DocumentEditorPanel
+              key={`${selectedCollectionName ?? "collection"}:${editorDocument.id}:${editorDocument.ejson}`}
+              document={editorDocument}
+              isProduction={selectedConnection?.environment === "production"}
+              isReadOnly={selectedConnection?.readOnly ?? true}
+              isSaving={updateDocumentMutation.isPending}
+              onClose={() => setEditorDocument(null)}
+              onSave={(editedDocument) =>
+                updateDocumentMutation.mutate({
+                  editedDocument,
+                  originalDocument: editorDocument.ejson,
+                })
+              }
+            />
           ) : null}
         </>
       ) : isConnectionManager ? (
@@ -1280,8 +1349,11 @@ type ResultsSectionProps = {
   isInitialLoading: boolean;
   onCellFilter: (request: CellFilterRequest) => void;
   onCellProjection: (request: CellProjectionRequest) => void;
+  onDocumentOpen: (document: ParsedDocument) => void;
+  onDocumentSelect: (document: ParsedDocument) => void;
   onRefresh: () => void;
   onTablePathChange: (path: string[]) => void;
+  selectedDocumentId: string | null;
   tablePath: string[];
   onViewModeChange: (mode: DocumentViewMode) => void;
   viewMode: DocumentViewMode;
@@ -1296,8 +1368,11 @@ const ResultsSection = ({
   isInitialLoading,
   onCellFilter,
   onCellProjection,
+  onDocumentOpen,
+  onDocumentSelect,
   onRefresh,
   onTablePathChange,
+  selectedDocumentId,
   tablePath,
   onViewModeChange,
   viewMode,
@@ -1329,14 +1404,17 @@ const ResultsSection = ({
       ) : isInitialLoading ? (
         <ResultsLoadingState />
       ) : viewMode === "json" ? (
-        <JsonResults documents={documents} />
+        <JsonResults documents={documents} onDocumentOpen={onDocumentOpen} />
       ) : (
         <DocumentTable
           key={`${tablePath.join(".")}:${tableDocuments[0]?.id ?? "empty"}:${tableDocuments.length}`}
           documents={tableDocuments}
           onCellFilter={onCellFilter}
           onCellProjection={onCellProjection}
+          onDocumentOpen={onDocumentOpen}
+          onDocumentSelect={onDocumentSelect}
           onObjectOpen={handleObjectOpen}
+          selectedDocumentId={selectedDocumentId}
           tablePath={tablePath}
         />
       )}
@@ -1457,7 +1535,10 @@ type DocumentTableProps = {
   documents: ParsedDocument[];
   onCellFilter: (request: CellFilterRequest) => void;
   onCellProjection: (request: CellProjectionRequest) => void;
+  onDocumentOpen: (document: ParsedDocument) => void;
+  onDocumentSelect: (document: ParsedDocument) => void;
   onObjectOpen: (field: string) => void;
+  selectedDocumentId: string | null;
   tablePath: string[];
 };
 
@@ -1511,7 +1592,10 @@ const DocumentTable = ({
   documents,
   onCellFilter,
   onCellProjection,
+  onDocumentOpen,
+  onDocumentSelect,
   onObjectOpen,
+  selectedDocumentId,
   tablePath,
 }: DocumentTableProps) => {
   const parentRef = useRef<HTMLDivElement | null>(null);
@@ -1748,9 +1832,13 @@ const DocumentTable = ({
             return (
               <div
                 className={`document-table-row ${
-                  selectedCell?.rowId === row.id ? "is-row-selected" : ""
+                  selectedDocumentId === row.original.id ||
+                  selectedCell?.rowId === row.id
+                    ? "is-row-selected"
+                    : ""
                 }`}
                 key={row.id}
+                onDoubleClick={() => onDocumentOpen(row.original)}
                 style={{
                   gridTemplateColumns: columnTemplate,
                   transform: `translateY(${virtualRow.start}px)`,
@@ -1763,6 +1851,7 @@ const DocumentTable = ({
                     }`}
                     key={cell.id}
                     onClick={() => {
+                      onDocumentSelect(row.original);
                       setSelectedCell({
                         cellId: cell.id,
                         rowId: row.id,
@@ -1918,9 +2007,10 @@ const CellContextMenu = ({
 
 type JsonResultsProps = {
   documents: ParsedDocument[];
+  onDocumentOpen: (document: ParsedDocument) => void;
 };
 
-const JsonResults = ({ documents }: JsonResultsProps) => {
+const JsonResults = ({ documents, onDocumentOpen }: JsonResultsProps) => {
   const parentRef = useRef<HTMLDivElement | null>(null);
   // eslint-disable-next-line react-hooks/incompatible-library
   const rowVirtualizer = useVirtualizer({
@@ -1961,6 +2051,13 @@ const JsonResults = ({ documents }: JsonResultsProps) => {
               <header className="json-document-card-header">
                 <span>Document</span>
                 <strong>{document.id}</strong>
+                <button
+                  className="secondary-button compact-button"
+                  onClick={() => onDocumentOpen(document)}
+                  type="button"
+                >
+                  Edit
+                </button>
               </header>
               <div className="json-document-tree">
                 <JsonTreeView data={document.value} />
@@ -1970,6 +2067,164 @@ const JsonResults = ({ documents }: JsonResultsProps) => {
         })}
       </div>
     </div>
+  );
+};
+
+type DocumentEditorPanelProps = {
+  document: ParsedDocument;
+  isProduction: boolean;
+  isReadOnly: boolean;
+  isSaving: boolean;
+  onClose: () => void;
+  onSave: (editedDocument: string) => void;
+};
+
+const DocumentEditorPanel = ({
+  document,
+  isProduction,
+  isReadOnly,
+  isSaving,
+  onClose,
+  onSave,
+}: DocumentEditorPanelProps) => {
+  const initialValue = useMemo(
+    () => formatEditableEjson(document.ejson),
+    [document.ejson],
+  );
+  const [editorValue, setEditorValue] = useState(initialValue);
+  const [isConfirmingSave, setIsConfirmingSave] = useState(false);
+  const validation = useMemo(
+    () => validateEditedDocument(document.ejson, editorValue),
+    [document.ejson, editorValue],
+  );
+  const isDirty = editorValue !== initialValue;
+  const canSave = !isReadOnly && !isSaving && isDirty && validation.ok;
+
+  return (
+    <aside
+      aria-label={`Edit document ${document.id}`}
+      className="document-editor-panel"
+    >
+      <header className="document-editor-header">
+        <div>
+          <span>Document editor</span>
+          <strong>{document.id}</strong>
+        </div>
+        <button
+          aria-label="Close document editor"
+          className="plain-icon"
+          onClick={onClose}
+          type="button"
+        >
+          ×
+        </button>
+      </header>
+
+      <div className="document-editor-body">
+        {isReadOnly ? (
+          <div className="document-editor-notice">
+            This connection is read-only. Saving is disabled.
+          </div>
+        ) : null}
+        {isProduction ? (
+          <div className="document-editor-notice is-warning">
+            Production write. Saving requires confirmation.
+          </div>
+        ) : null}
+        <div className="document-editor-field">
+          <div className="document-editor-field-label">
+            EJSON
+            <small>{isDirty ? "Modified" : "Saved"}</small>
+          </div>
+          <div className="document-editor-monaco">
+            <Editor
+              defaultLanguage="json"
+              height="100%"
+              loading={
+                <div className="document-editor-loading">Loading editor</div>
+              }
+              path={`document-${document.id}.json`}
+              value={editorValue}
+              onMount={(editor) => {
+                editor.focus();
+                editor.updateOptions({ domReadOnly: false, readOnly: false });
+              }}
+              onChange={(value) => {
+                setEditorValue(value ?? "");
+                setIsConfirmingSave(false);
+              }}
+              options={{
+                automaticLayout: true,
+                folding: true,
+                fontFamily:
+                  '"SFMono-Regular", Consolas, "Liberation Mono", monospace',
+                fontSize: 12,
+                lineHeight: 19,
+                minimap: { enabled: false },
+                readOnly: false,
+                renderValidationDecorations: "on",
+                renderLineHighlight: "none",
+                scrollBeyondLastLine: false,
+                tabSize: 2,
+                wordWrap: "off",
+              }}
+              theme="vs"
+            />
+          </div>
+        </div>
+        {!validation.ok ? (
+          <p className="document-editor-error">{validation.message}</p>
+        ) : null}
+      </div>
+
+      <footer className="document-editor-footer">
+        {isConfirmingSave ? (
+          <div className="document-editor-confirm">
+            <span>
+              Save changes to this document
+              {isProduction ? " in production" : ""}?
+            </span>
+            <button
+              className="secondary-button"
+              disabled={isSaving}
+              onClick={() => setIsConfirmingSave(false)}
+              type="button"
+            >
+              Cancel
+            </button>
+            <button
+              className="run-button compact"
+              disabled={isSaving}
+              onClick={() => onSave(editorValue)}
+              type="button"
+            >
+              <span className="play-icon" />
+              Confirm save
+            </button>
+          </div>
+        ) : (
+          <>
+            <button
+              className="secondary-button"
+              disabled={isSaving}
+              onClick={onClose}
+              type="button"
+            >
+              Close
+            </button>
+            <button
+              className="run-button compact"
+              disabled={!canSave}
+              onClick={() => setIsConfirmingSave(true)}
+              type="button"
+            >
+              <span className="play-icon" />
+              {isSaving ? "Saving" : "Save"}
+            </button>
+          </>
+        )}
+      </footer>
+    </aside>
   );
 };
 
@@ -3102,6 +3357,57 @@ const parseEjsonDocument = (document: string): Record<string, unknown> => {
   }
 
   return { document };
+};
+
+const formatEditableEjson = (document: string): string => {
+  try {
+    return JSON.stringify(JSON.parse(document), null, 2);
+  } catch {
+    return document;
+  }
+};
+
+const validateEditedDocument = (
+  originalDocument: string,
+  editedDocument: string,
+): { ok: true } | { ok: false; message: string } => {
+  const original = parseStrictJsonDocument(originalDocument);
+
+  if (!original.ok) {
+    return { ok: false, message: "Original document is not valid EJSON." };
+  }
+
+  const edited = parseStrictJsonDocument(editedDocument);
+
+  if (!edited.ok) {
+    return { ok: false, message: "Edited document is not valid EJSON." };
+  }
+
+  if (!("_id" in original.value) || !("_id" in edited.value)) {
+    return { ok: false, message: "Document _id is required." };
+  }
+
+  if (JSON.stringify(original.value._id) !== JSON.stringify(edited.value._id)) {
+    return { ok: false, message: "_id changes are not allowed." };
+  }
+
+  return { ok: true };
+};
+
+const parseStrictJsonDocument = (
+  document: string,
+): { ok: true; value: Record<string, unknown> } | { ok: false } => {
+  try {
+    const parsed = JSON.parse(document) as unknown;
+
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return { ok: true, value: parsed as Record<string, unknown> };
+    }
+  } catch {
+    return { ok: false };
+  }
+
+  return { ok: false };
 };
 
 const getDocumentId = (
