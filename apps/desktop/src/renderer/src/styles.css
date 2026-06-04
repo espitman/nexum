@@ -376,6 +376,20 @@ button {
   color: #8a95a4;
 }
 
+.breadcrumb-item {
+  align-items: center;
+  display: inline-flex;
+  gap: 12px;
+  min-width: 0;
+}
+
+.breadcrumb-item:not(:last-child) {
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .breadcrumb {
   background: #ffffff;
   border: 1px solid #e5eaf0;
@@ -385,8 +399,14 @@ button {
   flex: 1;
   gap: 12px;
   height: 40px;
-  min-width: 360px;
+  min-width: 0;
+  overflow: hidden;
   padding: 0 14px;
+}
+
+.breadcrumb strong {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .top-actions {

@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ExplorerNodeDto } from "../../../ipc/contracts";
 import { Icon } from "./Icon";
@@ -17,7 +17,6 @@ type ExplorerTreeNodeProps = {
   node: ExplorerNodeDto;
   onCollectionSelect: (collectionName: string) => void;
   onToggleNode: (nodeId: string) => void;
-  queryText: string;
   selectedCollectionName: string | null;
 };
 
@@ -26,9 +25,6 @@ const getNodeIconName = (node: ExplorerNodeDto): string =>
 
 const getNodeSelectionKey = (node: ExplorerNodeDto): string =>
   node.path.join(".");
-
-const matchesQuery = (label: string, queryText: string): boolean =>
-  label.toLowerCase().includes(queryText.toLowerCase());
 
 export const DatabasePanel = ({
   connectionId,
@@ -40,7 +36,6 @@ export const DatabasePanel = ({
   const [expandedNodeIds, setExpandedNodeIds] = useState<Set<string>>(
     () => new Set([connectionId]),
   );
-  const [queryText, setQueryText] = useState("");
   const rootNodesQuery = useQuery({
     queryKey: ["explorer", connectionId, "root"],
     queryFn: async () => {
@@ -51,13 +46,6 @@ export const DatabasePanel = ({
       return window.nexum.explorer.listRootNodes({ connectionId });
     },
   });
-  const visibleRootNodes = useMemo(
-    () =>
-      (rootNodesQuery.data ?? []).filter((node) =>
-        queryText.trim() ? matchesQuery(node.label, queryText.trim()) : true,
-      ),
-    [queryText, rootNodesQuery.data],
-  );
 
   const toggleNode = (nodeId: string) => {
     setExpandedNodeIds((current) => {
@@ -92,15 +80,6 @@ export const DatabasePanel = ({
           ↻
         </button>
       </div>
-      <label className="search-box">
-        <Icon name="search" />
-        <input
-          type="search"
-          placeholder="Filter databases"
-          value={queryText}
-          onChange={(event) => setQueryText(event.target.value)}
-        />
-      </label>
 
       <div className="tree-list">
         <button
@@ -123,10 +102,10 @@ export const DatabasePanel = ({
               actionLabel="Retry"
               onAction={() => void rootNodesQuery.refetch()}
             />
-          ) : visibleRootNodes.length === 0 ? (
+          ) : (rootNodesQuery.data ?? []).length === 0 ? (
             <ExplorerPanelState label="No databases found" />
           ) : (
-            visibleRootNodes.map((node) => (
+            (rootNodesQuery.data ?? []).map((node) => (
               <ExplorerTreeNode
                 connectionId={connectionId}
                 depth={1}
@@ -135,7 +114,6 @@ export const DatabasePanel = ({
                 node={node}
                 onCollectionSelect={onCollectionSelect}
                 onToggleNode={toggleNode}
-                queryText={queryText.trim()}
                 selectedCollectionName={selectedCollectionName}
               />
             ))
@@ -153,7 +131,6 @@ const ExplorerTreeNode = ({
   node,
   onCollectionSelect,
   onToggleNode,
-  queryText,
   selectedCollectionName,
 }: ExplorerTreeNodeProps) => {
   const isExpanded = expandedNodeIds.has(node.id);
@@ -171,13 +148,6 @@ const ExplorerTreeNode = ({
       });
     },
   });
-  const visibleChildren = useMemo(
-    () =>
-      (childrenQuery.data ?? []).filter((childNode) =>
-        queryText ? matchesQuery(childNode.label, queryText) : true,
-      ),
-    [childrenQuery.data, queryText],
-  );
   const isSelectable = node.type === "collection" || node.type === "view";
   const selectionKey = getNodeSelectionKey(node);
 
@@ -215,10 +185,10 @@ const ExplorerTreeNode = ({
             actionLabel="Retry"
             onAction={() => void childrenQuery.refetch()}
           />
-        ) : visibleChildren.length === 0 ? (
+        ) : (childrenQuery.data ?? []).length === 0 ? (
           <ExplorerPanelState depth={depth + 1} label="Empty" />
         ) : (
-          visibleChildren.map((childNode) => (
+          (childrenQuery.data ?? []).map((childNode) => (
             <ExplorerTreeNode
               connectionId={connectionId}
               depth={depth + 1}
@@ -227,7 +197,6 @@ const ExplorerTreeNode = ({
               node={childNode}
               onCollectionSelect={onCollectionSelect}
               onToggleNode={onToggleNode}
-              queryText={queryText}
               selectedCollectionName={selectedCollectionName}
             />
           ))

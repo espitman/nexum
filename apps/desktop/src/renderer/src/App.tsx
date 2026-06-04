@@ -275,6 +275,8 @@ export const App = () => {
       ) : null}
 
       <TopBar
+        collectionName={visibleSelectedCollectionName}
+        connectionName={selectedConnection?.name ?? null}
         connectionStatus={connectionStatus}
         connectionStatusLabel={connectionStatusLabel}
         environment={activeEnvironment}
