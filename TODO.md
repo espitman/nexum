@@ -248,7 +248,7 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
   - [x] Parse original document with EJSON
   - [x] Parse edited document with EJSON
   - [x] Block `_id` changes
-  - [x] Save with `replaceOne`
+  - [x] Save with field-level `updateOne`
   - [x] Return matched and modified counts
 - [x] Add safety protections
   - [x] Block writes on read-only connections
@@ -259,10 +259,10 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
   - [x] Edit EJSON in Monaco
   - [x] Show validation errors
   - [x] Add save confirmation
-- [ ] Verify editor
-  - [ ] Save one document safely
-  - [ ] Confirm `_id` changes are rejected
-  - [ ] Confirm read-only mode blocks writes
+- [x] Verify editor
+  - [x] Save one document safely
+  - [x] Confirm `_id` changes are rejected
+  - [x] Confirm read-only mode blocks writes
 
 ## Phase 10 — Aggregation Builder
 
