@@ -1555,6 +1555,7 @@ type SelectedDocumentCell = {
 };
 
 type CellContextMenuState = {
+  document: ParsedDocument;
   fieldPath: string;
   left: number;
   submenuDirection: "left" | "right";
@@ -1638,6 +1639,7 @@ const DocumentTable = ({
     (
       event: ReactMouseEvent<HTMLDivElement>,
       cellId: string,
+      document: ParsedDocument,
       rowId: string,
       fieldKey: string,
       value: unknown,
@@ -1651,6 +1653,7 @@ const DocumentTable = ({
       const rect = event.currentTarget.getBoundingClientRect();
       const left = getContextMenuLeft(rect.left);
       setCellContextMenu({
+        document,
         fieldPath: getCellFilterPath(tablePath, fieldKey),
         left,
         submenuDirection: getContextSubmenuDirection(left),
@@ -1839,7 +1842,6 @@ const DocumentTable = ({
                     : ""
                 }`}
                 key={row.id}
-                onDoubleClick={() => onDocumentOpen(row.original)}
                 style={{
                   gridTemplateColumns: columnTemplate,
                   transform: `translateY(${virtualRow.start}px)`,
@@ -1862,6 +1864,7 @@ const DocumentTable = ({
                       handleCellContextMenu(
                         event,
                         cell.id,
+                        row.original,
                         row.id,
                         cell.column.id,
                         cell.getValue(),
@@ -1900,6 +1903,10 @@ const DocumentTable = ({
             onCellProjection(request);
             closeCellContextMenu();
           }}
+          onEditDocument={(document) => {
+            onDocumentOpen(document);
+            closeCellContextMenu();
+          }}
           onClose={closeCellContextMenu}
         />
       ) : null}
@@ -1911,6 +1918,7 @@ type CellContextMenuProps = {
   menu: CellContextMenuState;
   onApplyFilter: (request: CellFilterRequest) => void;
   onApplyProjection: (request: CellProjectionRequest) => void;
+  onEditDocument: (document: ParsedDocument) => void;
   onClose: () => void;
 };
 
@@ -1918,6 +1926,7 @@ const CellContextMenu = ({
   menu,
   onApplyFilter,
   onApplyProjection,
+  onEditDocument,
   onClose,
 }: CellContextMenuProps) => {
   const items = getCellFilterMenuItems(menu.fieldPath, menu.value);
@@ -1999,6 +2008,9 @@ const CellContextMenu = ({
         </div>
       ) : null}
       <span className="cell-context-menu-separator" />
+      <button type="button" onClick={() => onEditDocument(menu.document)}>
+        Edit document
+      </button>
       <button type="button" onClick={onClose}>
         Close
       </button>
