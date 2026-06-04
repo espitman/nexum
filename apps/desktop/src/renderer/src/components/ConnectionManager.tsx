@@ -1,3 +1,4 @@
+import { Activity, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type {
   ConnectionCreatePayload,
@@ -248,16 +249,28 @@ export const ConnectionManager = ({
     <section className="connection-manager">
       <div className="connection-manager-list">
         <header className="connection-manager-header">
-          <strong>Connections</strong>
-          <button
-            className="run-button compact"
-            type="button"
-            onClick={startNewConnection}
-          >
-            New
-          </button>
+          <div className="connection-manager-title">
+            <strong>Connections</strong>
+          </div>
+          <div className="connection-manager-tools">
+            <button
+              className="run-button compact"
+              type="button"
+              onClick={startNewConnection}
+            >
+              New
+            </button>
+            <button
+              aria-label="Search connections"
+              className="connection-icon-button"
+              type="button"
+            >
+              <Icon name="search" />
+            </button>
+          </div>
         </header>
 
+        <div className="connection-list-label">Saved profiles</div>
         <div className="connection-profile-list">
           {isLoading ? (
             <div className="connection-profile-empty">Loading</div>
@@ -279,84 +292,137 @@ export const ConnectionManager = ({
                 <span>
                   <strong>{connection.name}</strong>
                   <small>
-                    {connection.pluginId} · {connection.environment}
+                    {connection.pluginId} · {getEnvironmentLabel(connection.environment)}
                   </small>
                 </span>
-                {connection.readOnly ? <em>RO</em> : null}
+                <span className="connection-profile-meta">
+                  <em>{getEnvironmentLabel(connection.environment)}</em>
+                  {connection.readOnly ? <small>Read-only</small> : null}
+                </span>
               </button>
             ))
           )}
         </div>
+
+        <footer className="connection-list-footer">
+          <span>{connections.length} profiles</span>
+          <span>Sorted by name</span>
+        </footer>
       </div>
 
       {selectedConnection && formMode !== "edit" ? (
         <article className="connection-form connection-detail-panel">
-          <header className="connection-form-header">
-            <div>
-              <span>Selected profile</span>
-              <strong>{selectedConnection.name}</strong>
+          <header className="connection-editor-header">
+            <div className="connection-editor-title">
+              <span
+                className={`profile-status-dot status-${selectedConnection.status}`}
+              />
+              <h1>{selectedConnection.name}</h1>
+              <span className="connection-plugin-pill">
+                <Icon name="database" />
+                MongoDB
+              </span>
+              <span className="connection-env-pill">
+                {getEnvironmentLabel(selectedConnection.environment)}
+              </span>
             </div>
             <div className="connection-form-actions">
               <button
-                className="plain-action"
+                className="secondary-button connection-header-test-button"
+                disabled={isSubmitting}
+                onClick={() => void testSelectedConnection()}
                 type="button"
-                onClick={editSelectedConnection}
               >
-                Edit
+                <Activity aria-hidden="true" size={16} strokeWidth={2} />
+                Test
               </button>
               <button
-                className="plain-action danger"
+                aria-label="Delete connection"
+                className="connection-delete-button"
                 disabled={isSubmitting}
                 onClick={() => setDeleteCandidate(selectedConnection)}
                 type="button"
               >
-                Delete
+                <Trash2 aria-hidden="true" size={16} strokeWidth={2} />
               </button>
             </div>
+            <p>
+              Last connected: recently <span aria-hidden="true">·</span>{" "}
+              Version: 7.0.11
+            </p>
           </header>
 
-          <dl className="connection-detail-grid">
-            <div>
-              <dt>Name</dt>
-              <dd>{selectedConnection.name}</dd>
-            </div>
-            <div>
-              <dt>URI</dt>
-              <dd>Saved securely in Keychain</dd>
-            </div>
-            <div>
-              <dt>Environment</dt>
-              <dd>{getEnvironmentLabel(selectedConnection.environment)}</dd>
-            </div>
-            <div>
-              <dt>Mode</dt>
-              <dd>{selectedConnection.readOnly ? "Read-only" : "Writable"}</dd>
-            </div>
-            <div>
-              <dt>Status</dt>
-              <dd>
-                <span
-                  className={`connection-detail-status status-${selectedConnection.status}`}
-                >
-                  {getStatusLabel(selectedConnection.status)}
-                </span>
-              </dd>
-            </div>
-            <div>
-              <dt>Plugin</dt>
-              <dd>{selectedConnection.pluginId}</dd>
-            </div>
-          </dl>
+          <div className="connection-form-sections">
+            <section className="connection-form-section">
+              <div className="connection-section-title">
+                <strong>Profile</strong>
+              </div>
+              <label className="field-row">
+                <span>Name</span>
+                <input readOnly value={selectedConnection.name} />
+              </label>
+            </section>
 
-          <div className="connection-runtime-actions">
-            <button
-              className="secondary-button"
-              disabled={isSubmitting}
-              onClick={() => void testSelectedConnection()}
-              type="button"
-            >
-              Test saved
-            </button>
+            <section className="connection-form-section">
+              <div className="connection-section-title">
+                <strong>Endpoint</strong>
+              </div>
+              <label className="field-row">
+                <span>URI</span>
+                <input readOnly value="Saved securely in Keychain" />
+              </label>
+            </section>
+
+            <section className="connection-form-section">
+              <div className="connection-section-title">
+                <strong>Environment</strong>
+                <span>Choose the target environment for this connection.</span>
+              </div>
+              <fieldset className="environment-selector">
+                <legend>Environment</legend>
+                <div>
+                  {environments.map(([value, label]) => (
+                    <button
+                      aria-pressed={selectedConnection.environment === value}
+                      className={
+                        selectedConnection.environment === value
+                          ? "is-active"
+                          : ""
+                      }
+                      disabled
+                      key={value}
+                      type="button"
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
+            </section>
+
+            <section className="connection-form-section">
+              <div className="connection-section-title">
+                <strong>Safety</strong>
+              </div>
+              <label className="readonly-toggle">
+                <span>
+                  <strong>Read-only</strong>
+                  <small>
+                    {selectedConnection.readOnly
+                      ? "When enabled, write operations are blocked."
+                      : "Write operations are allowed."}
+                  </small>
+                </span>
+                <input
+                  checked={selectedConnection.readOnly}
+                  readOnly
+                  type="checkbox"
+                />
+              </label>
+            </section>
+          </div>
+
+          <footer className="connection-form-footer">
             {selectedConnection.status === "connected" ? (
               <button
                 className="secondary-button"
@@ -376,9 +442,35 @@ export const ConnectionManager = ({
                 Connect
               </button>
             )}
-          </div>
+            <button
+              className="run-button compact"
+              type="button"
+              onClick={editSelectedConnection}
+            >
+              Edit profile
+            </button>
+          </footer>
 
-          {notice ? <p className="connection-notice">{notice}</p> : null}
+          <footer className="connection-editor-statusbar">
+            <div>
+              <span className="status-ok-mark">✓</span>
+              <span>
+                {notice ??
+                  (selectedConnection.status === "connected"
+                    ? "Connection healthy"
+                    : getStatusLabel(selectedConnection.status))}
+              </span>
+            </div>
+            {notice ? null : (
+              <div>
+                <span>Status: {getStatusLabel(selectedConnection.status)}</span>
+                <span aria-hidden="true">·</span>
+                <span>
+                  Mode: {selectedConnection.readOnly ? "Read-only" : "Writable"}
+                </span>
+              </div>
+            )}
+          </footer>
         </article>
       ) : (
         <form
@@ -388,14 +480,21 @@ export const ConnectionManager = ({
             void submitForm();
           }}
         >
-          <header className="connection-form-header">
-            <div>
-              <span>
-                {formMode === "create" ? "New profile" : "Edit profile"}
+          <header className="connection-editor-header">
+            <div className="connection-editor-title">
+              <span className="profile-status-dot status-disconnected" />
+              <h1>
+                {formMode === "create"
+                  ? "New MongoDB profile"
+                  : `Edit ${selectedConnection?.name ?? "profile"}`}
+              </h1>
+              <span className="connection-plugin-pill">
+                <Icon name="database" />
+                MongoDB
               </span>
-              <strong>
-                {formMode === "create" ? "MongoDB" : selectedConnection?.name}
-              </strong>
+              <span className="connection-env-pill">
+                {getEnvironmentLabel(form.environment)}
+              </span>
             </div>
             {selectedConnection ? (
               <div className="connection-form-actions">
@@ -409,92 +508,129 @@ export const ConnectionManager = ({
                 </button>
               </div>
             ) : null}
+            <p>
+              {formMode === "create"
+                ? "Create a saved profile and keep its secret on this device."
+                : "Update profile metadata or replace the saved URI."}
+            </p>
           </header>
 
-          <label className="field-row">
-            <span>Name</span>
-            <input
-              autoComplete="off"
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  name: event.target.value,
-                }))
-              }
-              placeholder="MongoDB Production"
-              required
-              value={form.name}
-            />
-          </label>
-
-          <label className="field-row">
-            <span>URI</span>
-            <input
-              autoComplete="off"
-              onChange={(event) =>
-                setForm((current) => ({ ...current, uri: event.target.value }))
-              }
-              placeholder={
-                formMode === "edit"
-                  ? "Leave blank to keep saved URI"
-                  : "mongodb://localhost:27017/admin"
-              }
-              required={formMode === "create"}
-              type="text"
-              value={form.uri}
-            />
-          </label>
-
-          <fieldset className="environment-selector">
-            <legend>Environment</legend>
-            <div>
-              {environments.map(([value, label]) => (
-                <button
-                  aria-pressed={form.environment === value}
-                  className={form.environment === value ? "is-active" : ""}
-                  key={value}
-                  onClick={() =>
-                    setForm((current) => ({ ...current, environment: value }))
+          <div className="connection-form-sections">
+            <section className="connection-form-section">
+              <div className="connection-section-title">
+                <strong>Profile</strong>
+                <span>Saved locally on this device</span>
+              </div>
+              <label className="field-row">
+                <span>Name</span>
+                <input
+                  autoComplete="off"
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      name: event.target.value,
+                    }))
                   }
-                  type="button"
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </fieldset>
+                  placeholder="MongoDB Production"
+                  required
+                  value={form.name}
+                />
+              </label>
+            </section>
 
-          <label className="readonly-toggle">
-            <span>
-              <strong>Read-only</strong>
-              <small>
-                {form.readOnly ? "Writes blocked" : "Writes allowed"}
-              </small>
-            </span>
-            <input
-              checked={form.readOnly}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  readOnly: event.target.checked,
-                }))
-              }
-              type="checkbox"
-            />
-          </label>
+            <section className="connection-form-section">
+              <div className="connection-section-title">
+                <strong>Endpoint</strong>
+                <span>Connection string is stored securely</span>
+              </div>
+              <label className="field-row">
+                <span>URI</span>
+                <input
+                  autoComplete="off"
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      uri: event.target.value,
+                    }))
+                  }
+                  placeholder={
+                    formMode === "edit"
+                      ? "Leave blank to keep saved URI"
+                      : "mongodb://localhost:27017/admin"
+                  }
+                  required={formMode === "create"}
+                  type="text"
+                  value={form.uri}
+                />
+              </label>
+            </section>
+
+            <section className="connection-form-section">
+              <div className="connection-section-title">
+                <strong>Environment</strong>
+                <span>Used for badges and safety behavior</span>
+              </div>
+              <fieldset className="environment-selector">
+                <legend>Environment</legend>
+                <div>
+                  {environments.map(([value, label]) => (
+                    <button
+                      aria-pressed={form.environment === value}
+                      className={form.environment === value ? "is-active" : ""}
+                      key={value}
+                      onClick={() =>
+                        setForm((current) => ({
+                          ...current,
+                          environment: value,
+                        }))
+                      }
+                      type="button"
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
+            </section>
+
+            <section className="connection-form-section">
+              <div className="connection-section-title">
+                <strong>Safety</strong>
+                <span>Default protection for write operations</span>
+              </div>
+              <label className="readonly-toggle">
+                <span>
+                  <strong>Read-only</strong>
+                  <small>
+                    {form.readOnly ? "Writes blocked" : "Writes allowed"}
+                  </small>
+                </span>
+                <input
+                  checked={form.readOnly}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      readOnly: event.target.checked,
+                    }))
+                  }
+                  type="checkbox"
+                />
+              </label>
+            </section>
+          </div>
 
           <footer className="connection-form-footer">
             <button
-              className="secondary-button"
+              className="secondary-button connection-action-button test-connection-button"
               disabled={isSubmitting || isTestingDraft || !canTestDraft}
               onClick={() => void testDraftConnection()}
               type="button"
             >
-              <Icon name="indexes" />
-              Test
+              <Activity aria-hidden="true" size={16} strokeWidth={2} />
+              Test connection
             </button>
             <button
-              className="run-button compact"
+              className="run-button compact connection-action-button connection-save-button"
               disabled={isSubmitting || !canSave}
               type="submit"
             >

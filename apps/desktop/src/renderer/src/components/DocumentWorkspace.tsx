@@ -470,13 +470,15 @@ export const DocumentWorkspace = ({
         shouldShowQueryBuilderPanel ? "is-query-builder" : ""
       }`}
     >
-      <CollectionTabBar
-        isCollectionWorkspace={isCollectionWorkspace}
-        selectedCollectionName={selectedCollectionName}
-        onCollectionClose={onCollectionClose}
-      />
+      {isConnectionManager ? null : (
+        <CollectionTabBar
+          isCollectionWorkspace={isCollectionWorkspace}
+          selectedCollectionName={selectedCollectionName}
+          onCollectionClose={onCollectionClose}
+        />
+      )}
 
-      {isCollectionWorkspace ? (
+      {isConnectionManager ? null : isCollectionWorkspace ? (
         <WorkspaceTabs
           activeWorkspaceTab={activeWorkspaceTab}
           isQueryBuilderOpen={isQueryBuilderOpen}
