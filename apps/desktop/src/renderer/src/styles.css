@@ -1973,6 +1973,23 @@ input:disabled {
   color: #ffffff;
 }
 
+.inline-cell-editor {
+  background: #ffffff;
+  border: 1px solid #80cbd3;
+  border-radius: 3px;
+  box-shadow: 0 0 0 3px rgb(0 113 125 / 12%);
+  color: #263142;
+  font: inherit;
+  height: 30px;
+  min-width: 90px;
+  padding: 0 8px;
+  width: 100%;
+}
+
+.inline-cell-editor:focus {
+  outline: none;
+}
+
 .document-table-header-cell {
   gap: 7px;
   padding-right: 28px;

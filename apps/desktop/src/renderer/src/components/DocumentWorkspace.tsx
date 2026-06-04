@@ -4,6 +4,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
 } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -390,6 +391,30 @@ export const DocumentWorkspace = ({
     }));
   };
 
+  const applyCellEdit = ({
+    document,
+    path,
+    rawValue,
+    value,
+  }: CellEditRequest) => {
+    const editedDocument = buildInlineEditedDocument({
+      document: document.ejson,
+      path,
+      rawValue,
+      value,
+    });
+
+    if (!editedDocument.ok) {
+      onConnectionError("Save document failed", editedDocument.message);
+      return;
+    }
+
+    updateDocumentMutation.mutate({
+      editedDocument: editedDocument.value,
+      originalDocument: document.ejson,
+    });
+  };
+
   useEffect(() => {
     onSchemaChange(isCollectionWorkspace ? schemaFields : []);
   }, [isCollectionWorkspace, onSchemaChange, schemaFields]);
@@ -498,6 +523,8 @@ export const DocumentWorkspace = ({
                 hasMore={documentsQuery.data?.hasMore ?? false}
                 isFetching={documentsQuery.isFetching}
                 isInitialLoading={documentsQuery.isLoading}
+                isSavingDocument={updateDocumentMutation.isPending}
+                onCellEdit={applyCellEdit}
                 onCellFilter={applyCellFilter}
                 onCellProjection={applyCellProjection}
                 onDocumentOpen={setEditorDocument}
@@ -1348,6 +1375,8 @@ type ResultsSectionProps = {
   hasMore: boolean;
   isFetching: boolean;
   isInitialLoading: boolean;
+  isSavingDocument: boolean;
+  onCellEdit: (request: CellEditRequest) => void;
   onCellFilter: (request: CellFilterRequest) => void;
   onCellProjection: (request: CellProjectionRequest) => void;
   onDocumentOpen: (document: ParsedDocument) => void;
@@ -1367,6 +1396,8 @@ const ResultsSection = ({
   hasMore,
   isFetching,
   isInitialLoading,
+  isSavingDocument,
+  onCellEdit,
   onCellFilter,
   onCellProjection,
   onDocumentOpen,
@@ -1410,6 +1441,8 @@ const ResultsSection = ({
         <DocumentTable
           key={`${tablePath.join(".")}:${tableDocuments[0]?.id ?? "empty"}:${tableDocuments.length}`}
           documents={tableDocuments}
+          isSavingDocument={isSavingDocument}
+          onCellEdit={onCellEdit}
           onCellFilter={onCellFilter}
           onCellProjection={onCellProjection}
           onDocumentOpen={onDocumentOpen}
@@ -1534,6 +1567,8 @@ const DocumentBreadcrumbs = ({
 
 type DocumentTableProps = {
   documents: ParsedDocument[];
+  isSavingDocument: boolean;
+  onCellEdit: (request: CellEditRequest) => void;
   onCellFilter: (request: CellFilterRequest) => void;
   onCellProjection: (request: CellProjectionRequest) => void;
   onDocumentOpen: (document: ParsedDocument) => void;
@@ -1590,8 +1625,24 @@ type CellProjectionRequest = {
   path: string;
 };
 
+type CellEditRequest = {
+  document: ParsedDocument;
+  path: string;
+  rawValue: string;
+  value: unknown;
+};
+
+type EditingDocumentCell = {
+  cellId: string;
+  document: ParsedDocument;
+  path: string;
+  value: unknown;
+};
+
 const DocumentTable = ({
   documents,
+  isSavingDocument,
+  onCellEdit,
   onCellFilter,
   onCellProjection,
   onDocumentOpen,
@@ -1606,6 +1657,9 @@ const DocumentTable = ({
   const [cellContextMenu, setCellContextMenu] =
     useState<CellContextMenuState | null>(null);
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
+  const [editingCell, setEditingCell] = useState<EditingDocumentCell | null>(
+    null,
+  );
   const [objectPreview, setObjectPreview] = useState<ObjectPreviewState | null>(
     null,
   );
@@ -1649,6 +1703,7 @@ const DocumentTable = ({
       cancelObjectPreviewShow();
       cancelObjectPreviewHide();
       setObjectPreview(null);
+      setEditingCell(null);
       setSelectedCell({ cellId, rowId });
       const rect = event.currentTarget.getBoundingClientRect();
       const left = getContextMenuLeft(rect.left);
@@ -1860,6 +1915,27 @@ const DocumentTable = ({
                         rowId: row.id,
                       });
                     }}
+                    onDoubleClick={(event) => {
+                      const path = getCellFilterPath(tablePath, cell.column.id);
+                      const value = cell.getValue();
+
+                      if (
+                        !isSavingDocument &&
+                        isInlineEditableTableValue(path, value)
+                      ) {
+                        event.stopPropagation();
+                        setEditingCell({
+                          cellId: cell.id,
+                          document: row.original,
+                          path,
+                          value,
+                        });
+                        setSelectedCell({
+                          cellId: cell.id,
+                          rowId: row.id,
+                        });
+                      }
+                    }}
                     onContextMenu={(event) =>
                       handleCellContextMenu(
                         event,
@@ -1871,7 +1947,23 @@ const DocumentTable = ({
                       )
                     }
                   >
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    {editingCell?.cellId === cell.id ? (
+                      <InlineCellEditor
+                        value={editingCell.value}
+                        onCancel={() => setEditingCell(null)}
+                        onCommit={(rawValue) => {
+                          onCellEdit({
+                            document: editingCell.document,
+                            path: editingCell.path,
+                            rawValue,
+                            value: editingCell.value,
+                          });
+                          setEditingCell(null);
+                        }}
+                      />
+                    ) : (
+                      flexRender(cell.column.columnDef.cell, cell.getContext())
+                    )}
                   </div>
                 ))}
               </div>
@@ -1911,6 +2003,73 @@ const DocumentTable = ({
         />
       ) : null}
     </div>
+  );
+};
+
+type InlineCellEditorProps = {
+  value: unknown;
+  onCancel: () => void;
+  onCommit: (rawValue: string) => void;
+};
+
+const InlineCellEditor = ({
+  value,
+  onCancel,
+  onCommit,
+}: InlineCellEditorProps) => {
+  const initialValue = useMemo(() => formatCellValue(value), [value]);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const hasFinished = useRef(false);
+  const [draftValue, setDraftValue] = useState(initialValue);
+  const finish = useCallback(
+    (action: "cancel" | "commit") => {
+      if (hasFinished.current) {
+        return;
+      }
+
+      hasFinished.current = true;
+
+      if (action === "cancel") {
+        onCancel();
+        return;
+      }
+
+      if (draftValue === initialValue) {
+        onCancel();
+        return;
+      }
+
+      onCommit(draftValue);
+    },
+    [draftValue, initialValue, onCancel, onCommit],
+  );
+
+  useEffect(() => {
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  }, []);
+
+  return (
+    <input
+      ref={inputRef}
+      className="inline-cell-editor"
+      value={draftValue}
+      onBlur={() => finish("commit")}
+      onChange={(event) => setDraftValue(event.target.value)}
+      onClick={(event) => event.stopPropagation()}
+      onDoubleClick={(event) => event.stopPropagation()}
+      onKeyDown={(event: ReactKeyboardEvent<HTMLInputElement>) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          finish("commit");
+        }
+
+        if (event.key === "Escape") {
+          event.preventDefault();
+          finish("cancel");
+        }
+      }}
+    />
   );
 };
 
@@ -3423,6 +3582,170 @@ const parseStrictJsonDocument = (
   return { ok: false };
 };
 
+const buildInlineEditedDocument = ({
+  document,
+  path,
+  rawValue,
+  value,
+}: {
+  document: string;
+  path: string;
+  rawValue: string;
+  value: unknown;
+}): { ok: true; value: string } | { ok: false; message: string } => {
+  const parsed = parseStrictJsonDocument(document);
+
+  if (!parsed.ok) {
+    return { ok: false, message: "Document is not valid EJSON." };
+  }
+
+  if (!path || path === "_id" || path.startsWith("_id.")) {
+    return { ok: false, message: "_id cannot be edited inline." };
+  }
+
+  const parsedValue = parseInlineCellValue(rawValue, value);
+
+  if (!parsedValue.ok) {
+    return parsedValue;
+  }
+
+  const updatedDocument = structuredClone(parsed.value);
+  const didSet = setValueAtPath(
+    updatedDocument,
+    path.split("."),
+    parsedValue.value,
+  );
+
+  if (!didSet) {
+    return { ok: false, message: "Unable to update field path." };
+  }
+
+  return {
+    ok: true,
+    value: JSON.stringify(updatedDocument),
+  };
+};
+
+const setValueAtPath = (
+  target: Record<string, unknown> | unknown[],
+  path: string[],
+  value: unknown,
+): boolean => {
+  const [head, ...tail] = path;
+
+  if (!head) {
+    return false;
+  }
+
+  if (Array.isArray(target)) {
+    const index = Number(head);
+
+    if (!Number.isInteger(index) || index < 0 || index >= target.length) {
+      return false;
+    }
+
+    if (tail.length === 0) {
+      target[index] = value;
+      return true;
+    }
+
+    const nextValue = target[index];
+
+    if (!isRecord(nextValue) && !Array.isArray(nextValue)) {
+      return false;
+    }
+
+    return setValueAtPath(nextValue, tail, value);
+  }
+
+  if (tail.length === 0) {
+    target[head] = value;
+    return true;
+  }
+
+  const nextValue = target[head];
+
+  if (!isRecord(nextValue) && !Array.isArray(nextValue)) {
+    return false;
+  }
+
+  return setValueAtPath(nextValue, tail, value);
+};
+
+const parseInlineCellValue = (
+  rawValue: string,
+  originalValue: unknown,
+): { ok: true; value: unknown } | { ok: false; message: string } => {
+  const trimmedValue = rawValue.trim();
+
+  if (isRecord(originalValue)) {
+    const ejsonKey = getEjsonScalarKey(originalValue);
+
+    if (ejsonKey) {
+      return parseInlineEjsonScalar(trimmedValue, originalValue, ejsonKey);
+    }
+  }
+
+  const unwrappedValue = unwrapEjsonValue(originalValue);
+
+  if (typeof unwrappedValue === "boolean") {
+    if (trimmedValue === "true") {
+      return { ok: true, value: true };
+    }
+
+    if (trimmedValue === "false") {
+      return { ok: true, value: false };
+    }
+
+    return { ok: false, message: "Boolean values must be true or false." };
+  }
+
+  if (typeof unwrappedValue === "number") {
+    const numericValue = Number(trimmedValue);
+
+    if (Number.isNaN(numericValue)) {
+      return { ok: false, message: "Number values must be numeric." };
+    }
+
+    return { ok: true, value: numericValue };
+  }
+
+  if (unwrappedValue === null) {
+    if (trimmedValue === "null") {
+      return { ok: true, value: null };
+    }
+
+    return { ok: true, value: rawValue };
+  }
+
+  return { ok: true, value: rawValue };
+};
+
+const parseInlineEjsonScalar = (
+  rawValue: string,
+  originalValue: Record<string, unknown>,
+  ejsonKey: string,
+): { ok: true; value: unknown } | { ok: false; message: string } => {
+  if (
+    ejsonKey === "$numberInt" ||
+    ejsonKey === "$numberLong" ||
+    ejsonKey === "$numberDouble" ||
+    ejsonKey === "$numberDecimal"
+  ) {
+    if (rawValue === "" || Number.isNaN(Number(rawValue))) {
+      return { ok: false, message: "EJSON numeric values must be numeric." };
+    }
+  }
+
+  return {
+    ok: true,
+    value: {
+      ...originalValue,
+      [ejsonKey]: rawValue,
+    },
+  };
+};
+
 const getDocumentId = (
   document: Record<string, unknown>,
   index: number,
@@ -3455,6 +3778,12 @@ const isDrillableTableValue = (value: unknown): boolean => {
 
   return isRecord(displayValue) && Object.keys(displayValue).length > 0;
 };
+
+const isInlineEditableTableValue = (path: string, value: unknown): boolean =>
+  path !== "_id" &&
+  !path.startsWith("_id.") &&
+  !isDrillableTableValue(value) &&
+  unwrapEjsonValue(value) !== undefined;
 
 const formatCellValue = (value: unknown): string => {
   const displayValue = unwrapEjsonValue(value);
@@ -3534,6 +3863,18 @@ const unwrapEjsonScalar = (value: unknown): unknown => {
   }
 
   return value;
+};
+
+const getEjsonScalarKey = (value: Record<string, unknown>): string | null => {
+  const keys = Object.keys(value);
+
+  if (keys.length !== 1) {
+    return null;
+  }
+
+  const key = keys[0];
+
+  return key && ejsonDisplayKeys.has(key) ? key : null;
 };
 
 const formatPreviewJson = (value: unknown): string =>
