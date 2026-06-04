@@ -1973,6 +1973,14 @@ input:disabled {
   color: #ffffff;
 }
 
+.inline-cell-editor-wrap {
+  align-items: center;
+  display: flex;
+  min-width: 0;
+  position: relative;
+  width: 100%;
+}
+
 .inline-cell-editor {
   background: #ffffff;
   border: 1px solid #80cbd3;
@@ -1988,6 +1996,21 @@ input:disabled {
 
 .inline-cell-editor:focus {
   outline: none;
+}
+
+.inline-cell-editor-error {
+  background: #b42318;
+  border-radius: 3px;
+  bottom: calc(100% + 4px);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  left: 0;
+  line-height: 1;
+  padding: 4px 6px;
+  position: absolute;
+  white-space: nowrap;
+  z-index: 40;
 }
 
 .document-table-header-cell {

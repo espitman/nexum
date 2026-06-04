@@ -395,12 +395,14 @@ export const DocumentWorkspace = ({
     document,
     path,
     rawValue,
+    schemaField,
     value,
   }: CellEditRequest) => {
     const editedDocument = buildInlineEditedDocument({
       document: document.ejson,
       path,
       rawValue,
+      schemaField,
       value,
     });
 
@@ -531,6 +533,7 @@ export const DocumentWorkspace = ({
                 onDocumentSelect={setSelectedDocument}
                 onRefresh={() => void documentsQuery.refetch()}
                 onTablePathChange={handleTablePathChange}
+                schemaFields={schemaFields}
                 selectedDocumentId={selectedDocument?.id ?? null}
                 tablePath={tablePath}
                 viewMode={documentViewMode}
@@ -1383,6 +1386,7 @@ type ResultsSectionProps = {
   onDocumentSelect: (document: ParsedDocument) => void;
   onRefresh: () => void;
   onTablePathChange: (path: string[]) => void;
+  schemaFields: SchemaFieldSummary[];
   selectedDocumentId: string | null;
   tablePath: string[];
   onViewModeChange: (mode: DocumentViewMode) => void;
@@ -1404,6 +1408,7 @@ const ResultsSection = ({
   onDocumentSelect,
   onRefresh,
   onTablePathChange,
+  schemaFields,
   selectedDocumentId,
   tablePath,
   onViewModeChange,
@@ -1448,6 +1453,7 @@ const ResultsSection = ({
           onDocumentOpen={onDocumentOpen}
           onDocumentSelect={onDocumentSelect}
           onObjectOpen={handleObjectOpen}
+          schemaFields={schemaFields}
           selectedDocumentId={selectedDocumentId}
           tablePath={tablePath}
         />
@@ -1574,6 +1580,7 @@ type DocumentTableProps = {
   onDocumentOpen: (document: ParsedDocument) => void;
   onDocumentSelect: (document: ParsedDocument) => void;
   onObjectOpen: (field: string) => void;
+  schemaFields: SchemaFieldSummary[];
   selectedDocumentId: string | null;
   tablePath: string[];
 };
@@ -1629,6 +1636,7 @@ type CellEditRequest = {
   document: ParsedDocument;
   path: string;
   rawValue: string;
+  schemaField: SchemaFieldSummary | null;
   value: unknown;
 };
 
@@ -1636,6 +1644,7 @@ type EditingDocumentCell = {
   cellId: string;
   document: ParsedDocument;
   path: string;
+  schemaField: SchemaFieldSummary | null;
   value: unknown;
 };
 
@@ -1648,6 +1657,7 @@ const DocumentTable = ({
   onDocumentOpen,
   onDocumentSelect,
   onObjectOpen,
+  schemaFields,
   selectedDocumentId,
   tablePath,
 }: DocumentTableProps) => {
@@ -1917,17 +1927,22 @@ const DocumentTable = ({
                     }}
                     onDoubleClick={(event) => {
                       const path = getCellFilterPath(tablePath, cell.column.id);
+                      const schemaField = getSchemaFieldForPath(
+                        schemaFields,
+                        path,
+                      );
                       const value = cell.getValue();
 
                       if (
                         !isSavingDocument &&
-                        isInlineEditableTableValue(path, value)
+                        isInlineEditableTableValue(path, value, schemaField)
                       ) {
                         event.stopPropagation();
                         setEditingCell({
                           cellId: cell.id,
                           document: row.original,
                           path,
+                          schemaField,
                           value,
                         });
                         setSelectedCell({
@@ -1949,6 +1964,7 @@ const DocumentTable = ({
                   >
                     {editingCell?.cellId === cell.id ? (
                       <InlineCellEditor
+                        schemaField={editingCell.schemaField}
                         value={editingCell.value}
                         onCancel={() => setEditingCell(null)}
                         onCommit={(rawValue) => {
@@ -1956,6 +1972,7 @@ const DocumentTable = ({
                             document: editingCell.document,
                             path: editingCell.path,
                             rawValue,
+                            schemaField: editingCell.schemaField,
                             value: editingCell.value,
                           });
                           setEditingCell(null);
@@ -2007,19 +2024,24 @@ const DocumentTable = ({
 };
 
 type InlineCellEditorProps = {
+  schemaField: SchemaFieldSummary | null;
   value: unknown;
   onCancel: () => void;
   onCommit: (rawValue: string) => void;
 };
 
 const InlineCellEditor = ({
+  schemaField,
   value,
   onCancel,
   onCommit,
 }: InlineCellEditorProps) => {
   const initialValue = useMemo(() => formatCellValue(value), [value]);
+  const schemaKind = getInlineSchemaKind(schemaField);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const selectRef = useRef<HTMLSelectElement | null>(null);
   const hasFinished = useRef(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [draftValue, setDraftValue] = useState(initialValue);
   const finish = useCallback(
     (action: "cancel" | "commit") => {
@@ -2039,37 +2061,91 @@ const InlineCellEditor = ({
         return;
       }
 
+      const validation = validateInlineCellDraft(draftValue, schemaField);
+
+      if (!validation.ok) {
+        hasFinished.current = false;
+        setErrorMessage(validation.message);
+        return;
+      }
+
       onCommit(draftValue);
     },
-    [draftValue, initialValue, onCancel, onCommit],
+    [draftValue, initialValue, onCancel, onCommit, schemaField],
   );
 
   useEffect(() => {
-    inputRef.current?.focus();
-    inputRef.current?.select();
+    const input = inputRef.current;
+
+    if (input) {
+      input.focus();
+      input.select();
+      return;
+    }
+
+    selectRef.current?.focus();
   }, []);
 
   return (
-    <input
-      ref={inputRef}
-      className="inline-cell-editor"
-      value={draftValue}
-      onBlur={() => finish("commit")}
-      onChange={(event) => setDraftValue(event.target.value)}
-      onClick={(event) => event.stopPropagation()}
-      onDoubleClick={(event) => event.stopPropagation()}
-      onKeyDown={(event: ReactKeyboardEvent<HTMLInputElement>) => {
-        if (event.key === "Enter") {
-          event.preventDefault();
-          finish("commit");
-        }
+    <span className="inline-cell-editor-wrap">
+      {schemaKind === "boolean" ? (
+        <select
+          ref={selectRef}
+          className="inline-cell-editor"
+          value={draftValue === "false" ? "false" : "true"}
+          onBlur={() => finish("commit")}
+          onChange={(event) => {
+            setDraftValue(event.target.value);
+            setErrorMessage(null);
+          }}
+          onClick={(event) => event.stopPropagation()}
+          onDoubleClick={(event) => event.stopPropagation()}
+          onKeyDown={(event: ReactKeyboardEvent<HTMLSelectElement>) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              finish("commit");
+            }
 
-        if (event.key === "Escape") {
-          event.preventDefault();
-          finish("cancel");
-        }
-      }}
-    />
+            if (event.key === "Escape") {
+              event.preventDefault();
+              finish("cancel");
+            }
+          }}
+        >
+          <option value="true">true</option>
+          <option value="false">false</option>
+        </select>
+      ) : (
+        <input
+          ref={inputRef}
+          className="inline-cell-editor"
+          inputMode={schemaKind === "number" ? "decimal" : "text"}
+          value={draftValue}
+          onBlur={() => finish("commit")}
+          onChange={(event) => {
+            setDraftValue(event.target.value);
+            setErrorMessage(null);
+          }}
+          onClick={(event) => event.stopPropagation()}
+          onDoubleClick={(event) => event.stopPropagation()}
+          onKeyDown={(event: ReactKeyboardEvent<HTMLInputElement>) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              finish("commit");
+            }
+
+            if (event.key === "Escape") {
+              event.preventDefault();
+              finish("cancel");
+            }
+          }}
+          type={schemaKind === "number" ? "number" : "text"}
+        />
+      )}
+      {errorMessage ? (
+        <span className="inline-cell-editor-error">{errorMessage}</span>
+      ) : null}
+    </span>
   );
 };
 
@@ -3586,11 +3662,13 @@ const buildInlineEditedDocument = ({
   document,
   path,
   rawValue,
+  schemaField,
   value,
 }: {
   document: string;
   path: string;
   rawValue: string;
+  schemaField: SchemaFieldSummary | null;
   value: unknown;
 }): { ok: true; value: string } | { ok: false; message: string } => {
   const parsed = parseStrictJsonDocument(document);
@@ -3603,7 +3681,7 @@ const buildInlineEditedDocument = ({
     return { ok: false, message: "_id cannot be edited inline." };
   }
 
-  const parsedValue = parseInlineCellValue(rawValue, value);
+  const parsedValue = parseInlineCellValue(rawValue, value, schemaField);
 
   if (!parsedValue.ok) {
     return parsedValue;
@@ -3675,20 +3753,27 @@ const setValueAtPath = (
 const parseInlineCellValue = (
   rawValue: string,
   originalValue: unknown,
+  schemaField: SchemaFieldSummary | null,
 ): { ok: true; value: unknown } | { ok: false; message: string } => {
   const trimmedValue = rawValue.trim();
+  const schemaKind = getInlineSchemaKind(schemaField);
 
   if (isRecord(originalValue)) {
     const ejsonKey = getEjsonScalarKey(originalValue);
 
     if (ejsonKey) {
-      return parseInlineEjsonScalar(trimmedValue, originalValue, ejsonKey);
+      return parseInlineEjsonScalar(
+        trimmedValue,
+        originalValue,
+        ejsonKey,
+        schemaField,
+      );
     }
   }
 
   const unwrappedValue = unwrapEjsonValue(originalValue);
 
-  if (typeof unwrappedValue === "boolean") {
+  if (schemaKind === "boolean" || typeof unwrappedValue === "boolean") {
     if (trimmedValue === "true") {
       return { ok: true, value: true };
     }
@@ -3700,7 +3785,7 @@ const parseInlineCellValue = (
     return { ok: false, message: "Boolean values must be true or false." };
   }
 
-  if (typeof unwrappedValue === "number") {
+  if (schemaKind === "number" || typeof unwrappedValue === "number") {
     const numericValue = Number(trimmedValue);
 
     if (Number.isNaN(numericValue)) {
@@ -3725,13 +3810,20 @@ const parseInlineEjsonScalar = (
   rawValue: string,
   originalValue: Record<string, unknown>,
   ejsonKey: string,
+  schemaField: SchemaFieldSummary | null,
 ): { ok: true; value: unknown } | { ok: false; message: string } => {
-  if (
+  const schemaKind = getInlineSchemaKind(schemaField);
+  const isNumericEjson =
     ejsonKey === "$numberInt" ||
     ejsonKey === "$numberLong" ||
     ejsonKey === "$numberDouble" ||
-    ejsonKey === "$numberDecimal"
-  ) {
+    ejsonKey === "$numberDecimal";
+
+  if (schemaKind === "boolean") {
+    return { ok: false, message: "Boolean fields must be true or false." };
+  }
+
+  if (schemaKind === "number" || isNumericEjson) {
     if (rawValue === "" || Number.isNaN(Number(rawValue))) {
       return { ok: false, message: "EJSON numeric values must be numeric." };
     }
@@ -3744,6 +3836,68 @@ const parseInlineEjsonScalar = (
       [ejsonKey]: rawValue,
     },
   };
+};
+
+type InlineSchemaKind = "boolean" | "number" | "string" | null;
+
+const getSchemaFieldForPath = (
+  schemaFields: SchemaFieldSummary[],
+  path: string,
+): SchemaFieldSummary | null =>
+  schemaFields.find((field) => field.name === path) ?? null;
+
+const getInlineSchemaKind = (
+  schemaField: SchemaFieldSummary | null,
+): InlineSchemaKind => {
+  if (!schemaField) {
+    return null;
+  }
+
+  const types = schemaField.type.split("|").map((type) => type.trim());
+
+  if (types.length === 0) {
+    return null;
+  }
+
+  if (types.every((type) => type === "Boolean")) {
+    return "boolean";
+  }
+
+  if (
+    types.every((type) =>
+      ["Decimal128", "Double", "Int32", "Long", "Number"].includes(type),
+    )
+  ) {
+    return "number";
+  }
+
+  if (types.every((type) => type === "String")) {
+    return "string";
+  }
+
+  return null;
+};
+
+const validateInlineCellDraft = (
+  rawValue: string,
+  schemaField: SchemaFieldSummary | null,
+): { ok: true } | { ok: false; message: string } => {
+  const schemaKind = getInlineSchemaKind(schemaField);
+  const trimmedValue = rawValue.trim();
+
+  if (schemaKind === "boolean") {
+    return trimmedValue === "true" || trimmedValue === "false"
+      ? { ok: true }
+      : { ok: false, message: "true / false" };
+  }
+
+  if (schemaKind === "number") {
+    return trimmedValue !== "" && !Number.isNaN(Number(trimmedValue))
+      ? { ok: true }
+      : { ok: false, message: "number only" };
+  }
+
+  return { ok: true };
 };
 
 const getDocumentId = (
@@ -3779,11 +3933,25 @@ const isDrillableTableValue = (value: unknown): boolean => {
   return isRecord(displayValue) && Object.keys(displayValue).length > 0;
 };
 
-const isInlineEditableTableValue = (path: string, value: unknown): boolean =>
-  path !== "_id" &&
-  !path.startsWith("_id.") &&
-  !isDrillableTableValue(value) &&
-  unwrapEjsonValue(value) !== undefined;
+const isInlineEditableTableValue = (
+  path: string,
+  value: unknown,
+  schemaField: SchemaFieldSummary | null,
+): boolean => {
+  if (path === "_id" || path.startsWith("_id.")) {
+    return false;
+  }
+
+  if (
+    schemaField?.type
+      .split("|")
+      .some((type) => ["Array", "Object"].includes(type.trim()))
+  ) {
+    return false;
+  }
+
+  return !isDrillableTableValue(value) && unwrapEjsonValue(value) !== undefined;
+};
 
 const formatCellValue = (value: unknown): string => {
   const displayValue = unwrapEjsonValue(value);
