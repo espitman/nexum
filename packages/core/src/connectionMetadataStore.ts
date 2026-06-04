@@ -1,5 +1,5 @@
 import { AppError, err, ok, type Result } from "@nexum/shared";
-import type { ConnectionMetadata } from "./contracts";
+import type { ConnectionMetadata } from "./contracts.ts";
 
 export interface ConnectionMetadataStore {
   get(connectionId: string): Result<ConnectionMetadata>;

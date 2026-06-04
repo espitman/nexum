@@ -6,6 +6,7 @@ import {
   sanitizeError,
   type Result,
 } from "@nexum/shared";
+import { AuditLogService, type AuditLogAction } from "@nexum/core";
 import {
   BSON,
   MongoClient,
@@ -48,6 +49,7 @@ export type MongoFindDocumentsResult = {
 
 export type MongoUpdateDocumentInput = {
   collection: string;
+  confirmedProductionWrite: boolean;
   database: string;
   editedDocument: string;
   originalDocument: string;
@@ -257,6 +259,7 @@ export class MongoDriverConnectionClient implements MongoConnectionDriver {
 }
 
 export class ConnectionLifecycleService {
+  readonly #auditLog: AuditLogService;
   readonly #driver: MongoConnectionDriver;
   readonly #sessions = new Map<string, ActiveMongoConnection>();
   readonly #statuses = new Map<string, ConnectionRuntimeStatus>();
@@ -265,7 +268,9 @@ export class ConnectionLifecycleService {
   constructor(
     storage: ConnectionStorageService,
     driver: MongoConnectionDriver = new MongoDriverConnectionClient(),
+    auditLog: AuditLogService = new AuditLogService(),
   ) {
+    this.#auditLog = auditLog;
     this.#driver = driver;
     this.#storage = storage;
   }
@@ -447,9 +452,68 @@ export class ConnectionLifecycleService {
     connectionId: string,
     input: MongoUpdateDocumentInput,
   ): Result<Promise<MongoUpdateDocumentResult>, AppError> {
+    const metadata = this.#storage.getMetadata(connectionId);
+
+    if (!metadata.ok) {
+      return metadata;
+    }
+
+    const target = `${input.database}.${input.collection}`;
+    this.#recordDocumentWrite(metadata.value, "document.write.attempted", {
+      target,
+      metadata: {
+        environment: metadata.value.environment,
+        readOnly: metadata.value.readOnly,
+      },
+    });
+
+    if (metadata.value.readOnly) {
+      this.#recordDocumentWrite(metadata.value, "document.write.blocked", {
+        target,
+        metadata: { reason: "read_only" },
+      });
+
+      return err(
+        new AppError("READ_ONLY_VIOLATION", "Connection is read-only", {
+          details: { connectionId },
+        }),
+      );
+    }
+
+    if (
+      metadata.value.environment === "production" &&
+      !input.confirmedProductionWrite
+    ) {
+      this.#recordDocumentWrite(metadata.value, "document.write.blocked", {
+        target,
+        metadata: {
+          environment: metadata.value.environment,
+          reason: "production_confirmation_required",
+        },
+      });
+
+      return err(
+        new AppError(
+          "WRITE_CONFIRMATION_REQUIRED",
+          "Production writes require confirmation",
+          {
+            details: {
+              connectionId,
+              environment: metadata.value.environment,
+            },
+          },
+        ),
+      );
+    }
+
     const session = this.#sessions.get(connectionId);
 
     if (!session) {
+      this.#recordDocumentWrite(metadata.value, "document.write.blocked", {
+        target,
+        metadata: { reason: "connection_not_active" },
+      });
+
       return err(
         new AppError("CONNECTION_NOT_ACTIVE", "Connection is not active", {
           details: { connectionId },
@@ -457,7 +521,36 @@ export class ConnectionLifecycleService {
       );
     }
 
-    return ok(session.updateDocument(input));
+    return ok(
+      session
+        .updateDocument(input)
+        .then((result) => {
+          this.#recordDocumentWrite(
+            metadata.value,
+            "document.write.completed",
+            {
+              target,
+              metadata: {
+                matchedCount: result.matchedCount,
+                modifiedCount: result.modifiedCount,
+              },
+            },
+          );
+
+          return result;
+        })
+        .catch((error: unknown) => {
+          this.#recordDocumentWrite(metadata.value, "document.write.blocked", {
+            target,
+            metadata: {
+              error: sanitizeError(error),
+              reason: "driver_error",
+            },
+          });
+
+          throw error;
+        }),
+    );
   }
 
   async test(
@@ -597,6 +690,23 @@ export class ConnectionLifecycleService {
         details: { connectionId },
       }),
     );
+  }
+
+  #recordDocumentWrite(
+    connection: StoredConnectionMetadata,
+    action: AuditLogAction,
+    input: {
+      metadata?: Record<string, unknown>;
+      target: string;
+    },
+  ): void {
+    this.#auditLog.record({
+      action,
+      connectionId: connection.id,
+      pluginId: connection.pluginId,
+      target: input.target,
+      ...(input.metadata ? { metadata: input.metadata } : {}),
+    });
   }
 
   #setStatus(connectionId: string, status: ConnectionRuntimeStatus): void {

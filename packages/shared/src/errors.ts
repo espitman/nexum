@@ -11,7 +11,8 @@ export type AppErrorCode =
   | "DOCUMENT_ID_MISSING"
   | "SECRET_NOT_FOUND"
   | "UNAUTHORIZED"
-  | "READ_ONLY_VIOLATION";
+  | "READ_ONLY_VIOLATION"
+  | "WRITE_CONFIRMATION_REQUIRED";
 
 export type SerializedAppError = {
   code: AppErrorCode;

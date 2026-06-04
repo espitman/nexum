@@ -77,7 +77,10 @@ export type MongoIndexDto = {
 export type AuditLogDto = {
   id: string;
   action: string;
+  actorId?: string;
   connectionId?: string;
   pluginId?: string;
+  target?: string;
+  metadata?: Record<string, unknown>;
   createdAt: string;
 };

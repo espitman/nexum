@@ -62,6 +62,14 @@ describe("registerIpcHandlers connection lifecycle", () => {
     const findPayloads: unknown[] = [];
     const profiles = new Map<string, ConnectionSummary>();
     const services = {
+      audit: {
+        list() {
+          return [];
+        },
+        listByConnection() {
+          return [];
+        },
+      },
       connections: {
         async connect(): Promise<Result<ConnectionSummary, AppError>> {
           throw new Error("unused");
@@ -277,6 +285,16 @@ describe("registerIpcHandlers connection lifecycle", () => {
         matchedCount: 1,
         modifiedCount: 1,
       },
+    });
+    expect(findPayloads.at(-1)).toEqual({
+      collection: "users",
+      confirmedProductionWrite: false,
+      connectionId: "conn_test",
+      database: "app",
+      editedDocument:
+        '{"_id":{"$oid":"6649f8c3e7b1d2a4f8c9a1b2"},"email":"updated@example.com"}',
+      originalDocument:
+        '{"_id":{"$oid":"6649f8c3e7b1d2a4f8c9a1b2"},"email":"old@example.com"}',
     });
     await expect(
       handlers.get(ipcChannels.mongodbFindDocuments)?.(undefined, {

@@ -250,10 +250,10 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
   - [x] Block `_id` changes
   - [x] Save with `replaceOne`
   - [x] Return matched and modified counts
-- [ ] Add safety protections
-  - [ ] Block writes on read-only connections
-  - [ ] Require confirmation for production writes
-  - [ ] Audit write attempts
+- [x] Add safety protections
+  - [x] Block writes on read-only connections
+  - [x] Require confirmation for production writes
+  - [x] Audit write attempts
 - [ ] Build editor UI
   - [ ] Open single-document editor
   - [ ] Edit EJSON in Monaco

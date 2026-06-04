@@ -1,5 +1,5 @@
 import { AppError, err, ok, type Result } from "@nexum/shared";
-import type { NexumPlugin } from "./contracts";
+import type { NexumPlugin } from "./contracts.ts";
 
 export class PluginRegistry {
   readonly #plugins = new Map<string, NexumPlugin>();

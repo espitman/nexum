@@ -1,5 +1,5 @@
 import { AppError, err, ok, type Result } from "@nexum/shared";
-import type { ConnectionProfile } from "./contracts";
+import type { ConnectionProfile } from "./contracts.ts";
 
 export class ConnectionRegistry {
   readonly #profiles = new Map<string, ConnectionProfile>();

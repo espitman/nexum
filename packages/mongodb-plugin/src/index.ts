@@ -1,8 +1,8 @@
 import type { NexumPlugin, PluginCapabilities } from "@nexum/core";
 import { err } from "@nexum/shared";
-import { validateMongoConnectionInput } from "./connectionSchema";
+import { validateMongoConnectionInput } from "./connectionSchema.ts";
 
-export * from "./connectionSchema";
+export * from "./connectionSchema.ts";
 
 export const mongodbPluginId = "mongodb";
 

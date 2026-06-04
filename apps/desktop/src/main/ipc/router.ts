@@ -1,4 +1,5 @@
 import { ipcMain, type IpcMain } from "electron";
+import { AuditLogService } from "@nexum/core";
 import { AppError, sanitizeError } from "@nexum/shared";
 import type { z } from "zod";
 import {
@@ -22,7 +23,6 @@ import {
   mongodbUpdateDocumentPayloadSchema,
   voidPayloadSchema,
 } from "../../ipc/validation";
-import { mockAuditLogs } from "./mockData";
 
 type IpcHandler<TPayload, TResult> = (
   payload: TPayload,
@@ -81,19 +81,24 @@ const registerValidatedHandler = <TSchema extends z.ZodType, TResult>(
 };
 
 export type IpcServices = {
+  audit: AuditLogService;
   connections: ConnectionLifecycleService;
   explorer: MongoExplorerService;
 };
 
 const createDefaultIpcServices = (): IpcServices => {
+  const audit = new AuditLogService();
   const connections = new ConnectionLifecycleService(
     new ConnectionStorageService(
       new ElectronConnectionMetadataStore(),
       new KeychainConnectionSecretStore(),
     ),
+    undefined,
+    audit,
   );
 
   return {
+    audit,
     connections,
     explorer: new MongoExplorerService(connections),
   };
@@ -259,10 +264,8 @@ export const registerIpcHandlers = (
     auditListPayloadSchema,
     (payload) =>
       payload?.connectionId
-        ? mockAuditLogs.filter(
-            (entry) => entry.connectionId === payload.connectionId,
-          )
-        : mockAuditLogs,
+        ? services.audit.listByConnection(payload.connectionId)
+        : services.audit.list(),
     ipc,
   );
 };

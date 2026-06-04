@@ -1,4 +1,5 @@
 import { AppError, err, ok, type Result } from "@nexum/shared";
+import { AuditLogService } from "@nexum/core";
 import { describe, expect, it } from "vitest";
 import {
   ConnectionLifecycleService,
@@ -9,7 +10,10 @@ import {
 import type { ConnectionMetadataRepository } from "./connectionMetadataStore";
 import { ConnectionStorageService } from "./connectionStorage";
 import type { ConnectionSecretRepository } from "./keychainSecretStore";
-import type { StoredConnectionMetadata } from "./types";
+import type {
+  CreateStoredConnectionInput,
+  StoredConnectionMetadata,
+} from "./types";
 
 const mongoUri = "mongodb://nexum-user:super-secret@localhost:27017/admin";
 
@@ -178,18 +182,23 @@ const createLifecycle = () => {
   const secretStore = new InMemorySecretStore();
   const driver = new FakeMongoDriver();
   const storage = new ConnectionStorageService(metadataStore, secretStore);
-  const lifecycle = new ConnectionLifecycleService(storage, driver);
+  const auditLog = new AuditLogService();
+  const lifecycle = new ConnectionLifecycleService(storage, driver, auditLog);
 
-  return { driver, lifecycle, metadataStore, secretStore };
+  return { auditLog, driver, lifecycle, metadataStore, secretStore };
 };
 
-const createStoredConnection = (lifecycle: ConnectionLifecycleService) =>
+const createStoredConnection = (
+  lifecycle: ConnectionLifecycleService,
+  overrides: Partial<CreateStoredConnectionInput> = {},
+) =>
   lifecycle.create({
     environment: "local",
     id: "conn_local",
     name: "Local MongoDB",
     readOnly: false,
     uri: mongoUri,
+    ...overrides,
   });
 
 describe("ConnectionLifecycleService", () => {
@@ -398,6 +407,7 @@ describe("ConnectionLifecycleService", () => {
 
     const result = lifecycle.updateDocument("conn_local", {
       collection: "users",
+      confirmedProductionWrite: false,
       database: "app",
       editedDocument:
         '{"_id":{"$oid":"6649f8c3e7b1d2a4f8c9a1b2"},"email":"updated@example.com"}',
@@ -417,6 +427,7 @@ describe("ConnectionLifecycleService", () => {
     expect(driver.activeConnections[0]?.updateInputs).toEqual([
       {
         collection: "users",
+        confirmedProductionWrite: false,
         database: "app",
         editedDocument:
           '{"_id":{"$oid":"6649f8c3e7b1d2a4f8c9a1b2"},"email":"updated@example.com"}',
@@ -429,6 +440,7 @@ describe("ConnectionLifecycleService", () => {
   it("parses EJSON update documents and rejects _id changes", () => {
     const parsed = parseMongoUpdateDocuments({
       collection: "users",
+      confirmedProductionWrite: false,
       database: "app",
       editedDocument:
         '{"_id":{"$oid":"6649f8c3e7b1d2a4f8c9a1b2"},"loginCount":{"$numberInt":"2"}}',
@@ -440,6 +452,7 @@ describe("ConnectionLifecycleService", () => {
     expect(() =>
       parseMongoUpdateDocuments({
         collection: "users",
+        confirmedProductionWrite: false,
         database: "app",
         editedDocument:
           '{"_id":{"$oid":"6649f8c3e7b1d2a4f8c9a1b3"},"loginCount":{"$numberInt":"2"}}',
@@ -487,6 +500,7 @@ describe("ConnectionLifecycleService", () => {
     expect(
       lifecycle.updateDocument("conn_local", {
         collection: "users",
+        confirmedProductionWrite: false,
         database: "app",
         editedDocument: "{}",
         originalDocument: "{}",
@@ -495,6 +509,100 @@ describe("ConnectionLifecycleService", () => {
       ok: false,
       error: { code: "CONNECTION_NOT_ACTIVE" },
     });
+  });
+
+  it("blocks document writes on read-only connections and audits the attempt", async () => {
+    const { auditLog, driver, lifecycle } = createLifecycle();
+    await createStoredConnection(lifecycle, { readOnly: true });
+    await lifecycle.connect("conn_local");
+
+    const result = lifecycle.updateDocument("conn_local", {
+      collection: "users",
+      confirmedProductionWrite: false,
+      database: "app",
+      editedDocument:
+        '{"_id":{"$oid":"6649f8c3e7b1d2a4f8c9a1b2"},"email":"updated@example.com"}',
+      originalDocument:
+        '{"_id":{"$oid":"6649f8c3e7b1d2a4f8c9a1b2"},"email":"old@example.com"}',
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: "READ_ONLY_VIOLATION" },
+    });
+    expect(driver.activeConnections[0]?.updateInputs).toEqual([]);
+    expect(auditLog.list()).toMatchObject([
+      {
+        action: "document.write.attempted",
+        connectionId: "conn_local",
+        metadata: { readOnly: true },
+        target: "app.users",
+      },
+      {
+        action: "document.write.blocked",
+        connectionId: "conn_local",
+        metadata: { reason: "read_only" },
+        target: "app.users",
+      },
+    ]);
+  });
+
+  it("requires explicit confirmation before production document writes", async () => {
+    const { auditLog, driver, lifecycle } = createLifecycle();
+    await createStoredConnection(lifecycle, { environment: "production" });
+    await lifecycle.connect("conn_local");
+
+    const unconfirmed = lifecycle.updateDocument("conn_local", {
+      collection: "users",
+      confirmedProductionWrite: false,
+      database: "app",
+      editedDocument:
+        '{"_id":{"$oid":"6649f8c3e7b1d2a4f8c9a1b2"},"email":"updated@example.com"}',
+      originalDocument:
+        '{"_id":{"$oid":"6649f8c3e7b1d2a4f8c9a1b2"},"email":"old@example.com"}',
+    });
+
+    expect(unconfirmed).toMatchObject({
+      ok: false,
+      error: { code: "WRITE_CONFIRMATION_REQUIRED" },
+    });
+
+    const confirmed = lifecycle.updateDocument("conn_local", {
+      collection: "users",
+      confirmedProductionWrite: true,
+      database: "app",
+      editedDocument:
+        '{"_id":{"$oid":"6649f8c3e7b1d2a4f8c9a1b2"},"email":"updated@example.com"}',
+      originalDocument:
+        '{"_id":{"$oid":"6649f8c3e7b1d2a4f8c9a1b2"},"email":"old@example.com"}',
+    });
+
+    expect(confirmed).toMatchObject({ ok: true });
+    await expect(
+      confirmed.ok
+        ? confirmed.value
+        : Promise.resolve({ matchedCount: 0, modifiedCount: 0 }),
+    ).resolves.toEqual({
+      matchedCount: 1,
+      modifiedCount: 1,
+    });
+    expect(driver.activeConnections[0]?.updateInputs).toEqual([
+      {
+        collection: "users",
+        confirmedProductionWrite: true,
+        database: "app",
+        editedDocument:
+          '{"_id":{"$oid":"6649f8c3e7b1d2a4f8c9a1b2"},"email":"updated@example.com"}',
+        originalDocument:
+          '{"_id":{"$oid":"6649f8c3e7b1d2a4f8c9a1b2"},"email":"old@example.com"}',
+      },
+    ]);
+    expect(auditLog.list().map((entry) => entry.action)).toEqual([
+      "document.write.attempted",
+      "document.write.blocked",
+      "document.write.attempted",
+      "document.write.completed",
+    ]);
   });
 
   it("closes active sessions before update and delete", async () => {

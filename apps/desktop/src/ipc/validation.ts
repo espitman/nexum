@@ -83,6 +83,7 @@ export const mongodbCollectionPayloadSchema = z.object({
 
 export const mongodbUpdateDocumentPayloadSchema = z.object({
   collection: z.string().min(1),
+  confirmedProductionWrite: z.boolean().default(false),
   connectionId: z.string().min(1),
   database: z.string().min(1),
   editedDocument: z.string().min(1),
