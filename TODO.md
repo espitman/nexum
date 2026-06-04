@@ -244,12 +244,12 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
 
 ## Phase 9 — Safe Document Editor
 
-- [ ] Implement update API
-  - [ ] Parse original document with EJSON
-  - [ ] Parse edited document with EJSON
-  - [ ] Block `_id` changes
-  - [ ] Save with `replaceOne`
-  - [ ] Return matched and modified counts
+- [x] Implement update API
+  - [x] Parse original document with EJSON
+  - [x] Parse edited document with EJSON
+  - [x] Block `_id` changes
+  - [x] Save with `replaceOne`
+  - [x] Return matched and modified counts
 - [ ] Add safety protections
   - [ ] Block writes on read-only connections
   - [ ] Require confirmation for production writes

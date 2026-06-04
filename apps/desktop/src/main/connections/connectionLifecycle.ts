@@ -46,6 +46,18 @@ export type MongoFindDocumentsResult = {
   hasMore: boolean;
 };
 
+export type MongoUpdateDocumentInput = {
+  collection: string;
+  database: string;
+  editedDocument: string;
+  originalDocument: string;
+};
+
+export type MongoUpdateDocumentResult = {
+  matchedCount: number;
+  modifiedCount: number;
+};
+
 export type MongoListIndexesInput = {
   collection: string;
   database: string;
@@ -66,6 +78,9 @@ export interface ActiveMongoConnection {
   listDatabases(): Promise<string[]>;
   listIndexes(input: MongoListIndexesInput): Promise<MongoIndexMetadata[]>;
   ping(): Promise<void>;
+  updateDocument(
+    input: MongoUpdateDocumentInput,
+  ): Promise<MongoUpdateDocumentResult>;
 }
 
 export interface MongoConnectionDriver {
@@ -79,6 +94,65 @@ const mongoClientOptions = {
 };
 
 const mongoFindMaxTimeMs = 30_000;
+
+export const parseMongoUpdateDocuments = ({
+  editedDocument,
+  originalDocument,
+}: MongoUpdateDocumentInput): {
+  editedDocument: Document;
+  originalDocument: Document;
+} => {
+  const original = parseEjsonDocument(originalDocument, "original document");
+  const edited = parseEjsonDocument(editedDocument, "edited document");
+
+  if (!("_id" in original)) {
+    throw new AppError(
+      "DOCUMENT_ID_MISSING",
+      "Original document is missing _id",
+    );
+  }
+
+  if (!("_id" in edited)) {
+    throw new AppError("DOCUMENT_ID_MISSING", "Edited document is missing _id");
+  }
+
+  if (!areBsonValuesEqual(original._id, edited._id)) {
+    throw new AppError("DOCUMENT_ID_CHANGED", "_id changes are not allowed");
+  }
+
+  return {
+    editedDocument: edited,
+    originalDocument: original,
+  };
+};
+
+const parseEjsonDocument = (value: string, label: string): Document => {
+  try {
+    const parsed = BSON.EJSON.parse(value, { relaxed: false }) as unknown;
+
+    if (!isMongoDocument(parsed)) {
+      throw new Error(`${label} must be an object`);
+    }
+
+    return parsed;
+  } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
+
+    throw new AppError(
+      "DOCUMENT_EJSON_INVALID",
+      `Unable to parse ${label} as EJSON`,
+    );
+  }
+};
+
+const isMongoDocument = (value: unknown): value is Document =>
+  Boolean(value) && typeof value === "object" && !Array.isArray(value);
+
+const areBsonValuesEqual = (left: unknown, right: unknown): boolean =>
+  BSON.EJSON.stringify(left, { relaxed: false }) ===
+  BSON.EJSON.stringify(right, { relaxed: false });
 
 export class MongoDriverConnectionClient implements MongoConnectionDriver {
   async connect(uri: string): Promise<ActiveMongoConnection> {
@@ -153,6 +227,19 @@ export class MongoDriverConnectionClient implements MongoConnectionDriver {
       },
       async ping() {
         await pingClient(client);
+      },
+      async updateDocument(input) {
+        const { editedDocument, originalDocument } =
+          parseMongoUpdateDocuments(input);
+        const result = await client
+          .db(input.database)
+          .collection(input.collection)
+          .replaceOne({ _id: originalDocument._id }, editedDocument);
+
+        return {
+          matchedCount: result.matchedCount,
+          modifiedCount: result.modifiedCount,
+        };
       },
     };
   }
@@ -354,6 +441,23 @@ export class ConnectionLifecycleService {
     }
 
     return ok(session.listIndexes(input));
+  }
+
+  updateDocument(
+    connectionId: string,
+    input: MongoUpdateDocumentInput,
+  ): Result<Promise<MongoUpdateDocumentResult>, AppError> {
+    const session = this.#sessions.get(connectionId);
+
+    if (!session) {
+      return err(
+        new AppError("CONNECTION_NOT_ACTIVE", "Connection is not active", {
+          details: { connectionId },
+        }),
+      );
+    }
+
+    return ok(session.updateDocument(input));
   }
 
   async test(

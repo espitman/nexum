@@ -5,6 +5,7 @@ import {
   ipcChannels,
   type ConnectionSummary,
   type DocumentQueryResult,
+  type DocumentUpdateResult,
   type ExplorerNodeDto,
 } from "../../ipc/contracts";
 import type { StoredConnectionTestResult } from "../connections";
@@ -122,6 +123,19 @@ describe("registerIpcHandlers connection lifecycle", () => {
                 name: "_id_",
               },
             ]),
+          );
+        },
+        updateDocument(
+          _connectionId: string,
+          payload: unknown,
+        ): Result<Promise<DocumentUpdateResult>, AppError> {
+          findPayloads.push(payload);
+
+          return ok(
+            Promise.resolve({
+              matchedCount: 1,
+              modifiedCount: 1,
+            }),
           );
         },
         async test(): Promise<Result<StoredConnectionTestResult, AppError>> {
@@ -246,6 +260,23 @@ describe("registerIpcHandlers connection lifecycle", () => {
     ).resolves.toMatchObject({
       ok: true,
       value: [{ key: '{"_id":{"$numberInt":"1"}}', name: "_id_" }],
+    });
+    await expect(
+      handlers.get(ipcChannels.mongodbUpdateDocument)?.(undefined, {
+        collection: "users",
+        connectionId: "conn_test",
+        database: "app",
+        editedDocument:
+          '{"_id":{"$oid":"6649f8c3e7b1d2a4f8c9a1b2"},"email":"updated@example.com"}',
+        originalDocument:
+          '{"_id":{"$oid":"6649f8c3e7b1d2a4f8c9a1b2"},"email":"old@example.com"}',
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: {
+        matchedCount: 1,
+        modifiedCount: 1,
+      },
     });
     await expect(
       handlers.get(ipcChannels.mongodbFindDocuments)?.(undefined, {

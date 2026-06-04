@@ -16,6 +16,7 @@ export const ipcChannels = {
   healthPing: "nexum:health:ping",
   mongodbFindDocuments: "nexum:mongodb:find-documents",
   mongodbListIndexes: "nexum:mongodb:list-indexes",
+  mongodbUpdateDocument: "nexum:mongodb:update-document",
 } as const;
 
 export type IpcChannel = (typeof ipcChannels)[keyof typeof ipcChannels];
@@ -60,6 +61,11 @@ export type DocumentQueryResult = {
   documents: string[];
   executionTimeMs: number;
   hasMore: boolean;
+};
+
+export type DocumentUpdateResult = {
+  matchedCount: number;
+  modifiedCount: number;
 };
 
 export type MongoIndexDto = {

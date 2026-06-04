@@ -19,6 +19,7 @@ import {
   explorerChildrenPayloadSchema,
   mongodbCollectionPayloadSchema,
   mongodbFindDocumentsPayloadSchema,
+  mongodbUpdateDocumentPayloadSchema,
   voidPayloadSchema,
 } from "../../ipc/validation";
 import { mockAuditLogs } from "./mockData";
@@ -239,6 +240,16 @@ export const registerIpcHandlers = (
     async (payload) =>
       unwrapResult(
         services.connections.listIndexes(payload.connectionId, payload),
+      ),
+    ipc,
+  );
+
+  registerValidatedHandler(
+    ipcChannels.mongodbUpdateDocument,
+    mongodbUpdateDocumentPayloadSchema,
+    async (payload) =>
+      unwrapResult(
+        services.connections.updateDocument(payload.connectionId, payload),
       ),
     ipc,
   );

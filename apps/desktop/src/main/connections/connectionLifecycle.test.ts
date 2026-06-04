@@ -2,6 +2,7 @@ import { AppError, err, ok, type Result } from "@nexum/shared";
 import { describe, expect, it } from "vitest";
 import {
   ConnectionLifecycleService,
+  parseMongoUpdateDocuments,
   type ActiveMongoConnection,
   type MongoConnectionDriver,
 } from "./connectionLifecycle";
@@ -93,6 +94,7 @@ class FakeActiveConnection implements ActiveMongoConnection {
   findInputs: unknown[] = [];
   indexInputs: unknown[] = [];
   pingCount = 0;
+  updateInputs: unknown[] = [];
 
   async close(): Promise<void> {
     this.closed = true;
@@ -131,6 +133,17 @@ class FakeActiveConnection implements ActiveMongoConnection {
         name: "email_1",
       },
     ];
+  }
+
+  async updateDocument(
+    input: Parameters<ActiveMongoConnection["updateDocument"]>[0],
+  ) {
+    this.updateInputs.push(input);
+
+    return {
+      matchedCount: 1,
+      modifiedCount: 1,
+    };
   }
 
   async ping(): Promise<void> {
@@ -378,6 +391,64 @@ describe("ConnectionLifecycleService", () => {
     ]);
   });
 
+  it("updates documents through active sessions", async () => {
+    const { driver, lifecycle } = createLifecycle();
+    await createStoredConnection(lifecycle);
+    await lifecycle.connect("conn_local");
+
+    const result = lifecycle.updateDocument("conn_local", {
+      collection: "users",
+      database: "app",
+      editedDocument:
+        '{"_id":{"$oid":"6649f8c3e7b1d2a4f8c9a1b2"},"email":"updated@example.com"}',
+      originalDocument:
+        '{"_id":{"$oid":"6649f8c3e7b1d2a4f8c9a1b2"},"email":"old@example.com"}',
+    });
+
+    expect(result).toMatchObject({ ok: true });
+    await expect(
+      result.ok
+        ? result.value
+        : Promise.resolve({ matchedCount: 0, modifiedCount: 0 }),
+    ).resolves.toEqual({
+      matchedCount: 1,
+      modifiedCount: 1,
+    });
+    expect(driver.activeConnections[0]?.updateInputs).toEqual([
+      {
+        collection: "users",
+        database: "app",
+        editedDocument:
+          '{"_id":{"$oid":"6649f8c3e7b1d2a4f8c9a1b2"},"email":"updated@example.com"}',
+        originalDocument:
+          '{"_id":{"$oid":"6649f8c3e7b1d2a4f8c9a1b2"},"email":"old@example.com"}',
+      },
+    ]);
+  });
+
+  it("parses EJSON update documents and rejects _id changes", () => {
+    const parsed = parseMongoUpdateDocuments({
+      collection: "users",
+      database: "app",
+      editedDocument:
+        '{"_id":{"$oid":"6649f8c3e7b1d2a4f8c9a1b2"},"loginCount":{"$numberInt":"2"}}',
+      originalDocument:
+        '{"_id":{"$oid":"6649f8c3e7b1d2a4f8c9a1b2"},"loginCount":{"$numberInt":"1"}}',
+    });
+
+    expect(parsed.editedDocument.loginCount).toMatchObject({ value: 2 });
+    expect(() =>
+      parseMongoUpdateDocuments({
+        collection: "users",
+        database: "app",
+        editedDocument:
+          '{"_id":{"$oid":"6649f8c3e7b1d2a4f8c9a1b3"},"loginCount":{"$numberInt":"2"}}',
+        originalDocument:
+          '{"_id":{"$oid":"6649f8c3e7b1d2a4f8c9a1b2"},"loginCount":{"$numberInt":"1"}}',
+      }),
+    ).toThrow("_id changes are not allowed");
+  });
+
   it("rejects explorer reads without an active session", async () => {
     const { lifecycle } = createLifecycle();
     await createStoredConnection(lifecycle);
@@ -408,6 +479,17 @@ describe("ConnectionLifecycleService", () => {
       lifecycle.listIndexes("conn_local", {
         collection: "users",
         database: "app",
+      }),
+    ).toMatchObject({
+      ok: false,
+      error: { code: "CONNECTION_NOT_ACTIVE" },
+    });
+    expect(
+      lifecycle.updateDocument("conn_local", {
+        collection: "users",
+        database: "app",
+        editedDocument: "{}",
+        originalDocument: "{}",
       }),
     ).toMatchObject({
       ok: false,
