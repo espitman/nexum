@@ -237,10 +237,10 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
   - [x] Add value input
   - [x] Add raw JSON preview
   - [x] Add run query action
-- [ ] Verify query builder
-  - [ ] Generate valid MongoDB filters
-  - [ ] Run generated query
-  - [ ] Show result preview
+- [x] Verify query builder
+  - [x] Generate valid MongoDB filters
+  - [x] Run generated query
+  - [x] Show result preview
 
 ## Phase 9 — Safe Document Editor
 
