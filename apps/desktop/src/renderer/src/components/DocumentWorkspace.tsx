@@ -7,6 +7,7 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import "../monacoEnvironment";
 import Editor, { loader } from "@monaco-editor/react";
 import * as monaco from "monaco-editor";
 import {

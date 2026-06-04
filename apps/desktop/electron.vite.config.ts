@@ -18,6 +18,9 @@ export default defineConfig({
     plugins: [externalizeDepsPlugin({ exclude: ["@nexum/shared"] })],
   },
   renderer: {
+    optimizeDeps: {
+      exclude: ["@monaco-editor/react", "monaco-editor"],
+    },
     root: "src/renderer",
     plugins: [react()],
   },

@@ -2,6 +2,7 @@ import { AppError, err, ok, type Result } from "@nexum/shared";
 import { AuditLogService } from "@nexum/core";
 import { describe, expect, it } from "vitest";
 import {
+  buildMongoUpdateOperation,
   ConnectionLifecycleService,
   parseMongoUpdateDocuments,
   type ActiveMongoConnection,
@@ -460,6 +461,42 @@ describe("ConnectionLifecycleService", () => {
           '{"_id":{"$oid":"6649f8c3e7b1d2a4f8c9a1b2"},"loginCount":{"$numberInt":"1"}}',
       }),
     ).toThrow("_id changes are not allowed");
+  });
+
+  it("builds field-level document updates so projected saves preserve hidden fields", () => {
+    const parsed = parseMongoUpdateDocuments({
+      collection: "rooms",
+      confirmedProductionWrite: false,
+      database: "app",
+      editedDocument:
+        '{"_id":{"$oid":"6649f8c3e7b1d2a4f8c9a1b2"},"title":{"en":"New"},"visible":false}',
+      originalDocument:
+        '{"_id":{"$oid":"6649f8c3e7b1d2a4f8c9a1b2"},"title":{"en":"Old"},"visible":true}',
+    });
+
+    expect(buildMongoUpdateOperation(parsed)).toEqual({
+      $set: {
+        "title.en": "New",
+        visible: false,
+      },
+    });
+  });
+
+  it("only unsets fields that were present in the loaded document", () => {
+    const parsed = parseMongoUpdateDocuments({
+      collection: "rooms",
+      confirmedProductionWrite: false,
+      database: "app",
+      editedDocument: '{"_id":{"$oid":"6649f8c3e7b1d2a4f8c9a1b2"}}',
+      originalDocument:
+        '{"_id":{"$oid":"6649f8c3e7b1d2a4f8c9a1b2"},"projectedOnly":true}',
+    });
+
+    expect(buildMongoUpdateOperation(parsed)).toEqual({
+      $unset: {
+        projectedOnly: "",
+      },
+    });
   });
 
   it("rejects explorer reads without an active session", async () => {

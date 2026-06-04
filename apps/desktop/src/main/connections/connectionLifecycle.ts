@@ -128,6 +128,34 @@ export const parseMongoUpdateDocuments = ({
   };
 };
 
+type MongoUpdateOperation = {
+  $set?: Record<string, unknown>;
+  $unset?: Record<string, "">;
+};
+
+export const buildMongoUpdateOperation = ({
+  editedDocument,
+  originalDocument,
+}: {
+  editedDocument: Document;
+  originalDocument: Document;
+}): MongoUpdateOperation | null => {
+  const operation: MongoUpdateOperation = {};
+
+  collectDocumentChanges({
+    editedValue: withoutId(editedDocument),
+    originalValue: withoutId(originalDocument),
+    operation,
+    path: "",
+  });
+
+  if (!operation.$set && !operation.$unset) {
+    return null;
+  }
+
+  return operation;
+};
+
 const parseEjsonDocument = (value: string, label: string): Document => {
   try {
     const parsed = BSON.EJSON.parse(value, { relaxed: false }) as unknown;
@@ -155,6 +183,83 @@ const isMongoDocument = (value: unknown): value is Document =>
 const areBsonValuesEqual = (left: unknown, right: unknown): boolean =>
   BSON.EJSON.stringify(left, { relaxed: false }) ===
   BSON.EJSON.stringify(right, { relaxed: false });
+
+const withoutId = (document: Document): Document => {
+  const rest = { ...document };
+  delete rest._id;
+
+  return rest;
+};
+
+const collectDocumentChanges = ({
+  editedValue,
+  originalValue,
+  operation,
+  path,
+}: {
+  editedValue: unknown;
+  originalValue: unknown;
+  operation: MongoUpdateOperation;
+  path: string;
+}): void => {
+  if (!isPlainObject(originalValue) || !isPlainObject(editedValue)) {
+    if (path && !areBsonValuesEqual(originalValue, editedValue)) {
+      operation.$set = {
+        ...operation.$set,
+        [path]: editedValue,
+      };
+    }
+
+    return;
+  }
+
+  const keys = new Set([
+    ...Object.keys(originalValue),
+    ...Object.keys(editedValue),
+  ]);
+
+  for (const key of keys) {
+    const nextPath = path ? `${path}.${key}` : key;
+    const hasOriginal = Object.prototype.hasOwnProperty.call(
+      originalValue,
+      key,
+    );
+    const hasEdited = Object.prototype.hasOwnProperty.call(editedValue, key);
+
+    if (!hasEdited && hasOriginal) {
+      operation.$unset = {
+        ...operation.$unset,
+        [nextPath]: "",
+      };
+      continue;
+    }
+
+    if (hasEdited && !hasOriginal) {
+      operation.$set = {
+        ...operation.$set,
+        [nextPath]: editedValue[key],
+      };
+      continue;
+    }
+
+    collectDocumentChanges({
+      editedValue: editedValue[key],
+      originalValue: originalValue[key],
+      operation,
+      path: nextPath,
+    });
+  }
+};
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  const prototype = Object.getPrototypeOf(value);
+
+  return prototype === Object.prototype || prototype === null;
+};
 
 export class MongoDriverConnectionClient implements MongoConnectionDriver {
   async connect(uri: string): Promise<ActiveMongoConnection> {
@@ -233,10 +338,22 @@ export class MongoDriverConnectionClient implements MongoConnectionDriver {
       async updateDocument(input) {
         const { editedDocument, originalDocument } =
           parseMongoUpdateDocuments(input);
+        const updateOperation = buildMongoUpdateOperation({
+          editedDocument,
+          originalDocument,
+        });
+
+        if (!updateOperation) {
+          return {
+            matchedCount: 1,
+            modifiedCount: 0,
+          };
+        }
+
         const result = await client
           .db(input.database)
           .collection(input.collection)
-          .replaceOne({ _id: originalDocument._id }, editedDocument);
+          .updateOne({ _id: originalDocument._id }, updateOperation);
 
         return {
           matchedCount: result.matchedCount,
