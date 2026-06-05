@@ -312,9 +312,9 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
   - [x] Add user-readable messages
   - [x] Hide unsafe details
   - [x] Add retry actions where useful
-- [ ] Final MVP verification
+- [x] Final MVP verification
   - [x] Run lint
   - [x] Run typecheck
   - [x] Run tests
   - [x] Run desktop app
-  - [ ] Verify primary MongoDB workflow end to end
+  - [x] Verify primary MongoDB workflow end to end
