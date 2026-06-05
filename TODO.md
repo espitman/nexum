@@ -321,12 +321,12 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
 
 ## Phase 12 — Sidebar Workspaces
 
-- [ ] Build Queries workspace
-  - [ ] Show saved find queries and aggregation pipelines
-  - [ ] Add create, rename, duplicate, delete actions
-  - [ ] Store query name, target connection, database, collection, filter, projection, sort, limit, and pipeline
-  - [ ] Open a saved query into the active collection workspace
-  - [ ] Add last-run status and execution metadata
+- [x] Build Queries workspace
+  - [x] Show saved find queries and aggregation pipelines
+  - [x] Add create, rename, duplicate, delete actions
+  - [x] Store query name, target connection, database, collection, filter, projection, sort, limit, and pipeline
+  - [x] Open a saved query into the active collection workspace
+  - [x] Add last-run status and execution metadata
 - [ ] Build Bookmarks workspace
   - [ ] Save bookmarked connections, databases, collections, documents, and field paths
   - [ ] Group bookmarks by connection and database

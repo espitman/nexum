@@ -65,6 +65,7 @@ import {
 import type {
   ConnectionProfile,
   IndexSummary,
+  SavedWorkspaceQuery,
   SchemaFieldSummary,
 } from "../types";
 import { ConnectionManager } from "./ConnectionManager";
@@ -87,6 +88,7 @@ type DocumentWorkspaceProps = {
   onConnectionError: (title: string, message: string) => void;
   onConnectionsChanged: () => Promise<void>;
   onSelectedConnectionChange: (connectionId: string | null) => void;
+  onSelectedCollectionChange: (collectionName: string | null) => void;
   onCollectionClose: () => void;
   onCollectionOpen: () => void;
   onSectionChange: (section: NavItemLabel) => void;
@@ -127,6 +129,8 @@ const defaultQueryState: DocumentQueryState = {
   sort: {},
 };
 
+const savedQueriesStorageKey = "nexum.savedQueries.v1";
+const queryHistoryStorageKey = "nexum.queryHistory.v1";
 const documentIdColumn = "{Document id}";
 const documentTableHorizontalGutter = 96;
 const maxAutoColumnWidth = 1400;
@@ -149,6 +153,7 @@ export const DocumentWorkspace = ({
   onConnectionError,
   onConnectionsChanged,
   onSelectedConnectionChange,
+  onSelectedCollectionChange,
   onCollectionClose,
   onCollectionOpen,
   onSectionChange,
@@ -171,6 +176,12 @@ export const DocumentWorkspace = ({
     useState<DocumentQueryState>(defaultQueryState);
   const [queryBuilderModel, setQueryBuilderModel] =
     useState<QueryBuilderGroupNode>(() => createDefaultQueryBuilderModel());
+  const [savedQueries, setSavedQueries] = useState<SavedWorkspaceQuery[]>(() =>
+    readStoredQueries(savedQueriesStorageKey),
+  );
+  const [queryHistory, setQueryHistory] = useState<SavedWorkspaceQuery[]>(() =>
+    readStoredQueries(queryHistoryStorageKey),
+  );
   const [aggregationPipelineModel, setAggregationPipelineModel] =
     useState<AggregationPipelineModel>(() =>
       addAggregationPipelineStage(
@@ -186,6 +197,7 @@ export const DocumentWorkspace = ({
   const [isQueryBuilderOpen, setIsQueryBuilderOpen] = useState(false);
   const [selectedDocument, setSelectedDocument] =
     useState<ParsedDocument | null>(null);
+  const lastRecordedHistoryIdRef = useRef<string | null>(null);
   const [editorDocument, setEditorDocument] = useState<ParsedDocument | null>(
     null,
   );
@@ -327,6 +339,15 @@ export const DocumentWorkspace = ({
     onCollectionOpen,
     () => onSectionChange("Connections"),
   );
+  const currentQueryTarget =
+    selectedConnection && selectedCollectionPath
+      ? {
+          collection: selectedCollectionPath.collection,
+          connectionId: selectedConnection.id,
+          connectionName: selectedConnection.name,
+          database: selectedCollectionPath.database,
+        }
+      : null;
   const emptyWorkspaceTitle =
     activeSection === "Explore" ? exploreEmptyState.title : activeSection;
   const emptyWorkspaceLabel =
@@ -356,6 +377,7 @@ export const DocumentWorkspace = ({
     setProjectionInput(JSON.stringify(nextState.value.projection));
     setSortInput(JSON.stringify(nextState.value.sort));
     setQueryState(nextState.value);
+    recordQueryRun(nextState.value);
   };
 
   const runQueryBuilder = () => {
@@ -369,6 +391,180 @@ export const DocumentWorkspace = ({
       filter: queryBuilderFilter,
       skip: 0,
     }));
+    recordQueryRun({
+      ...queryState,
+      filter: queryBuilderFilter,
+      skip: 0,
+    });
+  };
+
+  const buildQuerySnapshot = (
+    state: DocumentQueryState,
+    overrides: Partial<SavedWorkspaceQuery> = {},
+  ): SavedWorkspaceQuery | null => {
+    if (!currentQueryTarget) {
+      return null;
+    }
+
+    const now = new Date().toISOString();
+
+    return {
+      collection: currentQueryTarget.collection,
+      connectionId: currentQueryTarget.connectionId,
+      connectionName: currentQueryTarget.connectionName,
+      createdAt: now,
+      database: currentQueryTarget.database,
+      filter: state.filter,
+      id: `query_${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
+      kind: "find",
+      lastRunAt: now,
+      limit: state.limit,
+      name: `${currentQueryTarget.collection} find`,
+      projection: state.projection,
+      skip: state.skip,
+      sort: state.sort,
+      updatedAt: now,
+      ...overrides,
+    };
+  };
+
+  const recordQueryRun = (state: DocumentQueryState) => {
+    const snapshot = buildQuerySnapshot(state, {
+      id: `history_${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
+      name: `${currentQueryTarget?.collection ?? "Query"} run`,
+    });
+
+    if (!snapshot) {
+      return;
+    }
+
+    setQueryHistory((currentHistory) =>
+      [snapshot, ...currentHistory].slice(0, 50),
+    );
+    lastRecordedHistoryIdRef.current = snapshot.id;
+  };
+
+  const recordAggregationRun = (
+    pipeline: Record<string, unknown>[],
+    result: { documents: string[]; executionTimeMs?: number },
+  ) => {
+    const snapshot = buildQuerySnapshot(defaultQueryState, {
+      id: `history_${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
+      kind: "aggregation",
+      name: `${currentQueryTarget?.collection ?? "Pipeline"} aggregation`,
+      pipeline,
+      resultCount: result.documents.length,
+      ...(result.executionTimeMs !== undefined
+        ? { executionTimeMs: result.executionTimeMs }
+        : {}),
+    });
+
+    if (!snapshot) {
+      return;
+    }
+
+    setQueryHistory((currentHistory) =>
+      [snapshot, ...currentHistory].slice(0, 50),
+    );
+  };
+
+  const saveCurrentQuery = () => {
+    const nextState = parseDocumentQueryInputs({
+      filterInput,
+      limitInput,
+      projectionInput,
+      skipInput,
+      sortInput,
+    });
+
+    if (!nextState.ok) {
+      setQueryInputError(nextState.message);
+      onConnectionError("Query input is invalid", nextState.message);
+      return;
+    }
+
+    const snapshot = buildQuerySnapshot(nextState.value, {
+      name: createSavedQueryName(
+        currentQueryTarget?.collection ?? "Collection",
+        nextState.value.filter,
+      ),
+    });
+
+    if (!snapshot) {
+      onConnectionError(
+        "Save query failed",
+        "Select a connected collection before saving a query.",
+      );
+      return;
+    }
+
+    setQueryInputError(null);
+    const { lastRunAt: _lastRunAt, ...savedSnapshot } = snapshot;
+
+    setSavedQueries((currentQueries) => [savedSnapshot, ...currentQueries]);
+  };
+
+  const deleteSavedQuery = (queryId: string) => {
+    setSavedQueries((currentQueries) =>
+      currentQueries.filter((query) => query.id !== queryId),
+    );
+  };
+
+  const duplicateSavedQuery = (query: SavedWorkspaceQuery) => {
+    const now = new Date().toISOString();
+
+    setSavedQueries((currentQueries) => [
+      {
+        ...query,
+        createdAt: now,
+        id: `query_${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
+        name: `${query.name} copy`,
+        updatedAt: now,
+      },
+      ...currentQueries,
+    ]);
+  };
+
+  const renameSavedQuery = (queryId: string, name: string) => {
+    const trimmedName = name.trim();
+
+    if (!trimmedName) {
+      return;
+    }
+
+    setSavedQueries((currentQueries) =>
+      currentQueries.map((query) =>
+        query.id === queryId
+          ? {
+              ...query,
+              name: trimmedName,
+              updatedAt: new Date().toISOString(),
+            }
+          : query,
+      ),
+    );
+  };
+
+  const openSavedQuery = (query: SavedWorkspaceQuery) => {
+    onSelectedConnectionChange(query.connectionId);
+    onSelectedCollectionChange(`${query.database}.${query.collection}`);
+    setSelectedDocument(null);
+    setEditorDocument(null);
+    setTableDrillState({ collectionName: null, path: [] });
+    setFilterInput(JSON.stringify(query.filter));
+    setProjectionInput(JSON.stringify(query.projection));
+    setSortInput(JSON.stringify(query.sort));
+    setLimitInput(String(query.limit));
+    setSkipInput(String(query.skip));
+    setQueryState({
+      filter: query.filter,
+      limit: query.limit,
+      projection: query.projection,
+      skip: query.skip,
+      sort: query.sort,
+    });
+    onWorkspaceTabChange("Documents");
+    onSectionChange("Explore");
   };
 
   const updateDocumentMutation = useMutation({
@@ -517,6 +713,36 @@ export const DocumentWorkspace = ({
     onSchemaChange(isCollectionWorkspace ? schemaFields : []);
   }, [isCollectionWorkspace, onSchemaChange, schemaFields]);
 
+  useEffect(() => {
+    writeStoredQueries(savedQueriesStorageKey, savedQueries);
+  }, [savedQueries]);
+
+  useEffect(() => {
+    writeStoredQueries(queryHistoryStorageKey, queryHistory);
+  }, [queryHistory]);
+
+  useEffect(() => {
+    const lastHistoryId = lastRecordedHistoryIdRef.current;
+
+    if (!lastHistoryId || !documentsQuery.data) {
+      return;
+    }
+
+    setQueryHistory((currentHistory) =>
+      currentHistory.map((query) =>
+        query.id === lastHistoryId
+          ? {
+              ...query,
+              executionTimeMs: documentsQuery.data.executionTimeMs,
+              resultCount: documentsQuery.data.documents.length,
+              updatedAt: new Date().toISOString(),
+            }
+          : query,
+      ),
+    );
+    lastRecordedHistoryIdRef.current = null;
+  }, [documentsQuery.data]);
+
   const updatePagination = ({
     limit,
     skip,
@@ -566,6 +792,21 @@ export const DocumentWorkspace = ({
         shouldShowQueryBuilderPanel ? "is-query-builder" : ""
       }`}
     >
+      {activeSection === "Queries" ? (
+        <QueriesWorkspace
+          currentTarget={currentQueryTarget}
+          history={queryHistory}
+          savedQueries={savedQueries}
+          onDelete={deleteSavedQuery}
+          onDuplicate={duplicateSavedQuery}
+          onOpen={openSavedQuery}
+          onRename={renameSavedQuery}
+          onSaveCurrent={saveCurrentQuery}
+        />
+      ) : null}
+
+      {activeSection === "Queries" ? null : (
+        <>
       {isConnectionManager ? null : (
         <CollectionTabBar
           isCollectionWorkspace={isCollectionWorkspace}
@@ -648,6 +889,7 @@ export const DocumentWorkspace = ({
                       pipeline,
                     })
                     .then((result) => {
+                      recordAggregationRun(pipeline, result);
                       setAggregationRunResult({
                         documents: result.documents,
                         executionTimeMs: result.executionTimeMs,
@@ -797,6 +1039,8 @@ export const DocumentWorkspace = ({
           title={emptyWorkspaceTitle}
         />
       )}
+        </>
+      )}
     </section>
   );
 };
@@ -878,6 +1122,324 @@ const WorkspaceTabs = ({
     >
       <DatabaseSearch aria-hidden="true" size={17} strokeWidth={1.9} />
     </button>
+  </div>
+);
+
+type QueriesWorkspaceProps = {
+  currentTarget: {
+    collection: string;
+    connectionId: string;
+    connectionName: string;
+    database: string;
+  } | null;
+  history: SavedWorkspaceQuery[];
+  savedQueries: SavedWorkspaceQuery[];
+  onDelete: (queryId: string) => void;
+  onDuplicate: (query: SavedWorkspaceQuery) => void;
+  onOpen: (query: SavedWorkspaceQuery) => void;
+  onRename: (queryId: string, name: string) => void;
+  onSaveCurrent: () => void;
+};
+
+const QueriesWorkspace = ({
+  currentTarget,
+  history,
+  savedQueries,
+  onDelete,
+  onDuplicate,
+  onOpen,
+  onRename,
+  onSaveCurrent,
+}: QueriesWorkspaceProps) => {
+  const [activeQueryList, setActiveQueryList] = useState<"history" | "saved">(
+    "history",
+  );
+  const [editingQueryName, setEditingQueryName] = useState("");
+  const [renamingQueryId, setRenamingQueryId] = useState<string | null>(null);
+  const [selectedQueryId, setSelectedQueryId] = useState<string | null>(
+    history[0]?.id ?? savedQueries[0]?.id ?? null,
+  );
+  const visibleQueries =
+    activeQueryList === "saved" ? savedQueries : history;
+  const visibleEmptyLabel =
+    activeQueryList === "saved"
+      ? "No saved queries yet."
+      : "Run a query to build history.";
+  const selectedQuery =
+    visibleQueries.find((query) => query.id === selectedQueryId) ??
+    visibleQueries[0] ??
+    null;
+  const isSelectedSavedQuery =
+    selectedQuery !== null &&
+    savedQueries.some((query) => query.id === selectedQuery.id);
+
+  const startRenameSelectedQuery = () => {
+    if (!selectedQuery || !isSelectedSavedQuery) {
+      return;
+    }
+
+    setRenamingQueryId(selectedQuery.id);
+    setEditingQueryName(selectedQuery.name);
+  };
+
+  const commitRename = () => {
+    if (!renamingQueryId) {
+      return;
+    }
+
+    onRename(renamingQueryId, editingQueryName);
+    setRenamingQueryId(null);
+    setEditingQueryName("");
+  };
+
+  const cancelRename = () => {
+    setRenamingQueryId(null);
+    setEditingQueryName("");
+  };
+
+  const showSavedQueries = () => {
+    setActiveQueryList("saved");
+    setSelectedQueryId(savedQueries[0]?.id ?? null);
+    cancelRename();
+  };
+
+  const showQueryHistory = () => {
+    setActiveQueryList("history");
+    setSelectedQueryId(history[0]?.id ?? null);
+    cancelRename();
+  };
+
+  return (
+    <section className="queries-workspace">
+      <header className="queries-header">
+        <div>
+          <h1>Queries</h1>
+          <p>
+            Saved queries and recent runs stay local on this device. No
+            connection secrets are stored here.
+          </p>
+        </div>
+        <button
+          className="run-button compact"
+          disabled={!currentTarget}
+          onClick={onSaveCurrent}
+          type="button"
+        >
+          Save current query
+        </button>
+      </header>
+
+      <div className="queries-layout">
+        <section className="queries-list-panel">
+          <div className="query-list-tabs" role="tablist" aria-label="Queries">
+            <button
+              aria-selected={activeQueryList === "history"}
+              className={activeQueryList === "history" ? "is-active" : ""}
+              onClick={showQueryHistory}
+              role="tab"
+              type="button"
+            >
+              History
+              <span>{history.length}</span>
+            </button>
+            <button
+              aria-selected={activeQueryList === "saved"}
+              className={activeQueryList === "saved" ? "is-active" : ""}
+              onClick={showSavedQueries}
+              role="tab"
+              type="button"
+            >
+              Saved
+              <span>{savedQueries.length}</span>
+            </button>
+          </div>
+          <QueryList
+            emptyLabel={visibleEmptyLabel}
+            queries={visibleQueries}
+            selectedQueryId={selectedQuery?.id ?? null}
+            onSelect={setSelectedQueryId}
+          />
+        </section>
+
+        <section className="query-detail-panel">
+          {selectedQuery ? (
+            <>
+              <div className="query-detail-header">
+                <div>
+                  <span className="query-kind-badge">
+                    {selectedQuery.kind === "aggregation" ? "Pipeline" : "Find"}
+                  </span>
+                  {renamingQueryId === selectedQuery.id ? (
+                    <input
+                      aria-label="Query name"
+                      className="query-rename-input"
+                      autoFocus
+                      value={editingQueryName}
+                      onChange={(event) =>
+                        setEditingQueryName(event.target.value)
+                      }
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          commitRename();
+                        }
+
+                        if (event.key === "Escape") {
+                          event.preventDefault();
+                          cancelRename();
+                        }
+                      }}
+                    />
+                  ) : (
+                    <h2>{selectedQuery.name}</h2>
+                  )}
+                  <p>
+                    {selectedQuery.connectionName} · {selectedQuery.database}.
+                    {selectedQuery.collection}
+                  </p>
+                </div>
+                <div className="query-detail-actions">
+                  <button type="button" onClick={() => onOpen(selectedQuery)}>
+                    Open
+                  </button>
+                  {isSelectedSavedQuery ? (
+                    <>
+                      {renamingQueryId === selectedQuery.id ? (
+                        <>
+                          <button type="button" onClick={commitRename}>
+                            Save name
+                          </button>
+                          <button type="button" onClick={cancelRename}>
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <button type="button" onClick={startRenameSelectedQuery}>
+                          Rename
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => onDuplicate(selectedQuery)}
+                      >
+                        Duplicate
+                      </button>
+                      <button
+                        className="danger-text-button"
+                        type="button"
+                        onClick={() => onDelete(selectedQuery.id)}
+                      >
+                        Delete
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => onDuplicate(selectedQuery)}
+                    >
+                      Save from history
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="query-detail-grid">
+                <QueryCodeBlock
+                  label="Filter"
+                  value={selectedQuery.filter}
+                />
+                <QueryCodeBlock
+                  label="Projection"
+                  value={selectedQuery.projection}
+                />
+                <QueryCodeBlock label="Sort" value={selectedQuery.sort} />
+                {selectedQuery.pipeline ? (
+                  <QueryCodeBlock
+                    label="Pipeline"
+                    value={selectedQuery.pipeline}
+                  />
+                ) : null}
+              </div>
+
+              <footer className="query-detail-footer">
+                <span>Limit {selectedQuery.limit}</span>
+                <span>Skip {selectedQuery.skip}</span>
+                {selectedQuery.lastRunAt ? (
+                  <span>Last run {formatRelativeTime(selectedQuery.lastRunAt)}</span>
+                ) : null}
+                {selectedQuery.executionTimeMs !== undefined ? (
+                  <span>{selectedQuery.executionTimeMs} ms</span>
+                ) : null}
+              </footer>
+            </>
+          ) : (
+            <div className="queries-empty">
+              <Icon name="term" />
+              <strong>No queries yet</strong>
+              <span>
+                Open a collection, run a query, then save it here for reuse.
+              </span>
+            </div>
+          )}
+        </section>
+      </div>
+    </section>
+  );
+};
+
+type QueryListProps = {
+  emptyLabel: string;
+  queries: SavedWorkspaceQuery[];
+  selectedQueryId: string | null;
+  onSelect: (queryId: string) => void;
+};
+
+const QueryList = ({
+  emptyLabel,
+  queries,
+  selectedQueryId,
+  onSelect,
+}: QueryListProps) => (
+  <div className="query-list-block">
+    {queries.length > 0 ? (
+      <div className="query-list">
+        {queries.map((query) => (
+          <button
+            className={`query-list-item ${
+              selectedQueryId === query.id ? "is-active" : ""
+            }`}
+            key={query.id}
+            onClick={() => onSelect(query.id)}
+            type="button"
+          >
+            <span className="query-list-item-main">
+              <strong>{query.name}</strong>
+              <small>
+                {query.database}.{query.collection}
+              </small>
+            </span>
+            <span className="query-kind-badge">
+              {query.kind === "aggregation" ? "Pipeline" : "Find"}
+            </span>
+          </button>
+        ))}
+      </div>
+    ) : (
+      <p className="query-list-empty">{emptyLabel}</p>
+    )}
+  </div>
+);
+
+const QueryCodeBlock = ({
+  label,
+  value,
+}: {
+  label: string;
+  value: unknown;
+}) => (
+  <div className="query-code-block">
+    <span>{label}</span>
+    <pre>{JSON.stringify(value, null, 2)}</pre>
   </div>
 );
 
@@ -3421,6 +3983,98 @@ const getSafeWorkspaceErrorMessage = (error: Error): string => {
   }
 
   return error.message || "Something went wrong. Try again.";
+};
+
+const readStoredQueries = (storageKey: string): SavedWorkspaceQuery[] => {
+  try {
+    const rawValue = globalThis.localStorage?.getItem(storageKey);
+
+    if (!rawValue) {
+      return [];
+    }
+
+    const parsedValue = JSON.parse(rawValue);
+
+    if (!Array.isArray(parsedValue)) {
+      return [];
+    }
+
+    return parsedValue.filter(isSavedWorkspaceQuery);
+  } catch {
+    return [];
+  }
+};
+
+const writeStoredQueries = (
+  storageKey: string,
+  queries: SavedWorkspaceQuery[],
+) => {
+  try {
+    globalThis.localStorage?.setItem(storageKey, JSON.stringify(queries));
+  } catch {
+    // Local query storage is best-effort and should never break the workspace.
+  }
+};
+
+const isSavedWorkspaceQuery = (value: unknown): value is SavedWorkspaceQuery => {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const query = value as Partial<SavedWorkspaceQuery>;
+
+  return (
+    typeof query.collection === "string" &&
+    typeof query.connectionId === "string" &&
+    typeof query.connectionName === "string" &&
+    typeof query.database === "string" &&
+    typeof query.id === "string" &&
+    (query.kind === "find" || query.kind === "aggregation") &&
+    typeof query.limit === "number" &&
+    typeof query.name === "string" &&
+    typeof query.skip === "number"
+  );
+};
+
+const createSavedQueryName = (
+  collectionName: string,
+  filter: Record<string, unknown>,
+): string => {
+  const keys = Object.keys(filter);
+
+  if (keys.length === 0) {
+    return `${collectionName} find all`;
+  }
+
+  return `${collectionName} by ${keys.slice(0, 2).join(", ")}`;
+};
+
+const formatRelativeTime = (isoDate: string): string => {
+  const timestamp = Date.parse(isoDate);
+
+  if (!Number.isFinite(timestamp)) {
+    return "recently";
+  }
+
+  const seconds = Math.max(1, Math.floor((Date.now() - timestamp) / 1000));
+
+  if (seconds < 60) {
+    return `${seconds}s ago`;
+  }
+
+  const minutes = Math.floor(seconds / 60);
+
+  if (minutes < 60) {
+    return `${minutes}m ago`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+
+  if (hours < 24) {
+    return `${hours}h ago`;
+  }
+
+  return `${Math.floor(hours / 24)}d ago`;
 };
 
 type WorkspaceFooterProps = {

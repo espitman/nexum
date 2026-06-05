@@ -189,7 +189,7 @@ export const App = () => {
   const handleSectionChange = (section: NavItemLabel) => {
     setActiveSection(section);
 
-    if (section !== "Explore") {
+    if (section !== "Explore" && section !== "Queries") {
       setSelectedCollectionName(null);
       setSchemaFields([]);
       return;
@@ -281,7 +281,7 @@ export const App = () => {
             : null
         }
         selectedConnectionId={selectedConnectionId}
-        selectedCollectionName={visibleSelectedCollectionName}
+        selectedCollectionName={selectedCollectionName}
         isIndexesLoading={indexesQuery.isLoading}
         onConnectionError={(title, message) => {
           setToast({
@@ -296,6 +296,10 @@ export const App = () => {
         }
         onSelectedConnectionChange={(connectionId) => {
           setSelectedConnectionId(connectionId);
+          setSchemaFields([]);
+        }}
+        onSelectedCollectionChange={(collectionName) => {
+          setSelectedCollectionName(collectionName);
           setSchemaFields([]);
         }}
         onCollectionClose={() => {

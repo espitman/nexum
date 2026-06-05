@@ -68,3 +68,24 @@ export type DocumentRow = {
   createdAt: string;
   total: string;
 };
+
+export type SavedWorkspaceQuery = {
+  collection: string;
+  connectionId: string;
+  connectionName: string;
+  createdAt: string;
+  database: string;
+  executionTimeMs?: number;
+  filter: Record<string, unknown>;
+  id: string;
+  kind: "find" | "aggregation";
+  lastRunAt?: string;
+  limit: number;
+  name: string;
+  pipeline?: Record<string, unknown>[];
+  projection: Record<string, unknown>;
+  resultCount?: number;
+  skip: number;
+  sort: Record<string, 1 | -1>;
+  updatedAt: string;
+};

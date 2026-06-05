@@ -1,4 +1,10 @@
-import { useState, type CSSProperties } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ExplorerNodeDto } from "../../../ipc/contracts";
 import { Icon } from "./Icon";
@@ -26,6 +32,33 @@ const getNodeIconName = (node: ExplorerNodeDto): string =>
 const getNodeSelectionKey = (node: ExplorerNodeDto): string =>
   node.path.join(".");
 
+const encodeNodePart = (value: string): string => encodeURIComponent(value);
+
+const createDatabaseNodeId = (
+  connectionId: string,
+  databaseName: string,
+): string =>
+  [
+    "mongodb",
+    encodeNodePart(connectionId),
+    "database",
+    encodeNodePart(databaseName),
+  ].join(":");
+
+const createFolderNodeId = (
+  connectionId: string,
+  databaseName: string,
+  folder: "collections" | "views",
+): string =>
+  [
+    "mongodb",
+    encodeNodePart(connectionId),
+    "database",
+    encodeNodePart(databaseName),
+    "folder",
+    folder,
+  ].join(":");
+
 export const DatabasePanel = ({
   connectionId,
   connectionName,
@@ -36,6 +69,25 @@ export const DatabasePanel = ({
   const [expandedNodeIds, setExpandedNodeIds] = useState<Set<string>>(
     () => new Set([connectionId]),
   );
+  const selectedPathExpandedNodeIds = useMemo(() => {
+    const next = new Set(expandedNodeIds);
+
+    if (!selectedCollectionName) {
+      return next;
+    }
+
+    const [databaseName] = selectedCollectionName.split(".");
+
+    if (!databaseName) {
+      return next;
+    }
+
+    next.add(connectionId);
+    next.add(createDatabaseNodeId(connectionId, databaseName));
+    next.add(createFolderNodeId(connectionId, databaseName, "collections"));
+
+    return next;
+  }, [connectionId, expandedNodeIds, selectedCollectionName]);
   const rootNodesQuery = useQuery({
     queryKey: ["explorer", connectionId, "root"],
     queryFn: async () => {
@@ -93,7 +145,7 @@ export const DatabasePanel = ({
           <span>{connectionName}</span>
         </button>
 
-        {expandedNodeIds.has(connectionId) ? (
+        {selectedPathExpandedNodeIds.has(connectionId) ? (
           rootNodesQuery.isLoading ? (
             <ExplorerPanelState label="Loading databases" />
           ) : rootNodesQuery.error ? (
@@ -109,7 +161,7 @@ export const DatabasePanel = ({
               <ExplorerTreeNode
                 connectionId={connectionId}
                 depth={1}
-                expandedNodeIds={expandedNodeIds}
+                expandedNodeIds={selectedPathExpandedNodeIds}
                 key={node.id}
                 node={node}
                 onCollectionSelect={onCollectionSelect}
@@ -150,11 +202,25 @@ const ExplorerTreeNode = ({
   });
   const isSelectable = node.type === "collection" || node.type === "view";
   const selectionKey = getNodeSelectionKey(node);
+  const isSelected = selectionKey === selectedCollectionName;
+  const rowRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    if (!isSelected) {
+      return;
+    }
+
+    rowRef.current?.scrollIntoView({
+      block: "nearest",
+      inline: "nearest",
+    });
+  }, [isSelected]);
 
   return (
     <>
       <button
-        className={`tree-row ${selectionKey === selectedCollectionName ? "is-active" : ""}`}
+        ref={rowRef}
+        className={`tree-row ${isSelected ? "is-active" : ""}`}
         onClick={() => {
           if (isSelectable) {
             onCollectionSelect(selectionKey);
