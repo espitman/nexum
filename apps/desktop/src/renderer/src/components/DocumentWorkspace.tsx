@@ -70,7 +70,6 @@ import type {
 import { ConnectionManager } from "./ConnectionManager";
 import { Icon } from "./Icon";
 import { IndexList, SchemaTree } from "./InspectorPanel";
-import { JsonTreeView } from "./JsonTreeView";
 
 loader.config({ monaco });
 
@@ -1279,6 +1278,13 @@ const AggregationPipelineWorkspace = ({
       };
     }
   }, [model]);
+  const rawPipelineText = useMemo(
+    () =>
+      rawPipeline.ok
+        ? JSON.stringify(rawPipeline.value, null, 2)
+        : rawPipeline.message,
+    [rawPipeline],
+  );
   const resultDocuments = useMemo(
     () => parseEjsonDocuments(result?.documents ?? []),
     [result?.documents],
@@ -1441,11 +1447,7 @@ const AggregationPipelineWorkspace = ({
               <strong>Raw pipeline</strong>
               <span>{rawPipeline.ok ? "Valid" : "Invalid"}</span>
             </header>
-            <pre>
-              {rawPipeline.ok
-                ? JSON.stringify(rawPipeline.value, null, 2)
-                : rawPipeline.message}
-            </pre>
+            <RawPipelineEditor value={rawPipelineText} />
           </div>
           <button
             className="run-button compact aggregation-run-button"
@@ -1508,6 +1510,36 @@ const AggregationPipelineWorkspace = ({
     </section>
   );
 };
+
+type RawPipelineEditorProps = {
+  value: string;
+};
+
+const RawPipelineEditor = ({ value }: RawPipelineEditorProps) => (
+  <div className="document-editor-monaco aggregation-raw-editor">
+    <Editor
+      defaultLanguage="json"
+      height="100%"
+      loading={<div className="document-editor-loading">Loading editor</div>}
+      path="aggregation-raw-pipeline.json"
+      value={value}
+      options={{
+        automaticLayout: true,
+        folding: true,
+        fontFamily: '"SFMono-Regular", Consolas, "Liberation Mono", monospace',
+        fontSize: 12,
+        lineHeight: 19,
+        minimap: { enabled: false },
+        readOnly: true,
+        renderLineHighlight: "none",
+        scrollBeyondLastLine: false,
+        tabSize: 2,
+        wordWrap: "off",
+      }}
+      theme="vs"
+    />
+  </div>
+);
 
 type AggregationStageEditorProps = {
   schemaFields: SchemaFieldSummary[];
@@ -3020,7 +3052,7 @@ const JsonResults = ({ documents, onDocumentOpen }: JsonResultsProps) => {
   // eslint-disable-next-line react-hooks/incompatible-library
   const rowVirtualizer = useVirtualizer({
     count: documents.length,
-    estimateSize: () => 260,
+    estimateSize: () => 320,
     getScrollElement: () => parentRef.current,
     overscan: 4,
   });
@@ -3064,9 +3096,10 @@ const JsonResults = ({ documents, onDocumentOpen }: JsonResultsProps) => {
                   Edit
                 </button>
               </header>
-              <div className="json-document-tree">
-                <JsonTreeView data={document.value} />
-              </div>
+              <ReadOnlyJsonDocumentEditor
+                path={`document-json-${document.id}.json`}
+                value={formatEditableEjson(document.ejson)}
+              />
             </article>
           );
         })}
@@ -3084,7 +3117,7 @@ const AggregationJsonResults = ({ documents }: AggregationJsonResultsProps) => {
   // eslint-disable-next-line react-hooks/incompatible-library
   const rowVirtualizer = useVirtualizer({
     count: documents.length,
-    estimateSize: () => 220,
+    estimateSize: () => 320,
     getScrollElement: () => parentRef.current,
     overscan: 4,
   });
@@ -3112,9 +3145,10 @@ const AggregationJsonResults = ({ documents }: AggregationJsonResultsProps) => {
                 <span>Result</span>
                 <strong>{document.id}</strong>
               </header>
-              <div className="json-document-tree">
-                <JsonTreeView data={document.value} />
-              </div>
+              <ReadOnlyJsonDocumentEditor
+                path={`aggregation-json-${document.id}.json`}
+                value={formatEditableEjson(document.ejson)}
+              />
             </article>
           );
         })}
@@ -3122,6 +3156,40 @@ const AggregationJsonResults = ({ documents }: AggregationJsonResultsProps) => {
     </div>
   );
 };
+
+type ReadOnlyJsonDocumentEditorProps = {
+  path: string;
+  value: string;
+};
+
+const ReadOnlyJsonDocumentEditor = ({
+  path,
+  value,
+}: ReadOnlyJsonDocumentEditorProps) => (
+  <div className="document-editor-monaco json-document-editor">
+    <Editor
+      defaultLanguage="json"
+      height="100%"
+      loading={<div className="document-editor-loading">Loading editor</div>}
+      path={path}
+      value={value}
+      options={{
+        automaticLayout: true,
+        folding: true,
+        fontFamily: '"SFMono-Regular", Consolas, "Liberation Mono", monospace',
+        fontSize: 12,
+        lineHeight: 19,
+        minimap: { enabled: false },
+        readOnly: true,
+        renderLineHighlight: "none",
+        scrollBeyondLastLine: false,
+        tabSize: 2,
+        wordWrap: "off",
+      }}
+      theme="vs"
+    />
+  </div>
+);
 
 type DocumentEditorPanelProps = {
   document: ParsedDocument;

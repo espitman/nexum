@@ -1392,14 +1392,15 @@ button {
   font-size: 14px;
 }
 
-.aggregation-preview-panel pre {
-  color: #00717d;
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  font-size: 12px;
-  line-height: 1.55;
-  margin: 0;
-  overflow: auto;
-  padding: 12px;
+.aggregation-raw-editor {
+  border: 0;
+  border-radius: 0;
+  height: 100%;
+  min-height: 0;
+}
+
+.aggregation-raw-editor:focus-within {
+  box-shadow: none;
 }
 
 .aggregation-result {
@@ -2788,9 +2789,11 @@ input:disabled {
   border: 1px solid #dfe5ed;
   border-radius: 7px;
   border-bottom: 1px solid #e6ebf1;
+  display: grid;
+  grid-template-rows: 42px minmax(0, 1fr);
+  height: 296px;
   left: 0;
   margin: 12px 18px;
-  min-height: 236px;
   overflow: hidden;
   position: absolute;
   right: 0;
@@ -2823,10 +2826,15 @@ input:disabled {
   margin-left: auto;
 }
 
-.json-document-tree {
-  max-height: 193px;
-  overflow: auto;
-  padding: 12px 16px 16px;
+.json-document-editor {
+  border: 0;
+  border-radius: 0;
+  height: 100%;
+  min-height: 0;
+}
+
+.json-document-editor:focus-within {
+  box-shadow: none;
 }
 
 .json-tree-viewer {
