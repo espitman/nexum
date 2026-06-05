@@ -382,6 +382,46 @@ describe("ConnectionLifecycleService", () => {
     ]);
   });
 
+  it("runs aggregation pipelines through active sessions", async () => {
+    const { driver, lifecycle } = createLifecycle();
+    await createStoredConnection(lifecycle);
+    await lifecycle.connect("conn_local");
+
+    const result = lifecycle.aggregate("conn_local", {
+      collection: "users",
+      database: "app",
+      limit: 25,
+      pipeline: [
+        { $match: { status: "active" } },
+        { $project: { email: 1 } },
+      ],
+    });
+
+    expect(result).toMatchObject({ ok: true });
+    await expect(
+      result.ok
+        ? result.value
+        : Promise.resolve({
+            documents: [],
+            executionTimeMs: 0,
+          }),
+    ).resolves.toEqual({
+      documents: ['{"_id":{"$oid":"6649f8c3e7b1d2a4f8c9a1b2"}}'],
+      executionTimeMs: 4,
+    });
+    expect(driver.activeConnections[0]?.aggregateInputs).toEqual([
+      {
+        collection: "users",
+        database: "app",
+        limit: 25,
+        pipeline: [
+          { $match: { status: "active" } },
+          { $project: { email: 1 } },
+        ],
+      },
+    ]);
+  });
+
   it("lists indexes through active sessions", async () => {
     const { driver, lifecycle } = createLifecycle();
     await createStoredConnection(lifecycle);
@@ -539,6 +579,17 @@ describe("ConnectionLifecycleService", () => {
       lifecycle.listIndexes("conn_local", {
         collection: "users",
         database: "app",
+      }),
+    ).toMatchObject({
+      ok: false,
+      error: { code: "CONNECTION_NOT_ACTIVE" },
+    });
+    expect(
+      lifecycle.aggregate("conn_local", {
+        collection: "users",
+        database: "app",
+        limit: 50,
+        pipeline: [{ $match: {} }],
       }),
     ).toMatchObject({
       ok: false,

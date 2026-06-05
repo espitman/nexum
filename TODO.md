@@ -291,10 +291,10 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
   - [x] Add raw pipeline preview
   - [x] Add run action
   - [x] Add result preview
-- [ ] Verify aggregation builder
-  - [ ] Run allowed pipeline
-  - [ ] Reject blocked stages
-  - [ ] Show execution time
+- [x] Verify aggregation builder
+  - [x] Run allowed pipeline
+  - [x] Reject blocked stages
+  - [x] Show execution time
 
 ## Phase 11 — Audit, Safety, and Polish
 

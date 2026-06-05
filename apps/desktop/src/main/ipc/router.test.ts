@@ -7,6 +7,7 @@ import {
   type DocumentQueryResult,
   type DocumentUpdateResult,
   type ExplorerNodeDto,
+  type MongoAggregateResult,
 } from "../../ipc/contracts";
 import type { StoredConnectionTestResult } from "../connections";
 import { createValidatedIpcHandler, registerIpcHandlers } from "./router";
@@ -104,6 +105,21 @@ describe("registerIpcHandlers connection lifecycle", () => {
         },
         list(): ConnectionSummary[] {
           return [...profiles.values()];
+        },
+        aggregate(
+          _connectionId: string,
+          payload: unknown,
+        ): Result<Promise<MongoAggregateResult>, AppError> {
+          findPayloads.push(payload);
+
+          return ok(
+            Promise.resolve({
+              documents: [
+                '{"_id":{"$oid":"6649f8c3e7b1d2a4f8c9a1b2"},"status":"active"}',
+              ],
+              executionTimeMs: 9,
+            }),
+          );
         },
         findDocuments(
           _connectionId: string,
@@ -240,6 +256,51 @@ describe("registerIpcHandlers connection lifecycle", () => {
     ).resolves.toMatchObject({
       ok: true,
       value: [{ label: "users", type: "collection" }],
+    });
+    await expect(
+      handlers.get(ipcChannels.mongodbAggregate)?.(undefined, {
+        collection: "users",
+        connectionId: "conn_test",
+        database: "app",
+        limit: 25,
+        pipeline: [
+          { $match: { status: "active" } },
+          { $project: { status: 1 } },
+        ],
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: {
+        documents: [
+          '{"_id":{"$oid":"6649f8c3e7b1d2a4f8c9a1b2"},"status":"active"}',
+        ],
+        executionTimeMs: 9,
+      },
+    });
+    expect(findPayloads.at(-1)).toEqual({
+      collection: "users",
+      connectionId: "conn_test",
+      database: "app",
+      limit: 25,
+      pipeline: [
+        { $match: { status: "active" } },
+        { $project: { status: 1 } },
+      ],
+    });
+    await expect(
+      handlers.get(ipcChannels.mongodbAggregate)?.(undefined, {
+        collection: "users",
+        connectionId: "conn_test",
+        database: "app",
+        limit: 25,
+        pipeline: [{ $merge: "users_archive" }],
+      }),
+    ).resolves.toMatchObject({
+      ok: false,
+      error: {
+        code: "VALIDATION_FAILED",
+        message: "Invalid IPC payload",
+      },
     });
     await expect(
       handlers.get(ipcChannels.mongodbFindDocuments)?.(undefined, {
