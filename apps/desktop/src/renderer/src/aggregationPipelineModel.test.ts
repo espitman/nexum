@@ -107,6 +107,28 @@ describe("aggregationPipelineModel", () => {
     ]);
   });
 
+  it("validates every MVP raw stage shape", () => {
+    expect(() =>
+      validateRawAggregationPipeline([
+        { $match: { status: "active" } },
+        { $project: { email: 1 } },
+        { $sort: { createdAt: -1 } },
+        { $limit: 20 },
+        { $skip: 0 },
+        { $count: "total" },
+        { $group: { _id: "$status", total: { $sum: 1 } } },
+        { $unwind: "$items" },
+        {
+          $unwind: {
+            includeArrayIndex: "itemIndex",
+            path: "$items",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+      ]),
+    ).not.toThrow();
+  });
+
   it("builds group and unwind stages", () => {
     const model = {
       stages: [
@@ -161,5 +183,38 @@ describe("aggregationPipelineModel", () => {
     expect(() =>
       validateRawAggregationPipeline([{ $search: { text: "hotel" } }]),
     ).toThrow("Unsupported aggregation stage in MVP: $search");
+    expect(() =>
+      validateRawAggregationPipeline([
+        { $project: { computed: { $function: { body: "return 1" } } } },
+      ]),
+    ).toThrow("Blocked aggregation stage: $function");
+    expect(() =>
+      validateRawAggregationPipeline([
+        {
+          $group: {
+            _id: "$status",
+            total: { $accumulator: { init: "function() {}" } },
+          },
+        },
+      ]),
+    ).toThrow("Blocked aggregation stage: $accumulator");
+  });
+
+  it("rejects malformed MVP stage payloads", () => {
+    expect(() => validateRawAggregationPipeline([{ $match: [] }])).toThrow(
+      "$match stage at index 0 must be an object",
+    );
+    expect(() =>
+      validateRawAggregationPipeline([{ $sort: { createdAt: "desc" } }]),
+    ).toThrow('$sort field "createdAt" at index 0 must be 1 or -1');
+    expect(() => validateRawAggregationPipeline([{ $limit: 1.5 }])).toThrow(
+      "$limit stage at index 0 must be a non-negative integer",
+    );
+    expect(() => validateRawAggregationPipeline([{ $count: "" }])).toThrow(
+      "$count stage at index 0 must be a non-empty string",
+    );
+    expect(() => validateRawAggregationPipeline([{ $unwind: {} }])).toThrow(
+      "$unwind stage at index 0 must include a path",
+    );
   });
 });

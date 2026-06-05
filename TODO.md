@@ -271,20 +271,20 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
   - [x] Support enable/disable
   - [x] Support reordering
   - [x] Generate raw pipeline
-- [ ] Support MVP stages
-  - [ ] `$match`
-  - [ ] `$project`
-  - [ ] `$sort`
-  - [ ] `$limit`
-  - [ ] `$skip`
-  - [ ] `$count`
-  - [ ] `$group`
-  - [ ] `$unwind`
-- [ ] Block dangerous stages
-  - [ ] `$out`
-  - [ ] `$merge`
-  - [ ] `$function`
-  - [ ] `$accumulator`
+- [x] Support MVP stages
+  - [x] `$match`
+  - [x] `$project`
+  - [x] `$sort`
+  - [x] `$limit`
+  - [x] `$skip`
+  - [x] `$count`
+  - [x] `$group`
+  - [x] `$unwind`
+- [x] Block dangerous stages
+  - [x] `$out`
+  - [x] `$merge`
+  - [x] `$function`
+  - [x] `$accumulator`
 - [ ] Build aggregation UI
   - [ ] Add stage list
   - [ ] Add stage editor

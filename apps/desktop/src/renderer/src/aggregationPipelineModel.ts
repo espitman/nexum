@@ -298,7 +298,7 @@ export const buildRawPipelineFromAggregationModel = (
 export const validateRawAggregationPipeline = (
   pipeline: Record<string, unknown>[],
 ) => {
-  for (const stage of pipeline) {
+  pipeline.forEach((stage, index) => {
     const stageNames = Object.keys(stage);
 
     if (stageNames.length !== 1) {
@@ -318,7 +318,10 @@ export const validateRawAggregationPipeline = (
     if (!allowedAggregationStageNames.has(stageName)) {
       throw new Error(`Unsupported aggregation stage in MVP: ${stageName}`);
     }
-  }
+
+    validateBlockedAggregationOperators(stage[stageName]);
+    validateAggregationStagePayload(stageName, stage[stageName], index);
+  });
 };
 
 const buildRawStage = (
@@ -458,3 +461,116 @@ const isPlainAggregationRecord = (
   value: unknown,
 ): value is Record<string, unknown> =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
+
+const validateBlockedAggregationOperators = (
+  value: unknown,
+  path = "pipeline",
+) => {
+  if (Array.isArray(value)) {
+    value.forEach((item, index) =>
+      validateBlockedAggregationOperators(item, `${path}[${index}]`),
+    );
+    return;
+  }
+
+  if (!isPlainAggregationRecord(value)) {
+    return;
+  }
+
+  for (const [key, nestedValue] of Object.entries(value)) {
+    if (blockedAggregationStageNames.has(key)) {
+      throw new Error(`Blocked aggregation stage: ${key}`);
+    }
+
+    validateBlockedAggregationOperators(nestedValue, `${path}.${key}`);
+  }
+};
+
+const validateAggregationStagePayload = (
+  stageName: string,
+  payload: unknown,
+  index: number,
+) => {
+  switch (stageName) {
+    case "$match":
+    case "$project":
+    case "$group":
+      if (!isPlainAggregationRecord(payload)) {
+        throw new Error(`${stageName} stage at index ${index} must be an object`);
+      }
+      break;
+    case "$sort":
+      validateSortPayload(payload, index);
+      break;
+    case "$limit":
+    case "$skip":
+      if (!isNonNegativeInteger(payload)) {
+        throw new Error(
+          `${stageName} stage at index ${index} must be a non-negative integer`,
+        );
+      }
+      break;
+    case "$count":
+      if (typeof payload !== "string" || !payload.trim()) {
+        throw new Error(
+          `${stageName} stage at index ${index} must be a non-empty string`,
+        );
+      }
+      break;
+    case "$unwind":
+      validateUnwindPayload(payload, index);
+      break;
+  }
+};
+
+const validateSortPayload = (payload: unknown, index: number) => {
+  if (!isPlainAggregationRecord(payload)) {
+    throw new Error(`$sort stage at index ${index} must be an object`);
+  }
+
+  for (const [field, direction] of Object.entries(payload)) {
+    if (direction !== 1 && direction !== -1) {
+      throw new Error(
+        `$sort field "${field}" at index ${index} must be 1 or -1`,
+      );
+    }
+  }
+};
+
+const validateUnwindPayload = (payload: unknown, index: number) => {
+  if (typeof payload === "string") {
+    if (!payload.trim()) {
+      throw new Error(`$unwind stage at index ${index} must include a path`);
+    }
+    return;
+  }
+
+  if (!isPlainAggregationRecord(payload)) {
+    throw new Error(`$unwind stage at index ${index} must be a string or object`);
+  }
+
+  if (typeof payload.path !== "string" || !payload.path.trim()) {
+    throw new Error(`$unwind stage at index ${index} must include a path`);
+  }
+
+  if (
+    "includeArrayIndex" in payload &&
+    typeof payload.includeArrayIndex !== "string"
+  ) {
+    throw new Error(
+      `$unwind includeArrayIndex at index ${index} must be a string`,
+    );
+  }
+
+  if (
+    "preserveNullAndEmptyArrays" in payload &&
+    typeof payload.preserveNullAndEmptyArrays !== "boolean"
+  ) {
+    throw new Error(
+      `$unwind preserveNullAndEmptyArrays at index ${index} must be a boolean`,
+    );
+  }
+};
+
+const isNonNegativeInteger = (value: unknown): value is number =>
+  typeof value === "number" && Number.isInteger(value) && value >= 0;
