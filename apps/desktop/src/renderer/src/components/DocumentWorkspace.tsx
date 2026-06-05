@@ -373,10 +373,12 @@ export const DocumentWorkspace = ({
 
   const updateDocumentMutation = useMutation({
     mutationFn: async ({
+      confirmedProductionWrite,
       documentId: _documentId,
       editedDocument,
       originalDocument,
     }: {
+      confirmedProductionWrite: boolean;
       documentId: string;
       editedDocument: string;
       originalDocument: string;
@@ -391,8 +393,7 @@ export const DocumentWorkspace = ({
 
       return window.nexum.mongodb.updateDocument({
         collection: selectedCollectionPath.collection,
-        confirmedProductionWrite:
-          selectedConnection?.environment === "production",
+        confirmedProductionWrite,
         connectionId: selectedConnectionId,
         database: selectedCollectionPath.database,
         editedDocument,
@@ -410,7 +411,9 @@ export const DocumentWorkspace = ({
         return nextDocuments;
       });
       const message =
-        error instanceof Error ? error.message : "Unable to save document";
+        error instanceof Error
+          ? getSafeWorkspaceErrorMessage(error)
+          : "Unable to save document.";
       onConnectionError("Save document failed", message);
     },
     async onSuccess(_data, variables) {
@@ -471,6 +474,14 @@ export const DocumentWorkspace = ({
     schemaField,
     value,
   }: CellEditRequest) => {
+    if (selectedConnection?.environment === "production") {
+      onConnectionError(
+        "Inline edit blocked",
+        "Production writes require opening the document editor and confirming the save.",
+      );
+      return;
+    }
+
     const editedDocument = buildInlineEditedDocument({
       document: document.ejson,
       path,
@@ -495,6 +506,7 @@ export const DocumentWorkspace = ({
     }
 
     updateDocumentMutation.mutate({
+      confirmedProductionWrite: false,
       documentId: document.id,
       editedDocument: editedDocument.value,
       originalDocument: document.ejson,
@@ -647,7 +659,7 @@ export const DocumentWorkspace = ({
                     .catch((error: unknown) => {
                       const message =
                         error instanceof Error
-                          ? error.message
+                          ? getSafeWorkspaceErrorMessage(error)
                           : "Aggregation failed.";
                       setAggregationRunResult({
                         documents: [],
@@ -751,8 +763,9 @@ export const DocumentWorkspace = ({
               isReadOnly={selectedConnection?.readOnly ?? true}
               isSaving={updateDocumentMutation.isPending}
               onClose={() => setEditorDocument(null)}
-              onSave={(editedDocument) =>
+              onSave={(editedDocument, confirmedProductionWrite) =>
                 updateDocumentMutation.mutate({
+                  confirmedProductionWrite,
                   documentId: editorDocument.id,
                   editedDocument,
                   originalDocument: editorDocument.ejson,
@@ -1475,7 +1488,12 @@ const AggregationPipelineWorkspace = ({
         {result?.status === "running" ? (
           <ResultsLoadingState />
         ) : result?.status === "error" ? (
-          <ResultsState title="Unable to run pipeline" label={result.message} />
+          <ResultsState
+            title="Unable to run pipeline"
+            label={result.message}
+            actionLabel="Run again"
+            onAction={onRunPipeline}
+          />
         ) : resultDocuments.length === 0 ? (
           <ResultsState
             title={result ? "No aggregation results" : "No results yet"}
@@ -2223,7 +2241,12 @@ const ResultsSection = ({
         viewMode={viewMode}
       />
       {error ? (
-        <ResultsState title="Unable to load documents" label={error.message} />
+        <ResultsState
+          title="Unable to load documents"
+          label={getSafeWorkspaceErrorMessage(error)}
+          actionLabel="Retry"
+          onAction={onRefresh}
+        />
       ) : isInitialLoading ? (
         <ResultsLoadingState />
       ) : viewMode === "json" ? (
@@ -3197,7 +3220,7 @@ type DocumentEditorPanelProps = {
   isReadOnly: boolean;
   isSaving: boolean;
   onClose: () => void;
-  onSave: (editedDocument: string) => void;
+  onSave: (editedDocument: string, confirmedProductionWrite: boolean) => void;
 };
 
 const DocumentEditorPanel = ({
@@ -3316,7 +3339,7 @@ const DocumentEditorPanel = ({
             <button
               className="run-button compact"
               disabled={isSaving}
-              onClick={() => onSave(editorValue)}
+              onClick={() => onSave(editorValue, isProduction)}
               type="button"
             >
               <span className="play-icon" />
@@ -3350,17 +3373,55 @@ const DocumentEditorPanel = ({
 };
 
 type ResultsStateProps = {
+  actionLabel?: string;
   label: string;
+  onAction?: () => void;
   title: string;
 };
 
-const ResultsState = ({ label, title }: ResultsStateProps) => (
+const ResultsState = ({
+  actionLabel,
+  label,
+  onAction,
+  title,
+}: ResultsStateProps) => (
   <div className="results-state">
     <Icon name="table" />
     <strong>{title}</strong>
     <span>{label}</span>
+    {actionLabel && onAction ? (
+      <button className="secondary-button compact-button" onClick={onAction} type="button">
+        {actionLabel}
+      </button>
+    ) : null}
   </div>
 );
+
+const getSafeWorkspaceErrorMessage = (error: Error): string => {
+  const code = (error as { code?: string }).code;
+
+  if (code === "CONNECTION_NOT_ACTIVE") {
+    return "Connect to the profile and retry the operation.";
+  }
+
+  if (code === "READ_ONLY_VIOLATION") {
+    return "This connection is read-only. Write operations are blocked.";
+  }
+
+  if (code === "WRITE_CONFIRMATION_REQUIRED") {
+    return "Production writes require explicit confirmation.";
+  }
+
+  if (code === "VALIDATION_FAILED") {
+    return "The request is invalid. Check the query inputs and try again.";
+  }
+
+  if (code === "SECRET_NOT_FOUND") {
+    return "The saved secret is missing. Edit the connection and save the URI again.";
+  }
+
+  return error.message || "Something went wrong. Try again.";
+};
 
 type WorkspaceFooterProps = {
   canGoNext: boolean;

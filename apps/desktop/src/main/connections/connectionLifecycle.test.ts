@@ -299,7 +299,7 @@ describe("ConnectionLifecycleService", () => {
   });
 
   it("connects, disconnects, and closes active sessions", async () => {
-    const { driver, lifecycle } = createLifecycle();
+    const { auditLog, driver, lifecycle } = createLifecycle();
     await createStoredConnection(lifecycle);
 
     const connectResult = await lifecycle.connect("conn_local");
@@ -317,6 +317,11 @@ describe("ConnectionLifecycleService", () => {
       value: { status: "disconnected" },
     });
     expect(driver.activeConnections[0]?.closed).toBe(true);
+    expect(auditLog.list().map((entry) => entry.action)).toEqual([
+      "connection.created",
+      "connection.connected",
+      "connection.disconnected",
+    ]);
   });
 
   it("lists databases and collections from active sessions", async () => {
@@ -341,8 +346,8 @@ describe("ConnectionLifecycleService", () => {
     ]);
   });
 
-  it("finds documents through active sessions", async () => {
-    const { driver, lifecycle } = createLifecycle();
+  it("finds documents through active sessions and audits query metadata", async () => {
+    const { auditLog, driver, lifecycle } = createLifecycle();
     await createStoredConnection(lifecycle);
     await lifecycle.connect("conn_local");
 
@@ -380,10 +385,25 @@ describe("ConnectionLifecycleService", () => {
         sort: { createdAt: -1 },
       },
     ]);
+    expect(
+      auditLog.list().find((entry) => entry.action === "query.executed"),
+    ).toMatchObject({
+      action: "query.executed",
+      connectionId: "conn_local",
+      metadata: {
+        executionTimeMs: 3,
+        filterFields: ["status"],
+        limit: 50,
+        projectionFields: ["email"],
+        resultCount: 1,
+        sortFields: ["createdAt"],
+      },
+      target: "app.users",
+    });
   });
 
-  it("runs aggregation pipelines through active sessions", async () => {
-    const { driver, lifecycle } = createLifecycle();
+  it("runs aggregation pipelines through active sessions and audits execution time", async () => {
+    const { auditLog, driver, lifecycle } = createLifecycle();
     await createStoredConnection(lifecycle);
     await lifecycle.connect("conn_local");
 
@@ -420,6 +440,22 @@ describe("ConnectionLifecycleService", () => {
         ],
       },
     ]);
+    expect(
+      auditLog
+        .list()
+        .find((entry) => entry.action === "aggregation.executed"),
+    ).toMatchObject({
+      action: "aggregation.executed",
+      connectionId: "conn_local",
+      metadata: {
+        executionTimeMs: 4,
+        limit: 25,
+        resultCount: 1,
+        stageCount: 2,
+        stages: ["$match", "$project"],
+      },
+      target: "app.users",
+    });
   });
 
   it("lists indexes through active sessions", async () => {
@@ -629,7 +665,11 @@ describe("ConnectionLifecycleService", () => {
       error: { code: "READ_ONLY_VIOLATION" },
     });
     expect(driver.activeConnections[0]?.updateInputs).toEqual([]);
-    expect(auditLog.list()).toMatchObject([
+    expect(
+      auditLog
+        .list()
+        .filter((entry) => entry.action.startsWith("document.write.")),
+    ).toMatchObject([
       {
         action: "document.write.attempted",
         connectionId: "conn_local",
@@ -695,7 +735,12 @@ describe("ConnectionLifecycleService", () => {
           '{"_id":{"$oid":"6649f8c3e7b1d2a4f8c9a1b2"},"email":"old@example.com"}',
       },
     ]);
-    expect(auditLog.list().map((entry) => entry.action)).toEqual([
+    expect(
+      auditLog
+        .list()
+        .filter((entry) => entry.action.startsWith("document.write."))
+        .map((entry) => entry.action),
+    ).toEqual([
       "document.write.attempted",
       "document.write.blocked",
       "document.write.attempted",
@@ -704,7 +749,8 @@ describe("ConnectionLifecycleService", () => {
   });
 
   it("closes active sessions before update and delete", async () => {
-    const { driver, lifecycle, metadataStore, secretStore } = createLifecycle();
+    const { auditLog, driver, lifecycle, metadataStore, secretStore } =
+      createLifecycle();
     await createStoredConnection(lifecycle);
     await lifecycle.connect("conn_local");
 
@@ -732,5 +778,12 @@ describe("ConnectionLifecycleService", () => {
     expect(driver.activeConnections[1]?.closed).toBe(true);
     expect(metadataStore.metadata.has("conn_local")).toBe(false);
     expect(secretStore.secrets.has("conn_local")).toBe(false);
+    expect(auditLog.list().map((entry) => entry.action)).toContain(
+      "connection.updated",
+    );
+    expect(auditLog.list().map((entry) => entry.action)).toContain(
+      "connection.deleted",
+    );
+    expect(JSON.stringify(auditLog.list())).not.toContain("27018");
   });
 });

@@ -1,12 +1,19 @@
 import { createId, nowIso } from "@nexum/shared";
 
 export type AuditLogAction =
+  | "aggregation.executed"
+  | "aggregation.failed"
+  | "connection.connected"
   | "connection.created"
   | "connection.updated"
   | "connection.deleted"
+  | "connection.disconnected"
+  | "connection.failed"
   | "connection.tested"
   | "plugin.registered"
   | "plugin.unregistered"
+  | "query.executed"
+  | "query.failed"
   | "document.read"
   | "document.write.attempted"
   | "document.write.blocked"
@@ -39,8 +46,8 @@ export class AuditLogService {
       ...(entry.actorId ? { actorId: entry.actorId } : {}),
       ...(entry.connectionId ? { connectionId: entry.connectionId } : {}),
       ...(entry.pluginId ? { pluginId: entry.pluginId } : {}),
-      ...(entry.target ? { target: entry.target } : {}),
-      ...(entry.metadata ? { metadata: entry.metadata } : {}),
+      ...(entry.target ? { target: redactAuditString(entry.target) } : {}),
+      ...(entry.metadata ? { metadata: sanitizeAuditMetadata(entry.metadata) } : {}),
     };
 
     this.#entries.push(nextEntry);
@@ -59,3 +66,37 @@ export class AuditLogService {
     this.#entries.length = 0;
   }
 }
+
+const secretKeyPattern =
+  /(?:password|passwd|pwd|secret|token|accessToken|refreshToken|uri|url|connectionString)/i;
+const secretValuePattern =
+  /(mongodb(?:\+srv)?:\/\/|postgres(?:ql)?:\/\/|mysql:\/\/|redis:\/\/|Bearer\s+)[^\s"']+/gi;
+
+const redactAuditString = (value: string): string =>
+  value.replace(secretValuePattern, "$1[REDACTED]");
+
+const sanitizeAuditMetadata = (
+  metadata: Record<string, unknown>,
+): Record<string, unknown> =>
+  Object.fromEntries(
+    Object.entries(metadata).map(([key, value]) => [
+      key,
+      secretKeyPattern.test(key) ? "[REDACTED]" : sanitizeAuditValue(value),
+    ]),
+  );
+
+const sanitizeAuditValue = (value: unknown): unknown => {
+  if (typeof value === "string") {
+    return redactAuditString(value);
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeAuditValue(item));
+  }
+
+  if (value && typeof value === "object") {
+    return sanitizeAuditMetadata(value as Record<string, unknown>);
+  }
+
+  return value;
+};

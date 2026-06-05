@@ -296,7 +296,9 @@ export const ConnectionManager = ({
                   </small>
                 </span>
                 <span className="connection-profile-meta">
-                  <em>{getEnvironmentLabel(connection.environment)}</em>
+                  <em className={`env-${connection.environment}`}>
+                    {getEnvironmentLabel(connection.environment)}
+                  </em>
                   {connection.readOnly ? <small>Read-only</small> : null}
                 </span>
               </button>
@@ -322,7 +324,9 @@ export const ConnectionManager = ({
                 <Icon name="database" />
                 MongoDB
               </span>
-              <span className="connection-env-pill">
+              <span
+                className={`connection-env-pill env-${selectedConnection.environment}`}
+              >
                 {getEnvironmentLabel(selectedConnection.environment)}
               </span>
             </div>
@@ -492,7 +496,7 @@ export const ConnectionManager = ({
                 <Icon name="database" />
                 MongoDB
               </span>
-              <span className="connection-env-pill">
+              <span className={`connection-env-pill env-${form.environment}`}>
                 {getEnvironmentLabel(form.environment)}
               </span>
             </div>
@@ -582,6 +586,8 @@ export const ConnectionManager = ({
                         setForm((current) => ({
                           ...current,
                           environment: value,
+                          readOnly:
+                            value === "production" ? true : current.readOnly,
                         }))
                       }
                       type="button"
@@ -602,7 +608,11 @@ export const ConnectionManager = ({
                 <span>
                   <strong>Read-only</strong>
                   <small>
-                    {form.readOnly ? "Writes blocked" : "Writes allowed"}
+                    {form.environment === "production"
+                      ? "Production profiles default to read-only"
+                      : form.readOnly
+                        ? "Writes blocked"
+                        : "Writes allowed"}
                   </small>
                 </span>
                 <input
@@ -718,6 +728,28 @@ export const ConnectionManager = ({
 const getApiErrorMessage = (error: unknown): string => {
   if (!(error instanceof Error)) {
     return "Unknown error";
+  }
+
+  const code = (error as { code?: string }).code;
+
+  if (code === "READ_ONLY_VIOLATION") {
+    return "This connection is read-only. Disable read-only mode before writing.";
+  }
+
+  if (code === "WRITE_CONFIRMATION_REQUIRED") {
+    return "Production writes require explicit confirmation.";
+  }
+
+  if (code === "CONNECTION_NOT_ACTIVE") {
+    return "Connect to the profile and try again.";
+  }
+
+  if (code === "SECRET_NOT_FOUND") {
+    return "The saved secret is missing. Edit the profile and save the URI again.";
+  }
+
+  if (code === "VALIDATION_FAILED") {
+    return "Check the highlighted fields and try again.";
   }
 
   const details = (error as { details?: Record<string, unknown> }).details;

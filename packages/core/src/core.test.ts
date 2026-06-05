@@ -140,6 +140,32 @@ describe("AuditLogService", () => {
     expect(entry.id).toMatch(/^audit_/);
     expect(auditLog.listByConnection(profile.id)).toHaveLength(1);
   });
+
+  it("redacts secrets from audit targets and metadata", () => {
+    const auditLog = new AuditLogService();
+
+    const entry = auditLog.record({
+      action: "connection.created",
+      connectionId: profile.id,
+      metadata: {
+        connectionString: "mongodb://user:pass@localhost/admin",
+        nested: {
+          token: "abc123",
+          value: "Bearer super-secret",
+        },
+      },
+      target: "mongodb://user:pass@localhost/admin",
+    });
+
+    expect(entry.target).toBe("mongodb://[REDACTED]");
+    expect(entry.metadata).toEqual({
+      connectionString: "[REDACTED]",
+      nested: {
+        token: "[REDACTED]",
+        value: "Bearer [REDACTED]",
+      },
+    });
+  });
 });
 
 describe("sanitizeError", () => {

@@ -452,6 +452,9 @@ export class ConnectionLifecycleService {
         return updated;
       }
 
+      this.#recordConnectionEvent(updated.value, "connection.connected", {
+        status: "connected",
+      });
       return ok(this.#toSummary(updated.value));
     } catch (error) {
       return this.#recordConnectionError(connectionId, error);
@@ -468,6 +471,11 @@ export class ConnectionLifecycleService {
     }
 
     this.#setStatus(result.value.id, "disconnected");
+    this.#recordConnectionEvent(result.value, "connection.created", {
+      environment: result.value.environment,
+      readOnly: result.value.readOnly,
+      status: "disconnected",
+    });
     return ok(this.#toSummary(result.value));
   }
 
@@ -494,6 +502,9 @@ export class ConnectionLifecycleService {
     }
 
     this.#statuses.delete(connectionId);
+    this.#recordConnectionEvent(metadata.value, "connection.deleted", {
+      status: "deleted",
+    });
     return ok(summary);
   }
 
@@ -513,6 +524,9 @@ export class ConnectionLifecycleService {
     }
 
     this.#setStatus(connectionId, "disconnected");
+    this.#recordConnectionEvent(metadata.value, "connection.disconnected", {
+      status: "disconnected",
+    });
     return ok(this.#toSummary(metadata.value));
   }
 
@@ -530,9 +544,20 @@ export class ConnectionLifecycleService {
     connectionId: string,
     input: MongoFindDocumentsInput,
   ): Result<Promise<MongoFindDocumentsResult>, AppError> {
+    const metadata = this.#storage.getMetadata(connectionId);
+
+    if (!metadata.ok) {
+      return metadata;
+    }
+
+    const target = `${input.database}.${input.collection}`;
     const session = this.#sessions.get(connectionId);
 
     if (!session) {
+      this.#recordQueryEvent(metadata.value, "query.failed", {
+        target,
+        metadata: { reason: "connection_not_active" },
+      });
       return err(
         new AppError("CONNECTION_NOT_ACTIVE", "Connection is not active", {
           details: { connectionId },
@@ -540,16 +565,58 @@ export class ConnectionLifecycleService {
       );
     }
 
-    return ok(session.findDocuments(input));
+    return ok(
+      session
+        .findDocuments(input)
+        .then((result) => {
+          this.#recordQueryEvent(metadata.value, "query.executed", {
+            target,
+            metadata: {
+              executionTimeMs: result.executionTimeMs,
+              filterFields: Object.keys(input.filter),
+              hasMore: result.hasMore,
+              limit: input.limit,
+              projectionFields: Object.keys(input.projection),
+              resultCount: result.documents.length,
+              skip: input.skip,
+              sortFields: Object.keys(input.sort),
+            },
+          });
+
+          return result;
+        })
+        .catch((error: unknown) => {
+          this.#recordQueryEvent(metadata.value, "query.failed", {
+            target,
+            metadata: {
+              error: sanitizeError(error),
+              reason: "driver_error",
+            },
+          });
+
+          throw error;
+        }),
+    );
   }
 
   aggregate(
     connectionId: string,
     input: MongoAggregateInput,
   ): Result<Promise<MongoAggregateResult>, AppError> {
+    const metadata = this.#storage.getMetadata(connectionId);
+
+    if (!metadata.ok) {
+      return metadata;
+    }
+
+    const target = `${input.database}.${input.collection}`;
     const session = this.#sessions.get(connectionId);
 
     if (!session) {
+      this.#recordAggregationEvent(metadata.value, "aggregation.failed", {
+        target,
+        metadata: { reason: "connection_not_active" },
+      });
       return err(
         new AppError("CONNECTION_NOT_ACTIVE", "Connection is not active", {
           details: { connectionId },
@@ -557,7 +624,35 @@ export class ConnectionLifecycleService {
       );
     }
 
-    return ok(session.aggregate(input));
+    return ok(
+      session
+        .aggregate(input)
+        .then((result) => {
+          this.#recordAggregationEvent(metadata.value, "aggregation.executed", {
+            target,
+            metadata: {
+              executionTimeMs: result.executionTimeMs,
+              limit: input.limit,
+              resultCount: result.documents.length,
+              stageCount: input.pipeline.length,
+              stages: input.pipeline.map((stage) => Object.keys(stage)[0]),
+            },
+          });
+
+          return result;
+        })
+        .catch((error: unknown) => {
+          this.#recordAggregationEvent(metadata.value, "aggregation.failed", {
+            target,
+            metadata: {
+              error: sanitizeError(error),
+              reason: "driver_error",
+            },
+          });
+
+          throw error;
+        }),
+    );
   }
 
   list(): StoredConnectionSummary[] {
@@ -750,6 +845,10 @@ export class ConnectionLifecycleService {
         connectionId,
         this.#sessions.has(connectionId) ? "connected" : "disconnected",
       );
+      this.#recordConnectionEvent(updated.value, "connection.tested", {
+        latencyMs,
+        ok: true,
+      });
 
       return ok({
         latencyMs,
@@ -762,6 +861,10 @@ export class ConnectionLifecycleService {
         lastErrorMessage: message,
       });
       this.#setStatus(connectionId, "error");
+      this.#recordConnectionEvent(metadata.value, "connection.tested", {
+        error: message,
+        ok: false,
+      });
 
       return ok({
         message,
@@ -777,12 +880,31 @@ export class ConnectionLifecycleService {
 
     try {
       await this.#driver.ping(input.uri);
+      this.#auditLog.record({
+        action: "connection.tested",
+        pluginId: "mongodb",
+        metadata: {
+          environment: input.environment,
+          ok: true,
+          readOnly: input.readOnly,
+        },
+      });
       return ok({
         latencyMs: Math.round(performance.now() - startedAt),
         message: "MongoDB ping succeeded",
         ok: true,
       });
     } catch (error) {
+      this.#auditLog.record({
+        action: "connection.tested",
+        pluginId: "mongodb",
+        metadata: {
+          environment: input.environment,
+          error: sanitizeError(error).message,
+          ok: false,
+          readOnly: input.readOnly,
+        },
+      });
       return ok({
         message: sanitizeError(error).message,
         ok: false,
@@ -807,6 +929,12 @@ export class ConnectionLifecycleService {
     }
 
     this.#setStatus(connectionId, "disconnected");
+    this.#recordConnectionEvent(result.value, "connection.updated", {
+      changedFields: Object.keys(patch),
+      environment: result.value.environment,
+      readOnly: result.value.readOnly,
+      status: "disconnected",
+    });
     return ok(this.#toSummary(result.value));
   }
 
@@ -849,6 +977,13 @@ export class ConnectionLifecycleService {
       lastErrorMessage: message,
     });
     this.#setStatus(connectionId, "error");
+    const metadata = this.#storage.getMetadata(connectionId);
+
+    if (metadata.ok) {
+      this.#recordConnectionEvent(metadata.value, "connection.failed", {
+        error: message,
+      });
+    }
 
     return err(
       new AppError("UNKNOWN", "Unable to connect MongoDB profile", {
@@ -859,6 +994,54 @@ export class ConnectionLifecycleService {
   }
 
   #recordDocumentWrite(
+    connection: StoredConnectionMetadata,
+    action: AuditLogAction,
+    input: {
+      metadata?: Record<string, unknown>;
+      target: string;
+    },
+  ): void {
+    this.#auditLog.record({
+      action,
+      connectionId: connection.id,
+      pluginId: connection.pluginId,
+      target: input.target,
+      ...(input.metadata ? { metadata: input.metadata } : {}),
+    });
+  }
+
+  #recordConnectionEvent(
+    connection: StoredConnectionMetadata,
+    action: AuditLogAction,
+    metadata: Record<string, unknown> = {},
+  ): void {
+    this.#auditLog.record({
+      action,
+      connectionId: connection.id,
+      pluginId: connection.pluginId,
+      target: connection.name,
+      metadata,
+    });
+  }
+
+  #recordQueryEvent(
+    connection: StoredConnectionMetadata,
+    action: AuditLogAction,
+    input: {
+      metadata?: Record<string, unknown>;
+      target: string;
+    },
+  ): void {
+    this.#auditLog.record({
+      action,
+      connectionId: connection.id,
+      pluginId: connection.pluginId,
+      target: input.target,
+      ...(input.metadata ? { metadata: input.metadata } : {}),
+    });
+  }
+
+  #recordAggregationEvent(
     connection: StoredConnectionMetadata,
     action: AuditLogAction,
     input: {

@@ -298,23 +298,23 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
 
 ## Phase 11 — Audit, Safety, and Polish
 
-- [ ] Implement local audit log
-  - [ ] Log connection events
-  - [ ] Log query events
-  - [ ] Log aggregation events
-  - [ ] Log document update events
-  - [ ] Exclude secrets
-- [ ] Add production safety UX
-  - [ ] Show production badge
-  - [ ] Default production connections to read-only
-  - [ ] Require explicit write confirmation
-- [ ] Polish errors and empty states
-  - [ ] Add user-readable messages
-  - [ ] Hide unsafe details
-  - [ ] Add retry actions where useful
+- [x] Implement local audit log
+  - [x] Log connection events
+  - [x] Log query events
+  - [x] Log aggregation events
+  - [x] Log document update events
+  - [x] Exclude secrets
+- [x] Add production safety UX
+  - [x] Show production badge
+  - [x] Default production connections to read-only
+  - [x] Require explicit write confirmation
+- [x] Polish errors and empty states
+  - [x] Add user-readable messages
+  - [x] Hide unsafe details
+  - [x] Add retry actions where useful
 - [ ] Final MVP verification
-  - [ ] Run lint
-  - [ ] Run typecheck
-  - [ ] Run tests
-  - [ ] Run desktop app
+  - [x] Run lint
+  - [x] Run typecheck
+  - [x] Run tests
+  - [x] Run desktop app
   - [ ] Verify primary MongoDB workflow end to end

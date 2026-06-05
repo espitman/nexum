@@ -1898,6 +1898,34 @@ button {
   padding: 5px 8px;
 }
 
+.connection-profile-meta em.env-local,
+.connection-env-pill.env-local {
+  background: #eef3f8;
+  border-color: #d7e0ea;
+  color: #415064;
+}
+
+.connection-profile-meta em.env-development,
+.connection-env-pill.env-development {
+  background: #edf7ee;
+  border-color: #c8e9ce;
+  color: #166534;
+}
+
+.connection-profile-meta em.env-staging,
+.connection-env-pill.env-staging {
+  background: #fff4df;
+  border-color: #ffd89a;
+  color: #9a4a00;
+}
+
+.connection-profile-meta em.env-production,
+.connection-env-pill.env-production {
+  background: #dff6fa;
+  border-color: #b8e6ed;
+  color: #006b78;
+}
+
 .connection-profile-meta small {
   color: #6a7484;
   font-size: 11px;
