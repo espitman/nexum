@@ -27,6 +27,7 @@ export const TopBar = ({
     <header className="app-topbar">
       <div className="brand-lockup">
         <strong>Nexum</strong>
+        <span>v0.8.0</span>
       </div>
 
       <nav className="breadcrumb" aria-label="Connection context">

@@ -10,7 +10,6 @@ import { ConnectionRail } from "./components/ConnectionRail";
 import { DatabasePanel } from "./components/DatabasePanel";
 import { DocumentWorkspace } from "./components/DocumentWorkspace";
 import { ErrorToastSurface } from "./components/ErrorToastSurface";
-import { PanelRestoreButton } from "./components/PanelRestoreButton";
 import { TopBar } from "./components/TopBar";
 import type { NavItemLabel, WorkspaceTabLabel } from "./mockData";
 import type {
@@ -32,7 +31,6 @@ export const App = () => {
     environment: "production",
     isReadOnly: true,
   });
-  const [isConnectionRailOpen, setIsConnectionRailOpen] = useState(true);
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [activeSection, setActiveSection] =
     useState<NavItemLabel>("Connections");
@@ -47,7 +45,6 @@ export const App = () => {
   >(null);
   const [columnWidths, setColumnWidths] = useState({
     database: 320,
-    rail: 150,
   });
 
   const connectionsQuery = useQuery({
@@ -169,7 +166,6 @@ export const App = () => {
   const indexRows = (indexesQuery.data ?? []) as IndexSummary[];
   const shellClassName = [
     "app-shell",
-    isConnectionRailOpen ? "" : "is-connections-closed",
     shouldShowDatabasePanel ? "" : "is-database-hidden",
   ]
     .filter(Boolean)
@@ -178,7 +174,6 @@ export const App = () => {
     "--database-panel-width": shouldShowDatabasePanel
       ? `${columnWidths.database}px`
       : "0px",
-    "--rail-width": isConnectionRailOpen ? `${columnWidths.rail}px` : "0px",
   } as CSSProperties;
   const connectionListToast: ToastMessage | null = connectionsQuery.error
     ? {
@@ -206,7 +201,7 @@ export const App = () => {
     );
   };
   const startColumnResize = (
-    column: "database" | "rail",
+    column: "database",
     event: PointerEvent<HTMLButtonElement>,
   ) => {
     event.preventDefault();
@@ -238,41 +233,10 @@ export const App = () => {
 
   return (
     <main className={shellClassName} style={shellStyle}>
-      {isConnectionRailOpen ? (
-        <ConnectionRail
-          activeSection={activeSection}
-          connections={connections}
-          onClose={() => setIsConnectionRailOpen(false)}
-          onConnectionAdd={() => {
-            setActiveSection("Connections");
-            setSelectedConnectionId(null);
-            setSelectedCollectionName(null);
-            setSchemaFields([]);
-          }}
-          onConnectionSelect={(connectionId) => {
-            setActiveSection("Connections");
-            setSelectedConnectionId(connectionId);
-            setSelectedCollectionName(null);
-            setSchemaFields([]);
-          }}
-          onSectionChange={handleSectionChange}
-          selectedConnectionId={selectedConnectionId}
-        />
-      ) : (
-        <PanelRestoreButton
-          direction="left"
-          label="Open connections panel"
-          onClick={() => setIsConnectionRailOpen(true)}
-        />
-      )}
-
-      {isConnectionRailOpen ? (
-        <ColumnResizeHandle
-          label="Resize connections column"
-          placement="rail"
-          onPointerDown={(event) => startColumnResize("rail", event)}
-        />
-      ) : null}
+      <ConnectionRail
+        activeSection={activeSection}
+        onSectionChange={handleSectionChange}
+      />
 
       <TopBar
         collectionName={visibleSelectedCollectionName}
@@ -364,7 +328,7 @@ export const App = () => {
 
 type ColumnResizeHandleProps = {
   label: string;
-  placement: "database" | "rail";
+  placement: "database";
   onPointerDown: (event: PointerEvent<HTMLButtonElement>) => void;
 };
 
@@ -386,7 +350,6 @@ const clamp = (value: number, min: number, max: number): number =>
 
 const columnResizeBounds = {
   database: { max: 560, min: 220 },
-  rail: { max: 280, min: 120 },
 } as const;
 
 const parseSelectedCollectionPath = (
