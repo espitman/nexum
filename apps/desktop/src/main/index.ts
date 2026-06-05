@@ -31,7 +31,7 @@ const createMainWindow = () => {
   mainWindow.webContents.once("did-finish-load", () => {
     void mainWindow.webContents
       .executeJavaScript(
-        "Boolean(window.nexum?.health?.ping && window.nexum?.mongodb?.findDocuments && window.nexum?.mongodb?.listIndexes && window.nexum?.mongodb?.updateDocument)",
+        "Boolean(window.nexum?.health?.ping && window.nexum?.mongodb?.aggregate && window.nexum?.mongodb?.findDocuments && window.nexum?.mongodb?.listIndexes && window.nexum?.mongodb?.updateDocument)",
         true,
       )
       .then((hasPreloadApi) => {

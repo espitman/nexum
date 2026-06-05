@@ -29,6 +29,24 @@ const mongoConnectionUriSchema = z
     }
   }, "URI must use mongodb:// or mongodb+srv://");
 
+const allowedAggregationStages = new Set([
+  "$match",
+  "$project",
+  "$sort",
+  "$limit",
+  "$skip",
+  "$count",
+  "$group",
+  "$unwind",
+]);
+
+const blockedAggregationStages = new Set([
+  "$accumulator",
+  "$function",
+  "$merge",
+  "$out",
+]);
+
 export const connectionIdPayloadSchema = z.object({
   connectionId: z.string().min(1),
 });
@@ -81,6 +99,66 @@ export const mongodbCollectionPayloadSchema = z.object({
   database: z.string().min(1),
 });
 
+export const mongodbAggregatePayloadSchema = z.object({
+  collection: z.string().min(1),
+  connectionId: z.string().min(1),
+  database: z.string().min(1),
+  limit: z.number().int().min(1).max(500).default(50),
+  pipeline: z.array(z.record(z.string(), z.unknown())).max(50),
+}).superRefine((payload, context) => {
+  payload.pipeline.forEach((stage, index) => {
+    const stageNames = Object.keys(stage);
+
+    if (stageNames.length !== 1) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Each aggregation stage must contain exactly one operator",
+        path: ["pipeline", index],
+      });
+      return;
+    }
+
+    const stageName = stageNames[0];
+
+    if (!stageName) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Aggregation stage operator is missing",
+        path: ["pipeline", index],
+      });
+      return;
+    }
+
+    if (blockedAggregationStages.has(stageName)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Blocked aggregation stage: ${stageName}`,
+        path: ["pipeline", index],
+      });
+      return;
+    }
+
+    if (!allowedAggregationStages.has(stageName)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Unsupported aggregation stage in MVP: ${stageName}`,
+        path: ["pipeline", index],
+      });
+      return;
+    }
+
+    const blockedNestedStage = findBlockedAggregationOperator(stage[stageName]);
+
+    if (blockedNestedStage) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Blocked aggregation stage: ${blockedNestedStage}`,
+        path: ["pipeline", index],
+      });
+    }
+  });
+});
+
 export const mongodbUpdateDocumentPayloadSchema = z.object({
   collection: z.string().min(1),
   confirmedProductionWrite: z.boolean().default(false),
@@ -112,7 +190,42 @@ export type MongodbFindDocumentsPayload = z.infer<
 export type MongodbCollectionPayload = z.infer<
   typeof mongodbCollectionPayloadSchema
 >;
+export type MongodbAggregatePayload = z.infer<
+  typeof mongodbAggregatePayloadSchema
+>;
 export type MongodbUpdateDocumentPayload = z.infer<
   typeof mongodbUpdateDocumentPayloadSchema
 >;
 export type AuditListPayload = z.infer<typeof auditListPayloadSchema>;
+
+const findBlockedAggregationOperator = (value: unknown): string | null => {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const blockedOperator = findBlockedAggregationOperator(item);
+
+      if (blockedOperator) {
+        return blockedOperator;
+      }
+    }
+
+    return null;
+  }
+
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  for (const [key, nestedValue] of Object.entries(value)) {
+    if (blockedAggregationStages.has(key)) {
+      return key;
+    }
+
+    const blockedOperator = findBlockedAggregationOperator(nestedValue);
+
+    if (blockedOperator) {
+      return blockedOperator;
+    }
+  }
+
+  return null;
+};

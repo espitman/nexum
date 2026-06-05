@@ -11,6 +11,7 @@ import {
   type IpcChannel,
   type IpcResponse,
   type MongoIndexDto,
+  type MongoAggregateResult,
 } from "../ipc/contracts";
 import type {
   AuditListPayload,
@@ -19,6 +20,7 @@ import type {
   ConnectionUpdatePayload,
   ExplorerChildrenPayload,
   MongodbCollectionPayload,
+  MongodbAggregatePayload,
   MongodbFindDocumentsPayload,
   MongodbUpdateDocumentPayload,
 } from "../ipc/validation";
@@ -83,6 +85,7 @@ export type NexumDesktopApi = {
     ping(): Promise<HealthCheckResult>;
   };
   mongodb: {
+    aggregate(payload: MongodbAggregatePayload): Promise<MongoAggregateResult>;
     findDocuments(
       payload: MongodbFindDocumentsPayload,
     ): Promise<DocumentQueryResult>;
@@ -118,6 +121,7 @@ const api: NexumDesktopApi = {
     ping: () => invoke(ipcChannels.healthPing),
   },
   mongodb: {
+    aggregate: (payload) => invoke(ipcChannels.mongodbAggregate, payload),
     findDocuments: (payload) =>
       invoke(ipcChannels.mongodbFindDocuments, payload),
     listIndexes: (payload) => invoke(ipcChannels.mongodbListIndexes, payload),

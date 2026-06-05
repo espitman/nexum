@@ -21,6 +21,27 @@ import {
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { DatabaseSearch } from "lucide-react";
 import {
+  addAggregationPipelineStage,
+  buildRawPipelineFromAggregationModel,
+  createAggregationPipelineStage,
+  createDefaultAggregationPipelineModel,
+  moveAggregationPipelineStage,
+  removeAggregationPipelineStage,
+  setAggregationPipelineStageEnabled,
+  updateAggregationPipelineStage,
+  type AggregationPipelineModel,
+  type AggregationPipelineStage,
+  type AggregationPipelineStageType,
+  type CountAggregationStage,
+  type GroupAggregationStage,
+  type LimitAggregationStage,
+  type MatchAggregationStage,
+  type ProjectAggregationStage,
+  type SkipAggregationStage,
+  type SortAggregationStage,
+  type UnwindAggregationStage,
+} from "../aggregationPipelineModel";
+import {
   workspaceTabs,
   type NavItemLabel,
   type WorkspaceTabLabel,
@@ -91,6 +112,14 @@ type DocumentQueryState = {
   sort: Record<string, 1 | -1>;
 };
 
+type AggregationRunResult = {
+  documents: string[];
+  executionTimeMs?: number;
+  message: string;
+  pipeline: Record<string, unknown>[];
+  status: "error" | "ready" | "running";
+};
+
 const defaultQueryState: DocumentQueryState = {
   filter: {},
   limit: 50,
@@ -143,6 +172,15 @@ export const DocumentWorkspace = ({
     useState<DocumentQueryState>(defaultQueryState);
   const [queryBuilderModel, setQueryBuilderModel] =
     useState<QueryBuilderGroupNode>(() => createDefaultQueryBuilderModel());
+  const [aggregationPipelineModel, setAggregationPipelineModel] =
+    useState<AggregationPipelineModel>(() =>
+      addAggregationPipelineStage(
+        createDefaultAggregationPipelineModel(),
+        createAggregationPipelineStage("match", { id: "match_stage" }),
+      ),
+    );
+  const [aggregationRunResult, setAggregationRunResult] =
+    useState<AggregationRunResult | null>(null);
   const [skipInput, setSkipInput] = useState("0");
   const [sortInput, setSortInput] = useState("{}");
   const [queryInputError, setQueryInputError] = useState<string | null>(null);
@@ -163,8 +201,12 @@ export const DocumentWorkspace = ({
     activeSection === "Explore" && selectedCollectionName !== null;
   const isMetadataWorkspace =
     activeWorkspaceTab === "Schema" || activeWorkspaceTab === "Indexes";
+  const isAggregationWorkspace = activeWorkspaceTab === "Aggregation Pipeline";
   const shouldShowQueryBuilderPanel =
-    isCollectionWorkspace && !isMetadataWorkspace && isQueryBuilderOpen;
+    isCollectionWorkspace &&
+    !isMetadataWorkspace &&
+    !isAggregationWorkspace &&
+    isQueryBuilderOpen;
   const isConnectionManager =
     activeSection === "Connections" && selectedCollectionName === null;
   const documentsQuery = useQuery({
@@ -545,7 +587,92 @@ export const DocumentWorkspace = ({
               schemaFields={schemaFields}
             />
           ) : null}
-          {!isMetadataWorkspace ? (
+          {isAggregationWorkspace ? (
+            <AggregationPipelineWorkspace
+              model={aggregationPipelineModel}
+              result={aggregationRunResult}
+              schemaFields={schemaFields}
+              onModelChange={(nextModel) => {
+                setAggregationPipelineModel(nextModel);
+                setAggregationRunResult(null);
+              }}
+              onRunPipeline={() => {
+                try {
+                  const pipeline = buildRawPipelineFromAggregationModel(
+                    aggregationPipelineModel,
+                  );
+
+                  if (!window.nexum) {
+                    throw new Error("Preload API is unavailable");
+                  }
+
+                  if (!selectedConnectionId || !selectedCollectionPath) {
+                    throw new Error("No collection selected");
+                  }
+
+                  if (pipeline.length === 0) {
+                    setAggregationRunResult({
+                      documents: [],
+                      message:
+                        "Pipeline is empty. Add an enabled complete stage to run.",
+                      pipeline,
+                      status: "error",
+                    });
+                    return;
+                  }
+
+                  setAggregationRunResult({
+                    documents: [],
+                    message:
+                      "Running aggregation pipeline against the selected collection.",
+                    pipeline,
+                    status: "running",
+                  });
+                  void window.nexum.mongodb
+                    .aggregate({
+                      collection: selectedCollectionPath.collection,
+                      connectionId: selectedConnectionId,
+                      database: selectedCollectionPath.database,
+                      limit: 50,
+                      pipeline,
+                    })
+                    .then((result) => {
+                      setAggregationRunResult({
+                        documents: result.documents,
+                        executionTimeMs: result.executionTimeMs,
+                        message: `${result.documents.length} document${result.documents.length === 1 ? "" : "s"} returned.`,
+                        pipeline,
+                        status: "ready",
+                      });
+                    })
+                    .catch((error: unknown) => {
+                      const message =
+                        error instanceof Error
+                          ? error.message
+                          : "Aggregation failed.";
+                      setAggregationRunResult({
+                        documents: [],
+                        message,
+                        pipeline,
+                        status: "error",
+                      });
+                      onConnectionError("Aggregation failed", message);
+                    });
+                } catch (error) {
+                  setAggregationRunResult({
+                    documents: [],
+                    message:
+                      error instanceof Error
+                        ? error.message
+                        : "Pipeline is invalid.",
+                    pipeline: [],
+                    status: "error",
+                  });
+                }
+              }}
+            />
+          ) : null}
+          {!isMetadataWorkspace && !isAggregationWorkspace ? (
             <>
               <QuerySection
                 filterInput={filterInput}
@@ -1110,6 +1237,587 @@ const MetadataWorkspace = ({
   </section>
 );
 
+type AggregationPipelineWorkspaceProps = {
+  model: AggregationPipelineModel;
+  result: AggregationRunResult | null;
+  schemaFields: SchemaFieldSummary[];
+  onModelChange: (model: AggregationPipelineModel) => void;
+  onRunPipeline: () => void;
+};
+
+const AggregationPipelineWorkspace = ({
+  model,
+  result,
+  schemaFields,
+  onModelChange,
+  onRunPipeline,
+}: AggregationPipelineWorkspaceProps) => {
+  const [activeStageId, setActiveStageId] = useState<string | null>(
+    model.stages[0]?.id ?? null,
+  );
+  const [resultTablePath, setResultTablePath] = useState<string[]>([]);
+  const [resultViewMode, setResultViewMode] =
+    useState<DocumentViewMode>("table");
+  const [selectedResultDocument, setSelectedResultDocument] =
+    useState<ParsedDocument | null>(null);
+  const [newStageType, setNewStageType] =
+    useState<AggregationPipelineStageType>("match");
+  const activeStage =
+    model.stages.find((stage) => stage.id === activeStageId) ??
+    model.stages[0] ??
+    null;
+  const rawPipeline = useMemo(() => {
+    try {
+      return {
+        ok: true as const,
+        value: buildRawPipelineFromAggregationModel(model),
+      };
+    } catch (error) {
+      return {
+        message: error instanceof Error ? error.message : "Pipeline is invalid.",
+        ok: false as const,
+      };
+    }
+  }, [model]);
+  const resultDocuments = useMemo(
+    () => parseEjsonDocuments(result?.documents ?? []),
+    [result?.documents],
+  );
+  const resultTableDocuments = useMemo(
+    () => projectDocumentsForTable(resultDocuments, resultTablePath),
+    [resultDocuments, resultTablePath],
+  );
+  const handleResultObjectOpen = useCallback(
+    (field: string) => setResultTablePath((path) => [...path, field]),
+    [],
+  );
+  const updateStage = (
+    stageId: string,
+    patch: Parameters<typeof updateAggregationPipelineStage>[2],
+  ) => onModelChange(updateAggregationPipelineStage(model, stageId, patch));
+
+  return (
+    <section className="aggregation-workspace">
+      <div className="aggregation-generator">
+        <div className="aggregation-stage-list">
+          <div className="aggregation-toolbar">
+            <select
+              aria-label="Stage type"
+              value={newStageType}
+              onChange={(event) =>
+                setNewStageType(
+                  event.target.value as AggregationPipelineStageType,
+                )
+              }
+            >
+              {aggregationStageOptions.map((stageType) => (
+                <option key={stageType} value={stageType}>
+                  {formatAggregationStageType(stageType)}
+                </option>
+              ))}
+            </select>
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => {
+                const stage = createAggregationPipelineStage(newStageType);
+                onModelChange(addAggregationPipelineStage(model, stage));
+                setActiveStageId(stage.id);
+              }}
+            >
+              Add stage
+            </button>
+          </div>
+
+          <div className="aggregation-stages" aria-label="Pipeline stages">
+            {model.stages.length === 0 ? (
+              <div className="aggregation-empty">No stages yet.</div>
+            ) : (
+              model.stages.map((stage, index) => (
+                <button
+                  aria-pressed={activeStage?.id === stage.id}
+                  className={`aggregation-stage-card ${
+                    activeStage?.id === stage.id ? "is-active" : ""
+                  } ${stage.enabled ? "" : "is-disabled"}`}
+                  key={stage.id}
+                  type="button"
+                  onClick={() => setActiveStageId(stage.id)}
+                >
+                  <span className="aggregation-stage-index">{index + 1}</span>
+                  <span>
+                    <strong>{formatAggregationStageType(stage.type)}</strong>
+                    <small>{getAggregationStageSummary(stage)}</small>
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+
+        <div className="aggregation-stage-editor">
+          {activeStage ? (
+            <>
+              <div className="aggregation-editor-header">
+                <div>
+                  <strong>{formatAggregationStageType(activeStage.type)}</strong>
+                  <span>{activeStage.enabled ? "Enabled" : "Disabled"}</span>
+                </div>
+                <div className="aggregation-editor-actions">
+                  <button
+                    className="secondary-button compact-button"
+                    type="button"
+                    onClick={() =>
+                      onModelChange(
+                        setAggregationPipelineStageEnabled(
+                          model,
+                          activeStage.id,
+                          !activeStage.enabled,
+                        ),
+                      )
+                    }
+                  >
+                    {activeStage.enabled ? "Disable" : "Enable"}
+                  </button>
+                  <button
+                    className="secondary-button compact-button"
+                    type="button"
+                    onClick={() =>
+                      onModelChange(
+                        moveAggregationPipelineStage(
+                          model,
+                          activeStage.id,
+                          "up",
+                        ),
+                      )
+                    }
+                  >
+                    Up
+                  </button>
+                  <button
+                    className="secondary-button compact-button"
+                    type="button"
+                    onClick={() =>
+                      onModelChange(
+                        moveAggregationPipelineStage(
+                          model,
+                          activeStage.id,
+                          "down",
+                        ),
+                      )
+                    }
+                  >
+                    Down
+                  </button>
+                  <button
+                    className="query-builder-remove compact-button"
+                    type="button"
+                    onClick={() => {
+                      onModelChange(
+                        removeAggregationPipelineStage(model, activeStage.id),
+                      );
+                      setActiveStageId(model.stages[0]?.id ?? null);
+                    }}
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+              <AggregationStageEditor
+                schemaFields={schemaFields}
+                stage={activeStage}
+                onStageChange={(patch) => updateStage(activeStage.id, patch)}
+              />
+            </>
+          ) : (
+            <div className="aggregation-editor-empty">
+              Add a stage to start building a pipeline.
+            </div>
+          )}
+        </div>
+
+        <div className="aggregation-preview">
+          <div className="aggregation-preview-panel">
+            <header>
+              <strong>Raw pipeline</strong>
+              <span>{rawPipeline.ok ? "Valid" : "Invalid"}</span>
+            </header>
+            <pre>
+              {rawPipeline.ok
+                ? JSON.stringify(rawPipeline.value, null, 2)
+                : rawPipeline.message}
+            </pre>
+          </div>
+          <button
+            className="run-button compact aggregation-run-button"
+            type="button"
+            onClick={onRunPipeline}
+          >
+            <span className="play-icon" />
+            Run pipeline
+          </button>
+        </div>
+      </div>
+
+      <section className="aggregation-data-explorer">
+        <ResultsHeader
+          collectionLabel="Aggregation"
+          count={resultDocuments.length}
+          hasMore={false}
+          isFetching={result?.status === "running"}
+          onRefresh={onRunPipeline}
+          onTablePathChange={setResultTablePath}
+          onViewModeChange={setResultViewMode}
+          tablePath={resultTablePath}
+          viewMode={resultViewMode}
+        />
+        {result?.status === "running" ? (
+          <ResultsLoadingState />
+        ) : result?.status === "error" ? (
+          <ResultsState title="Unable to run pipeline" label={result.message} />
+        ) : resultDocuments.length === 0 ? (
+          <ResultsState
+            title={result ? "No aggregation results" : "No results yet"}
+            label={
+              result
+                ? result.message
+                : "Run the pipeline to explore aggregation output."
+            }
+          />
+        ) : resultViewMode === "json" ? (
+          <AggregationJsonResults documents={resultDocuments} />
+        ) : (
+          <DocumentTable
+            key={`aggregation:${resultTablePath.join(".")}:${
+              resultTableDocuments[0]?.id ?? "empty"
+            }:${resultTableDocuments.length}`}
+            allowCellEdit={false}
+            documents={resultTableDocuments}
+            isSavingDocument={false}
+            onCellEdit={() => undefined}
+            onCellFilter={() => undefined}
+            onCellProjection={() => undefined}
+            onDocumentOpen={() => undefined}
+            onDocumentSelect={setSelectedResultDocument}
+            onObjectOpen={handleResultObjectOpen}
+            schemaFields={schemaFields}
+            selectedDocumentId={selectedResultDocument?.id ?? null}
+            tablePath={resultTablePath}
+          />
+        )}
+      </section>
+    </section>
+  );
+};
+
+type AggregationStageEditorProps = {
+  schemaFields: SchemaFieldSummary[];
+  stage: AggregationPipelineStage;
+  onStageChange: (
+    patch: Parameters<typeof updateAggregationPipelineStage>[2],
+  ) => void;
+};
+
+const AggregationStageEditor = ({
+  schemaFields,
+  stage,
+  onStageChange,
+}: AggregationStageEditorProps) => {
+  switch (stage.type) {
+    case "match":
+      return (
+        <AggregationAutocompleteObjectField
+          key={`${stage.id}:filter`}
+          fields={schemaFields}
+          label="Filter"
+          mode="filter"
+          placeholder='{ "status": "active" }'
+          value={stage.filter}
+          onChange={(filter) =>
+            onStageChange({ filter } satisfies Partial<MatchAggregationStage>)
+          }
+        />
+      );
+    case "project":
+      return (
+        <AggregationAutocompleteObjectField
+          key={`${stage.id}:projection`}
+          fields={schemaFields}
+          label="Projection"
+          mode="projection"
+          placeholder='{ "email": 1 }'
+          value={stage.projection}
+          onChange={(projection) =>
+            onStageChange({
+              projection,
+            } satisfies Partial<ProjectAggregationStage>)
+          }
+        />
+      );
+    case "sort":
+      return (
+        <AggregationJsonObjectField
+          key={`${stage.id}:sort`}
+          label="Sort"
+          placeholder='{ "createdAt": -1 }'
+          value={stage.sort}
+          onChange={(sort) =>
+            onStageChange({
+              sort: normalizeAggregationSort(sort),
+            } satisfies Partial<SortAggregationStage>)
+          }
+        />
+      );
+    case "limit":
+      return (
+        <AggregationNumberField
+          label="Limit"
+          min={1}
+          value={stage.limit}
+          onChange={(limit) =>
+            onStageChange({ limit } satisfies Partial<LimitAggregationStage>)
+          }
+        />
+      );
+    case "skip":
+      return (
+        <AggregationNumberField
+          label="Skip"
+          min={0}
+          value={stage.skip}
+          onChange={(skip) =>
+            onStageChange({ skip } satisfies Partial<SkipAggregationStage>)
+          }
+        />
+      );
+    case "count":
+      return (
+        <label className="aggregation-field">
+          <span>Output field</span>
+          <input
+            value={stage.field}
+            onChange={(event) =>
+              onStageChange({
+                field: event.target.value,
+              } satisfies Partial<CountAggregationStage>)
+            }
+          />
+        </label>
+      );
+    case "group":
+      return (
+        <>
+          <label className="aggregation-field">
+            <span>Group _id expression</span>
+            <input
+              placeholder="$status"
+              value={formatAggregationExpressionInput(stage.idExpression)}
+              onChange={(event) =>
+                onStageChange({
+                  idExpression: parseAggregationExpressionInput(
+                    event.target.value,
+                  ),
+                } satisfies Partial<GroupAggregationStage>)
+              }
+            />
+          </label>
+          <AggregationJsonObjectField
+            key={`${stage.id}:accumulators`}
+            label="Accumulators"
+            placeholder='{ "total": { "$sum": 1 } }'
+            value={stage.accumulators}
+            onChange={(accumulators) =>
+              onStageChange({
+                accumulators,
+              } satisfies Partial<GroupAggregationStage>)
+            }
+          />
+        </>
+      );
+    case "unwind":
+      return (
+        <>
+          <label className="aggregation-field">
+            <span>Array path</span>
+            <QueryFieldAutocompleteInput
+              aria-label="Unwind path"
+              fields={schemaFields}
+              mode="field"
+              placeholder="items"
+              value={stage.path}
+              onChange={(path) =>
+                onStageChange({ path } satisfies Partial<UnwindAggregationStage>)
+              }
+            />
+          </label>
+          <label className="aggregation-field">
+            <span>Include array index</span>
+            <input
+              placeholder="itemIndex"
+              value={stage.includeArrayIndex ?? ""}
+              onChange={(event) =>
+                onStageChange({
+                  includeArrayIndex: event.target.value,
+                } satisfies Partial<UnwindAggregationStage>)
+              }
+            />
+          </label>
+          <label className="aggregation-checkbox">
+            <input
+              checked={stage.preserveNullAndEmptyArrays ?? false}
+              type="checkbox"
+              onChange={(event) =>
+                onStageChange({
+                  preserveNullAndEmptyArrays: event.target.checked,
+                } satisfies Partial<UnwindAggregationStage>)
+              }
+            />
+            Preserve null and empty arrays
+          </label>
+        </>
+      );
+  }
+};
+
+type AggregationJsonObjectFieldProps = {
+  label: string;
+  placeholder: string;
+  value: Record<string, unknown>;
+  onChange: (value: Record<string, unknown>) => void;
+};
+
+const AggregationJsonObjectField = ({
+  label,
+  placeholder,
+  value,
+  onChange,
+}: AggregationJsonObjectFieldProps) => {
+  const [draftValue, setDraftValue] = useState(() =>
+    JSON.stringify(value, null, 2),
+  );
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  return (
+    <label className="aggregation-field aggregation-json-field">
+      <span>{label}</span>
+      <textarea
+        placeholder={placeholder}
+        value={draftValue}
+        onBlur={() => {
+          const parsed = parseJsonObject(draftValue, label);
+
+          if (!parsed.ok) {
+            setErrorMessage(parsed.message);
+            return;
+          }
+
+          setErrorMessage(null);
+          onChange(parsed.value);
+        }}
+        onChange={(event) => {
+          setDraftValue(event.target.value);
+          setErrorMessage(null);
+        }}
+      />
+      {errorMessage ? <small>{errorMessage}</small> : null}
+    </label>
+  );
+};
+
+type AggregationAutocompleteObjectFieldProps = {
+  fields: SchemaFieldSummary[];
+  label: string;
+  mode: "filter" | "projection";
+  placeholder: string;
+  value: Record<string, unknown>;
+  onChange: (value: Record<string, unknown>) => void;
+};
+
+const AggregationAutocompleteObjectField = ({
+  fields,
+  label,
+  mode,
+  placeholder,
+  value,
+  onChange,
+}: AggregationAutocompleteObjectFieldProps) => {
+  const [draftValue, setDraftValue] = useState(() => JSON.stringify(value));
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const commitDraftValue = (nextValue = draftValue) => {
+    const parsed = parseJsonObject(nextValue, label);
+
+    if (!parsed.ok) {
+      setErrorMessage(parsed.message);
+      return;
+    }
+
+    setErrorMessage(null);
+    onChange(parsed.value);
+  };
+
+  return (
+    <label className="aggregation-field aggregation-autocomplete-field">
+      <span>{label}</span>
+      <QueryFieldAutocompleteInput
+        aria-label={label}
+        canClear
+        fields={fields}
+        mode={mode}
+        placeholder={placeholder}
+        value={draftValue}
+        onChange={(nextValue) => {
+          setDraftValue(nextValue);
+          setErrorMessage(null);
+          const parsed = parseJsonObject(nextValue, label);
+
+          if (parsed.ok) {
+            onChange(parsed.value);
+          }
+        }}
+        onEnter={() => commitDraftValue()}
+      />
+      <button
+        className="secondary-button compact-button"
+        type="button"
+        onClick={() => commitDraftValue()}
+      >
+        Apply
+      </button>
+      {errorMessage ? <small>{errorMessage}</small> : null}
+    </label>
+  );
+};
+
+type AggregationNumberFieldProps = {
+  label: string;
+  min: number;
+  value: number;
+  onChange: (value: number) => void;
+};
+
+const AggregationNumberField = ({
+  label,
+  min,
+  value,
+  onChange,
+}: AggregationNumberFieldProps) => (
+  <label className="aggregation-field">
+    <span>{label}</span>
+    <input
+      inputMode="numeric"
+      min={min}
+      type="number"
+      value={value}
+      onChange={(event) => {
+        const nextValue = Number(event.target.value);
+
+        if (Number.isInteger(nextValue) && nextValue >= min) {
+          onChange(nextValue);
+        }
+      }}
+    />
+  </label>
+);
+
 type QueryBuilderSectionProps = {
   fields: QueryBuilderFieldInference[];
   isFetching: boolean;
@@ -1618,6 +2326,7 @@ const DocumentBreadcrumbs = ({
 );
 
 type DocumentTableProps = {
+  allowCellEdit?: boolean;
   documents: ParsedDocument[];
   isSavingDocument: boolean;
   onCellEdit: (request: CellEditRequest) => void;
@@ -1695,6 +2404,7 @@ type EditingDocumentCell = {
 };
 
 const DocumentTable = ({
+  allowCellEdit = true,
   documents,
   isSavingDocument,
   onCellEdit,
@@ -1980,6 +2690,7 @@ const DocumentTable = ({
                       const value = cell.getValue();
 
                       if (
+                        allowCellEdit &&
                         !isSavingDocument &&
                         isInlineEditableTableValue(path, value, schemaField)
                       ) {
@@ -2352,6 +3063,54 @@ const JsonResults = ({ documents, onDocumentOpen }: JsonResultsProps) => {
                 >
                   Edit
                 </button>
+              </header>
+              <div className="json-document-tree">
+                <JsonTreeView data={document.value} />
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+type AggregationJsonResultsProps = {
+  documents: ParsedDocument[];
+};
+
+const AggregationJsonResults = ({ documents }: AggregationJsonResultsProps) => {
+  const parentRef = useRef<HTMLDivElement | null>(null);
+  // eslint-disable-next-line react-hooks/incompatible-library
+  const rowVirtualizer = useVirtualizer({
+    count: documents.length,
+    estimateSize: () => 220,
+    getScrollElement: () => parentRef.current,
+    overscan: 4,
+  });
+
+  return (
+    <div className="json-results" ref={parentRef}>
+      <div
+        className="json-results-inner"
+        style={{ height: `${rowVirtualizer.getTotalSize()}px` }}
+      >
+        {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+          const document = documents[virtualRow.index];
+
+          if (!document) {
+            return null;
+          }
+
+          return (
+            <article
+              className="json-document-card"
+              key={document.id}
+              style={{ transform: `translateY(${virtualRow.start}px)` }}
+            >
+              <header className="json-document-card-header">
+                <span>Result</span>
+                <strong>{document.id}</strong>
               </header>
               <div className="json-document-tree">
                 <JsonTreeView data={document.value} />
@@ -3189,6 +3948,109 @@ const parseDocumentQueryInputs = ({
       sort: sort.value,
     },
   };
+};
+
+const aggregationStageOptions: AggregationPipelineStageType[] = [
+  "match",
+  "project",
+  "sort",
+  "limit",
+  "skip",
+  "count",
+  "group",
+  "unwind",
+];
+
+const formatAggregationStageType = (
+  type: AggregationPipelineStageType,
+): string => {
+  switch (type) {
+    case "match":
+      return "$match";
+    case "project":
+      return "$project";
+    case "sort":
+      return "$sort";
+    case "limit":
+      return "$limit";
+    case "skip":
+      return "$skip";
+    case "count":
+      return "$count";
+    case "group":
+      return "$group";
+    case "unwind":
+      return "$unwind";
+  }
+};
+
+const getAggregationStageSummary = (stage: AggregationPipelineStage): string => {
+  switch (stage.type) {
+    case "match":
+      return summarizeObjectKeys(stage.filter, "empty filter");
+    case "project":
+      return summarizeObjectKeys(stage.projection, "empty projection");
+    case "sort":
+      return summarizeObjectKeys(stage.sort, "no sort fields");
+    case "limit":
+      return `${stage.limit} documents`;
+    case "skip":
+      return `${stage.skip} skipped`;
+    case "count":
+      return stage.field.trim() || "missing output field";
+    case "group":
+      return summarizeObjectKeys(stage.accumulators, "no accumulators");
+    case "unwind":
+      return stage.path.trim() || "missing path";
+  }
+};
+
+const summarizeObjectKeys = (
+  value: Record<string, unknown>,
+  emptyLabel: string,
+): string => {
+  const keys = Object.keys(value);
+
+  if (keys.length === 0) {
+    return emptyLabel;
+  }
+
+  if (keys.length === 1) {
+    return keys[0] ?? emptyLabel;
+  }
+
+  return `${keys.length} fields`;
+};
+
+const normalizeAggregationSort = (
+  value: Record<string, unknown>,
+): Record<string, 1 | -1> =>
+  Object.fromEntries(
+    Object.entries(value).flatMap(([field, direction]) =>
+      direction === 1 || direction === -1 ? [[field, direction]] : [],
+    ),
+  );
+
+const formatAggregationExpressionInput = (value: unknown): string => {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  return JSON.stringify(value);
+};
+
+const parseAggregationExpressionInput = (value: string): unknown => {
+  const trimmedValue = value.trim();
+
+  if (!trimmedValue) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(normalizeMongoJsonInput(trimmedValue));
+  } catch {
+    return trimmedValue;
+  }
 };
 
 type QueryFieldSuggestionContext = {

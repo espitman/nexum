@@ -47,6 +47,18 @@ export type MongoFindDocumentsResult = {
   hasMore: boolean;
 };
 
+export type MongoAggregateInput = {
+  collection: string;
+  database: string;
+  limit: number;
+  pipeline: Record<string, unknown>[];
+};
+
+export type MongoAggregateResult = {
+  documents: string[];
+  executionTimeMs: number;
+};
+
 export type MongoUpdateDocumentInput = {
   collection: string;
   confirmedProductionWrite: boolean;
@@ -72,6 +84,7 @@ export type MongoIndexMetadata = {
 };
 
 export interface ActiveMongoConnection {
+  aggregate(input: MongoAggregateInput): Promise<MongoAggregateResult>;
   close(): Promise<void>;
   findDocuments(
     input: MongoFindDocumentsInput,
@@ -268,6 +281,25 @@ export class MongoDriverConnectionClient implements MongoConnectionDriver {
     await pingClient(client);
 
     return {
+      async aggregate(input) {
+        const startedAt = performance.now();
+        const documents = await client
+          .db(input.database)
+          .collection(input.collection)
+          .aggregate(input.pipeline as Document[], {
+            allowDiskUse: false,
+            maxTimeMS: mongoFindMaxTimeMs,
+          })
+          .limit(input.limit)
+          .toArray();
+
+        return {
+          documents: documents.map((document) =>
+            BSON.EJSON.stringify(document, { relaxed: false }),
+          ),
+          executionTimeMs: Math.round(performance.now() - startedAt),
+        };
+      },
       close: () => client.close(true),
       async findDocuments(input) {
         const startedAt = performance.now();
@@ -509,6 +541,23 @@ export class ConnectionLifecycleService {
     }
 
     return ok(session.findDocuments(input));
+  }
+
+  aggregate(
+    connectionId: string,
+    input: MongoAggregateInput,
+  ): Result<Promise<MongoAggregateResult>, AppError> {
+    const session = this.#sessions.get(connectionId);
+
+    if (!session) {
+      return err(
+        new AppError("CONNECTION_NOT_ACTIVE", "Connection is not active", {
+          details: { connectionId },
+        }),
+      );
+    }
+
+    return ok(session.aggregate(input));
   }
 
   list(): StoredConnectionSummary[] {

@@ -97,12 +97,22 @@ class FakeActiveConnection implements ActiveMongoConnection {
   ]);
   databases = ["admin", "app"];
   findInputs: unknown[] = [];
+  aggregateInputs: unknown[] = [];
   indexInputs: unknown[] = [];
   pingCount = 0;
   updateInputs: unknown[] = [];
 
   async close(): Promise<void> {
     this.closed = true;
+  }
+
+  async aggregate(input: Parameters<ActiveMongoConnection["aggregate"]>[0]) {
+    this.aggregateInputs.push(input);
+
+    return {
+      documents: ['{"_id":{"$oid":"6649f8c3e7b1d2a4f8c9a1b2"}}'],
+      executionTimeMs: 4,
+    };
   }
 
   async findDocuments(

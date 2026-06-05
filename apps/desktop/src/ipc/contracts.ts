@@ -14,6 +14,7 @@ export const ipcChannels = {
   explorerListChildren: "nexum:explorer:list-children",
   explorerListRootNodes: "nexum:explorer:list-root-nodes",
   healthPing: "nexum:health:ping",
+  mongodbAggregate: "nexum:mongodb:aggregate",
   mongodbFindDocuments: "nexum:mongodb:find-documents",
   mongodbListIndexes: "nexum:mongodb:list-indexes",
   mongodbUpdateDocument: "nexum:mongodb:update-document",
@@ -66,6 +67,11 @@ export type DocumentQueryResult = {
 export type DocumentUpdateResult = {
   matchedCount: number;
   modifiedCount: number;
+};
+
+export type MongoAggregateResult = {
+  documents: string[];
+  executionTimeMs: number;
 };
 
 export type MongoIndexDto = {

@@ -18,6 +18,7 @@ import {
   connectionIdPayloadSchema,
   connectionUpdatePayloadSchema,
   explorerChildrenPayloadSchema,
+  mongodbAggregatePayloadSchema,
   mongodbCollectionPayloadSchema,
   mongodbFindDocumentsPayloadSchema,
   mongodbUpdateDocumentPayloadSchema,
@@ -226,6 +227,14 @@ export const registerIpcHandlers = (
     explorerChildrenPayloadSchema,
     async ({ connectionId, nodeId }) =>
       unwrapResult(await services.explorer.listChildren(connectionId, nodeId)),
+    ipc,
+  );
+
+  registerValidatedHandler(
+    ipcChannels.mongodbAggregate,
+    mongodbAggregatePayloadSchema,
+    async (payload) =>
+      unwrapResult(services.connections.aggregate(payload.connectionId, payload)),
     ipc,
   );
 

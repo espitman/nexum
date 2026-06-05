@@ -285,12 +285,12 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
   - [x] `$merge`
   - [x] `$function`
   - [x] `$accumulator`
-- [ ] Build aggregation UI
-  - [ ] Add stage list
-  - [ ] Add stage editor
-  - [ ] Add raw pipeline preview
-  - [ ] Add run action
-  - [ ] Add result preview
+- [x] Build aggregation UI
+  - [x] Add stage list
+  - [x] Add stage editor
+  - [x] Add raw pipeline preview
+  - [x] Add run action
+  - [x] Add result preview
 - [ ] Verify aggregation builder
   - [ ] Run allowed pipeline
   - [ ] Reject blocked stages
