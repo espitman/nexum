@@ -152,6 +152,9 @@ export const DocumentWorkspace = ({
   const [editorDocument, setEditorDocument] = useState<ParsedDocument | null>(
     null,
   );
+  const [pendingInlineDocuments, setPendingInlineDocuments] = useState<
+    Map<string, ParsedDocument>
+  >(() => new Map());
   const [tableDrillState, setTableDrillState] = useState<{
     collectionName: string | null;
     path: string[];
@@ -233,6 +236,15 @@ export const DocumentWorkspace = ({
     () => parseEjsonDocuments(documentsQuery.data?.documents ?? []),
     [documentsQuery.data?.documents],
   );
+  const displayedDocuments = useMemo(() => {
+    if (pendingInlineDocuments.size === 0) {
+      return parsedDocuments;
+    }
+
+    return parsedDocuments.map(
+      (document) => pendingInlineDocuments.get(document.id) ?? document,
+    );
+  }, [parsedDocuments, pendingInlineDocuments]);
   const schemaParsedDocuments = useMemo(
     () => parseEjsonDocuments(schemaDocumentsQuery.data?.documents ?? []),
     [schemaDocumentsQuery.data?.documents],
@@ -320,9 +332,11 @@ export const DocumentWorkspace = ({
 
   const updateDocumentMutation = useMutation({
     mutationFn: async ({
+      documentId: _documentId,
       editedDocument,
       originalDocument,
     }: {
+      documentId: string;
       editedDocument: string;
       originalDocument: string;
     }) => {
@@ -344,14 +358,32 @@ export const DocumentWorkspace = ({
         originalDocument,
       });
     },
-    onError(error) {
+    onError(error, variables) {
+      setPendingInlineDocuments((currentDocuments) => {
+        if (!currentDocuments.has(variables.documentId)) {
+          return currentDocuments;
+        }
+
+        const nextDocuments = new Map(currentDocuments);
+        nextDocuments.delete(variables.documentId);
+        return nextDocuments;
+      });
       const message =
         error instanceof Error ? error.message : "Unable to save document";
       onConnectionError("Save document failed", message);
     },
-    async onSuccess() {
+    async onSuccess(_data, variables) {
       setEditorDocument(null);
       await documentsQuery.refetch();
+      setPendingInlineDocuments((currentDocuments) => {
+        if (!currentDocuments.has(variables.documentId)) {
+          return currentDocuments;
+        }
+
+        const nextDocuments = new Map(currentDocuments);
+        nextDocuments.delete(variables.documentId);
+        return nextDocuments;
+      });
     },
   });
 
@@ -411,7 +443,18 @@ export const DocumentWorkspace = ({
       return;
     }
 
+    const optimisticDocument = parseEjsonDocuments([editedDocument.value])[0];
+
+    if (optimisticDocument) {
+      setPendingInlineDocuments((currentDocuments) => {
+        const nextDocuments = new Map(currentDocuments);
+        nextDocuments.set(document.id, optimisticDocument);
+        return nextDocuments;
+      });
+    }
+
     updateDocumentMutation.mutate({
+      documentId: document.id,
       editedDocument: editedDocument.value,
       originalDocument: document.ejson,
     });
@@ -522,7 +565,7 @@ export const DocumentWorkspace = ({
               />
               <ResultsSection
                 collectionLabel={selectedCollectionLabel ?? "Collection"}
-                documents={parsedDocuments}
+                documents={displayedDocuments}
                 error={documentsQuery.error}
                 hasMore={documentsQuery.data?.hasMore ?? false}
                 isFetching={documentsQuery.isFetching}
@@ -559,7 +602,7 @@ export const DocumentWorkspace = ({
                     Math.max(Math.floor(queryState.skip / queryState.limit), 1),
                   )
                 }
-                resultCount={parsedDocuments.length}
+                resultCount={displayedDocuments.length}
                 skip={queryState.skip}
               />
               {shouldShowQueryBuilderPanel ? (
@@ -584,6 +627,7 @@ export const DocumentWorkspace = ({
               onClose={() => setEditorDocument(null)}
               onSave={(editedDocument) =>
                 updateDocumentMutation.mutate({
+                  documentId: editorDocument.id,
                   editedDocument,
                   originalDocument: editorDocument.ejson,
                 })
