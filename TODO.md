@@ -318,3 +318,42 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
   - [x] Run tests
   - [x] Run desktop app
   - [x] Verify primary MongoDB workflow end to end
+
+## Phase 12 — Sidebar Workspaces
+
+- [ ] Build Queries workspace
+  - [ ] Show saved find queries and aggregation pipelines
+  - [ ] Add create, rename, duplicate, delete actions
+  - [ ] Store query name, target connection, database, collection, filter, projection, sort, limit, and pipeline
+  - [ ] Open a saved query into the active collection workspace
+  - [ ] Add last-run status and execution metadata
+- [ ] Build Bookmarks workspace
+  - [ ] Save bookmarked connections, databases, collections, documents, and field paths
+  - [ ] Group bookmarks by connection and database
+  - [ ] Jump directly from a bookmark to its target
+  - [ ] Add notes and tags for each bookmark
+  - [ ] Add remove and reorder actions
+- [ ] Build Snippets workspace
+  - [ ] Save reusable filter, projection, sort, update, and aggregation snippets
+  - [ ] Add snippet variables/placeholders
+  - [ ] Insert snippets into Documents, Query Builder, and Aggregation Pipeline editors
+  - [ ] Validate snippet JSON/EJSON before saving
+  - [ ] Add copy, duplicate, and delete actions
+- [ ] Build Tasks workspace
+  - [ ] Show recent and scheduled local operations
+  - [ ] Track running queries, exports, schema inference, and audit cleanup jobs
+  - [ ] Show status, duration, target, and error details
+  - [ ] Add cancel/retry actions where safe
+  - [ ] Keep task history local and free of secrets
+- [ ] Build Settings workspace
+  - [ ] Add appearance and density settings
+  - [ ] Add default page size, query timeout, and max sample size settings
+  - [ ] Add safety defaults for production and read-only behavior
+  - [ ] Add local data management for audit logs and cached metadata
+  - [ ] Add about/version and diagnostics information
+- [ ] Verify sidebar workspaces
+  - [ ] Each sidebar item opens its workspace
+  - [ ] Active sidebar state persists during navigation
+  - [ ] Empty, loading, and error states are consistent
+  - [ ] Workspaces do not expose secrets
+  - [ ] Run lint, typecheck, and tests
