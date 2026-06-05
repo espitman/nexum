@@ -266,11 +266,11 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
 
 ## Phase 10 — Aggregation Builder
 
-- [ ] Implement pipeline model
-  - [ ] Add stage model
-  - [ ] Support enable/disable
-  - [ ] Support reordering
-  - [ ] Generate raw pipeline
+- [x] Implement pipeline model
+  - [x] Add stage model
+  - [x] Support enable/disable
+  - [x] Support reordering
+  - [x] Generate raw pipeline
 - [ ] Support MVP stages
   - [ ] `$match`
   - [ ] `$project`
