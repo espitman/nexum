@@ -1251,6 +1251,115 @@ button {
   margin: 4px 2px;
 }
 
+.task-schedule-menu-popover {
+  min-width: 190px;
+}
+
+.task-schedule-time-field {
+  display: grid;
+  gap: 5px;
+  padding: 7px 10px;
+}
+
+.task-schedule-time-field span {
+  color: #667286;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.task-schedule-time-field input {
+  border: 1px solid #dbe3ec;
+  border-radius: 5px;
+  color: #263142;
+  font: inherit;
+  height: 30px;
+  padding: 0 8px;
+}
+
+.task-context-menu,
+.task-context-submenu-panel {
+  background: #111417;
+  border: 1px solid #3b4148;
+  border-radius: 7px;
+  box-shadow: 0 16px 36px rgb(15 23 42 / 28%);
+  color: #f4f6f8;
+  display: grid;
+  padding: 5px;
+  position: fixed;
+  width: 240px;
+  z-index: 80;
+}
+
+.task-context-menu button,
+.task-context-submenu-panel button {
+  align-items: center;
+  border: 0;
+  border-radius: 5px;
+  color: #f4f6f8;
+  display: flex;
+  font-size: 13px;
+  font-weight: 700;
+  justify-content: space-between;
+  min-height: 32px;
+  padding: 0 10px;
+  text-align: left;
+}
+
+.task-context-menu button:hover:not(:disabled),
+.task-context-submenu-panel button:hover {
+  background: #0b72d9;
+}
+
+.task-context-menu button:disabled {
+  color: #737b86;
+  cursor: default;
+}
+
+.task-context-menu .danger-text-button {
+  color: #ff8f85;
+}
+
+.task-context-menu-divider {
+  border-top: 1px solid #343a42;
+  margin: 5px 2px;
+}
+
+.task-context-submenu {
+  position: relative;
+}
+
+.task-context-submenu-panel {
+  display: none;
+  left: calc(100% + 4px);
+  top: 0;
+}
+
+.task-context-submenu:hover .task-context-submenu-panel,
+.task-context-submenu:focus-within .task-context-submenu-panel {
+  display: grid;
+}
+
+.task-context-submenu-panel small {
+  color: #aeb6c2;
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.task-context-submenu-panel button {
+  align-items: start;
+  display: grid;
+  justify-items: start;
+  line-height: 1.25;
+  padding: 7px 10px;
+}
+
+.task-context-submenu-panel .task-schedule-time-field input {
+  background: #191d22;
+  border-color: #4a515a;
+  color: #f4f6f8;
+}
+
 .tasks-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 360px;
@@ -1294,6 +1403,13 @@ button {
 .tasks-table tbody tr:hover,
 .tasks-table tbody tr.is-active {
   background: #eef6f8;
+}
+
+.task-next-run {
+  color: #667286;
+  display: block;
+  font-size: 11px;
+  margin-top: 3px;
 }
 
 .task-status {

@@ -111,8 +111,10 @@ export type SavedWorkspaceTask = {
   id: string;
   lastModifiedAt: string;
   lastRunAt?: string;
+  nextRunAt?: string;
   result?: string;
-  schedule: "manual";
+  schedule: "daily" | "daily-at" | "hourly" | "manual" | "minute" | "weekly";
+  scheduleTime?: string;
   sourceQuery: SavedWorkspaceQuery;
   status: "idle" | "running" | "success" | "failed";
   target: string;

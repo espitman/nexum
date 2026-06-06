@@ -6,6 +6,7 @@ import {
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
+  type RefObject,
 } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import "../monacoEnvironment";
@@ -685,18 +686,69 @@ export const DocumentWorkspace = ({
 
   const cloneTask = (task: SavedWorkspaceTask) => {
     const now = new Date().toISOString();
+    const nextTask: SavedWorkspaceTask = {
+      ...task,
+      createdAt: now,
+      id: `task_${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
+      lastModifiedAt: now,
+      name: `${task.name} copy`,
+      status: "idle",
+    };
 
-    setTasks((currentTasks) => [
-      {
-        ...task,
-        createdAt: now,
-        id: `task_${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
-        lastModifiedAt: now,
-        name: `${task.name} copy`,
-        status: "idle",
-      },
-      ...currentTasks,
-    ]);
+    if (task.schedule !== "manual") {
+      nextTask.nextRunAt = getNextTaskRunAt(task.schedule, task.scheduleTime);
+    } else {
+      delete nextTask.nextRunAt;
+    }
+
+    setTasks((currentTasks) => [nextTask, ...currentTasks]);
+  };
+
+  const scheduleTask = (
+    taskId: string,
+    schedule: Exclude<SavedWorkspaceTask["schedule"], "manual">,
+    scheduleTime?: string,
+  ) => {
+    const now = new Date().toISOString();
+
+    setTasks((currentTasks) =>
+      currentTasks.map((task) => {
+        if (task.id !== taskId) {
+          return task;
+        }
+
+        const { scheduleTime: _scheduleTime, ...nextTask } = task;
+
+        return {
+              ...nextTask,
+              lastModifiedAt: now,
+              nextRunAt: getNextTaskRunAt(schedule, scheduleTime),
+              schedule,
+              ...(scheduleTime ? { scheduleTime } : {}),
+            };
+      }),
+    );
+  };
+
+  const unscheduleTask = (taskId: string) => {
+    const now = new Date().toISOString();
+
+    setTasks((currentTasks) =>
+      currentTasks.map((task) => {
+        if (task.id !== taskId) {
+          return task;
+        }
+
+        const { nextRunAt: _nextRunAt, ...nextTask } = task;
+        const { scheduleTime: _scheduleTime, ...manualTask } = nextTask;
+
+        return {
+          ...manualTask,
+          lastModifiedAt: now,
+          schedule: "manual",
+        };
+      }),
+    );
   };
 
   const removeTask = (taskId: string) => {
@@ -1110,6 +1162,8 @@ export const DocumentWorkspace = ({
           onPerform={performTask}
           onPreview={previewTask}
           onRemove={removeTask}
+          onSchedule={scheduleTask}
+          onUnschedule={unscheduleTask}
         />
       ) : null}
 
@@ -1779,6 +1833,12 @@ type TasksWorkspaceProps = {
   onPerform: (task: SavedWorkspaceTask) => void;
   onPreview: (task: SavedWorkspaceTask) => void;
   onRemove: (taskId: string) => void;
+  onSchedule: (
+    taskId: string,
+    schedule: Exclude<SavedWorkspaceTask["schedule"], "manual">,
+    scheduleTime?: string,
+  ) => void;
+  onUnschedule: (taskId: string) => void;
 };
 
 const TasksWorkspace = ({
@@ -1791,15 +1851,29 @@ const TasksWorkspace = ({
   onPerform,
   onPreview,
   onRemove,
+  onSchedule,
+  onUnschedule,
 }: TasksWorkspaceProps) => {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(
     tasks[0]?.id ?? null,
   );
   const [isNewTaskMenuOpen, setIsNewTaskMenuOpen] = useState(false);
+  const [isScheduleMenuOpen, setIsScheduleMenuOpen] = useState(false);
+  const [dailyScheduleTime, setDailyScheduleTime] = useState("09:00");
+  const [taskContextMenu, setTaskContextMenu] = useState<{
+    taskId: string;
+    x: number;
+    y: number;
+  } | null>(null);
   const newTaskMenuRef = useRef<HTMLDivElement | null>(null);
+  const scheduleMenuRef = useRef<HTMLDivElement | null>(null);
+  const taskContextMenuRef = useRef<HTMLDivElement | null>(null);
   const querySources = [...savedQueries, ...history].slice(0, 10);
   const selectedTask =
     tasks.find((task) => task.id === selectedTaskId) ?? tasks[0] ?? null;
+  const contextTask = taskContextMenu
+    ? (tasks.find((task) => task.id === taskContextMenu.taskId) ?? null)
+    : null;
 
   useEffect(() => {
     if (!isNewTaskMenuOpen) {
@@ -1833,6 +1907,72 @@ const TasksWorkspace = ({
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [isNewTaskMenuOpen]);
+
+  useEffect(() => {
+    if (!isScheduleMenuOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+
+      if (
+        target instanceof Node &&
+        scheduleMenuRef.current?.contains(target)
+      ) {
+        return;
+      }
+
+      setIsScheduleMenuOpen(false);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsScheduleMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isScheduleMenuOpen]);
+
+  useEffect(() => {
+    if (!taskContextMenu) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+
+      if (
+        target instanceof Node &&
+        taskContextMenuRef.current?.contains(target)
+      ) {
+        return;
+      }
+
+      setTaskContextMenu(null);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setTaskContextMenu(null);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [taskContextMenu]);
 
   return (
     <section className="tasks-workspace">
@@ -1921,10 +2061,65 @@ const TasksWorkspace = ({
         >
           Remove
         </button>
-        <button disabled type="button" title="Scheduling is not available yet">
-          Schedule
-        </button>
-        <button disabled type="button" title="Scheduling is not available yet">
+        <div className="task-new-menu task-schedule-menu" ref={scheduleMenuRef}>
+          <button
+            disabled={!selectedTask}
+            onClick={() => setIsScheduleMenuOpen((isOpen) => !isOpen)}
+            type="button"
+          >
+            Schedule
+          </button>
+          {isScheduleMenuOpen && selectedTask ? (
+            <div className="task-new-menu-popover task-schedule-menu-popover">
+              {(["minute", "hourly", "daily", "weekly"] as const).map((schedule) => (
+                <button
+                  key={schedule}
+                  type="button"
+                  onClick={() => {
+                    onSchedule(selectedTask.id, schedule);
+                    setIsScheduleMenuOpen(false);
+                  }}
+                >
+                  <span>{formatTaskSchedule(schedule)}</span>
+                  <small>
+                    Next run {formatRelativeTime(getNextTaskRunAt(schedule))}
+                  </small>
+                </button>
+              ))}
+              <div className="task-new-menu-divider" />
+              <label className="task-schedule-time-field">
+                <span>Every day at</span>
+                <input
+                  type="time"
+                  value={dailyScheduleTime}
+                  onChange={(event) =>
+                    setDailyScheduleTime(event.target.value)
+                  }
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  onSchedule(selectedTask.id, "daily-at", dailyScheduleTime);
+                  setIsScheduleMenuOpen(false);
+                }}
+              >
+                <span>{formatTaskSchedule("daily-at", dailyScheduleTime)}</span>
+                <small>
+                  Next run{" "}
+                  {formatRelativeTime(
+                    getNextTaskRunAt("daily-at", dailyScheduleTime),
+                  )}
+                </small>
+              </button>
+            </div>
+          ) : null}
+        </div>
+        <button
+          disabled={!selectedTask || selectedTask.schedule === "manual"}
+          onClick={() => selectedTask && onUnschedule(selectedTask.id)}
+          type="button"
+        >
           Unschedule
         </button>
       </div>
@@ -1949,6 +2144,15 @@ const TasksWorkspace = ({
                     className={selectedTaskId === task.id ? "is-active" : ""}
                     key={task.id}
                     onClick={() => setSelectedTaskId(task.id)}
+                    onContextMenu={(event) => {
+                      event.preventDefault();
+                      setSelectedTaskId(task.id);
+                      setTaskContextMenu({
+                        taskId: task.id,
+                        x: event.clientX,
+                        y: event.clientY,
+                      });
+                    }}
                   >
                     <td>{task.name}</td>
                     <td>{formatTaskType(task.type)}</td>
@@ -1958,7 +2162,14 @@ const TasksWorkspace = ({
                         {formatTaskStatus(task.status)}
                       </span>
                     </td>
-                    <td>Manual</td>
+                    <td>
+                      {formatTaskSchedule(task.schedule, task.scheduleTime)}
+                      {task.nextRunAt ? (
+                        <small className="task-next-run">
+                          Next {formatRelativeTime(task.nextRunAt)}
+                        </small>
+                      ) : null}
+                    </td>
                     <td>{formatRelativeTime(task.lastModifiedAt)}</td>
                   </tr>
                 ))}
@@ -1996,7 +2207,20 @@ const TasksWorkspace = ({
                 </div>
                 <div>
                   <dt>Schedule</dt>
-                  <dd>Manual</dd>
+                  <dd>
+                    {formatTaskSchedule(
+                      selectedTask.schedule,
+                      selectedTask.scheduleTime,
+                    )}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Next run</dt>
+                  <dd>
+                    {selectedTask.nextRunAt
+                      ? formatRelativeTime(selectedTask.nextRunAt)
+                      : "Not scheduled"}
+                  </dd>
                 </div>
                 <div>
                   <dt>Last run</dt>
@@ -2031,7 +2255,153 @@ const TasksWorkspace = ({
           )}
         </aside>
       </div>
+      {taskContextMenu && contextTask ? (
+        <TaskContextMenu
+          dailyScheduleTime={dailyScheduleTime}
+          menuRef={taskContextMenuRef}
+          task={contextTask}
+          x={taskContextMenu.x}
+          y={taskContextMenu.y}
+          onClone={() => {
+            onClone(contextTask);
+            setTaskContextMenu(null);
+          }}
+          onDailyScheduleTimeChange={setDailyScheduleTime}
+          onPerform={() => {
+            onPerform(contextTask);
+            setTaskContextMenu(null);
+          }}
+          onPreview={() => {
+            onPreview(contextTask);
+            setTaskContextMenu(null);
+          }}
+          onRemove={() => {
+            onRemove(contextTask.id);
+            setTaskContextMenu(null);
+          }}
+          onSchedule={(schedule, scheduleTime) => {
+            onSchedule(contextTask.id, schedule, scheduleTime);
+            setTaskContextMenu(null);
+          }}
+          onUnschedule={() => {
+            onUnschedule(contextTask.id);
+            setTaskContextMenu(null);
+          }}
+        />
+      ) : null}
     </section>
+  );
+};
+
+type TaskContextMenuProps = {
+  dailyScheduleTime: string;
+  menuRef: RefObject<HTMLDivElement | null>;
+  task: SavedWorkspaceTask;
+  x: number;
+  y: number;
+  onClone: () => void;
+  onDailyScheduleTimeChange: (value: string) => void;
+  onPerform: () => void;
+  onPreview: () => void;
+  onRemove: () => void;
+  onSchedule: (
+    schedule: Exclude<SavedWorkspaceTask["schedule"], "manual">,
+    scheduleTime?: string,
+  ) => void;
+  onUnschedule: () => void;
+};
+
+const TaskContextMenu = ({
+  dailyScheduleTime,
+  menuRef,
+  task,
+  x,
+  y,
+  onClone,
+  onDailyScheduleTimeChange,
+  onPerform,
+  onPreview,
+  onRemove,
+  onSchedule,
+  onUnschedule,
+}: TaskContextMenuProps) => {
+  const left = Math.min(x, Math.max(12, window.innerWidth - 260));
+  const top = Math.min(y, Math.max(12, window.innerHeight - 360));
+
+  return (
+    <div
+      className="task-context-menu"
+      ref={menuRef}
+      style={{ left, top }}
+      role="menu"
+    >
+    <button type="button" role="menuitem" onClick={onPerform}>
+      Perform
+    </button>
+    <button type="button" role="menuitem" onClick={onPreview}>
+      Preview
+    </button>
+    <div className="task-context-submenu">
+      <button type="button" role="menuitem">
+        Schedule
+        <span>›</span>
+      </button>
+      <div className="task-context-submenu-panel">
+        {(["minute", "hourly", "daily", "weekly"] as const).map((schedule) => (
+          <button
+            key={schedule}
+            type="button"
+            role="menuitem"
+            onClick={() => onSchedule(schedule)}
+          >
+            <span>{formatTaskSchedule(schedule)}</span>
+            <small>Next {formatRelativeTime(getNextTaskRunAt(schedule))}</small>
+          </button>
+        ))}
+        <div className="task-new-menu-divider" />
+        <label className="task-schedule-time-field">
+          <span>Every day at</span>
+          <input
+            type="time"
+            value={dailyScheduleTime}
+            onChange={(event) =>
+              onDailyScheduleTimeChange(event.target.value)
+            }
+          />
+        </label>
+        <button
+          type="button"
+          role="menuitem"
+          onClick={() => onSchedule("daily-at", dailyScheduleTime)}
+        >
+          <span>{formatTaskSchedule("daily-at", dailyScheduleTime)}</span>
+          <small>
+            Next {formatRelativeTime(getNextTaskRunAt("daily-at", dailyScheduleTime))}
+          </small>
+        </button>
+      </div>
+    </div>
+    <button
+      type="button"
+      role="menuitem"
+      disabled={task.schedule === "manual"}
+      onClick={onUnschedule}
+    >
+      Unschedule
+    </button>
+    <div className="task-context-menu-divider" />
+    <button type="button" role="menuitem" onClick={onClone}>
+      Clone
+    </button>
+    <button
+      className="danger-text-button"
+      type="button"
+      role="menuitem"
+      onClick={onRemove}
+    >
+      Remove
+    </button>
+    </div>
   );
 };
 
@@ -5181,7 +5551,14 @@ const isSavedWorkspaceTask = (value: unknown): value is SavedWorkspaceTask => {
     typeof task.id === "string" &&
     typeof task.lastModifiedAt === "string" &&
     typeof task.name === "string" &&
-    task.schedule === "manual" &&
+    (task.schedule === "manual" ||
+      task.schedule === "minute" ||
+      task.schedule === "hourly" ||
+      task.schedule === "daily" ||
+      task.schedule === "daily-at" ||
+      task.schedule === "weekly") &&
+    (task.nextRunAt === undefined || typeof task.nextRunAt === "string") &&
+    (task.scheduleTime === undefined || typeof task.scheduleTime === "string") &&
     (task.status === "idle" ||
       task.status === "running" ||
       task.status === "success" ||
@@ -5359,6 +5736,33 @@ const createSavedQueryName = (
 const formatTaskType = (type: SavedWorkspaceTask["type"]): string =>
   type === "aggregation" ? "Aggregation" : "Find query";
 
+const formatTaskSchedule = (
+  schedule: SavedWorkspaceTask["schedule"],
+  scheduleTime?: string,
+): string => {
+  if (schedule === "minute") {
+    return "Every minute";
+  }
+
+  if (schedule === "hourly") {
+    return "Every hour";
+  }
+
+  if (schedule === "daily-at") {
+    return `Every day at ${scheduleTime ?? "09:00"}`;
+  }
+
+  if (schedule === "daily") {
+    return "Every day";
+  }
+
+  if (schedule === "weekly") {
+    return "Every week";
+  }
+
+  return "Manual";
+};
+
 const formatTaskStatus = (status: SavedWorkspaceTask["status"]): string => {
   if (status === "idle") {
     return "Idle";
@@ -5375,6 +5779,32 @@ const formatTaskStatus = (status: SavedWorkspaceTask["status"]): string => {
   return "Failed";
 };
 
+const getNextTaskRunAt = (
+  schedule: Exclude<SavedWorkspaceTask["schedule"], "manual">,
+  scheduleTime?: string,
+): string => {
+  const nextRunAt = new Date();
+
+  if (schedule === "minute") {
+    nextRunAt.setMinutes(nextRunAt.getMinutes() + 1);
+  } else if (schedule === "hourly") {
+    nextRunAt.setHours(nextRunAt.getHours() + 1);
+  } else if (schedule === "daily-at") {
+    const [hours = "9", minutes = "0"] = (scheduleTime ?? "09:00").split(":");
+    nextRunAt.setHours(Number(hours), Number(minutes), 0, 0);
+
+    if (nextRunAt.getTime() <= Date.now()) {
+      nextRunAt.setDate(nextRunAt.getDate() + 1);
+    }
+  } else if (schedule === "daily") {
+    nextRunAt.setDate(nextRunAt.getDate() + 1);
+  } else {
+    nextRunAt.setDate(nextRunAt.getDate() + 7);
+  }
+
+  return nextRunAt.toISOString();
+};
+
 const formatRelativeTime = (isoDate: string): string => {
   const timestamp = Date.parse(isoDate);
 
@@ -5382,25 +5812,30 @@ const formatRelativeTime = (isoDate: string): string => {
     return "recently";
   }
 
-  const seconds = Math.max(1, Math.floor((Date.now() - timestamp) / 1000));
+  const deltaSeconds = Math.floor((Date.now() - timestamp) / 1000);
+  const isFuture = deltaSeconds < 0;
+  const seconds = Math.max(1, Math.abs(deltaSeconds));
+
+  const format = (value: number, unit: string) =>
+    isFuture ? `in ${value}${unit}` : `${value}${unit} ago`;
 
   if (seconds < 60) {
-    return `${seconds}s ago`;
+    return format(seconds, "s");
   }
 
   const minutes = Math.floor(seconds / 60);
 
   if (minutes < 60) {
-    return `${minutes}m ago`;
+    return format(minutes, "m");
   }
 
   const hours = Math.floor(minutes / 60);
 
   if (hours < 24) {
-    return `${hours}h ago`;
+    return format(hours, "h");
   }
 
-  return `${Math.floor(hours / 24)}d ago`;
+  return format(Math.floor(hours / 24), "d");
 };
 
 type WorkspaceFooterProps = {
