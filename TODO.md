@@ -334,11 +334,11 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
   - [x] Add notes and tags for each bookmark
   - [x] Add remove and reorder actions
 - [ ] Build Tasks workspace
-  - [ ] Show recent and scheduled local operations
+  - [x] Show recent and scheduled local operations
   - [ ] Track running queries, exports, schema inference, and audit cleanup jobs
-  - [ ] Show status, duration, target, and error details
+  - [x] Show status, duration, target, and error details
   - [ ] Add cancel/retry actions where safe
-  - [ ] Keep task history local and free of secrets
+  - [x] Keep task history local and free of secrets
 - [ ] Build Settings workspace
   - [ ] Add appearance and density settings
   - [ ] Add default page size, query timeout, and max sample size settings
