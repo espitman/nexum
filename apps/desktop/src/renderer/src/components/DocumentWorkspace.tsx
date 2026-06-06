@@ -222,6 +222,7 @@ export const DocumentWorkspace = ({
   const [editorDocument, setEditorDocument] = useState<ParsedDocument | null>(
     null,
   );
+  const runningTaskIdsRef = useRef<Set<string>>(new Set());
   const [pendingInlineDocuments, setPendingInlineDocuments] = useState<
     Map<string, ParsedDocument>
   >(() => new Map());
@@ -603,6 +604,139 @@ export const DocumentWorkspace = ({
     onSectionChange("Explore");
   };
 
+  const executeTask = useCallback(
+    async (task: SavedWorkspaceTask, trigger: "manual" | "schedule") => {
+      if (runningTaskIdsRef.current.has(task.id)) {
+        return;
+      }
+
+      const startedAt = new Date().toISOString();
+      runningTaskIdsRef.current.add(task.id);
+      setTasks((currentTasks) =>
+        currentTasks.map((currentTask) =>
+          currentTask.id === task.id
+            ? {
+                ...currentTask,
+                lastModifiedAt: startedAt,
+                status: "running",
+              }
+            : currentTask,
+        ),
+      );
+
+      try {
+        if (!window.nexum) {
+          throw new Error("Preload API is unavailable");
+        }
+
+        const query = task.sourceQuery;
+        const result =
+          query.kind === "aggregation"
+            ? await window.nexum.mongodb.aggregate({
+                collection: query.collection,
+                connectionId: query.connectionId,
+                database: query.database,
+                limit: query.limit,
+                pipeline: query.pipeline ?? [],
+              })
+            : await window.nexum.mongodb.findDocuments({
+                collection: query.collection,
+                connectionId: query.connectionId,
+                database: query.database,
+                filter: query.filter,
+                limit: query.limit,
+                projection: query.projection,
+                skip: query.skip,
+                sort: query.sort,
+              });
+
+        const finishedAt = new Date().toISOString();
+        const resultCount = result.documents.length;
+        const message = `${resultCount} document${
+          resultCount === 1 ? "" : "s"
+        } returned in ${result.executionTimeMs} ms.`;
+        const run: SavedWorkspaceTask["runs"][number] = {
+          executionTimeMs: result.executionTimeMs,
+          finishedAt,
+          id: `task_run_${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
+          message,
+          resultCount,
+          startedAt,
+          status: "success",
+          trigger,
+        };
+
+        setTasks((currentTasks) =>
+          currentTasks.map((currentTask) => {
+            if (currentTask.id !== task.id) {
+              return currentTask;
+            }
+
+            const nextTask: SavedWorkspaceTask = {
+              ...currentTask,
+              lastModifiedAt: finishedAt,
+              lastRunAt: finishedAt,
+              result: message,
+              runs: [run, ...(currentTask.runs ?? [])].slice(0, 20),
+              status: "success",
+            };
+
+            if (currentTask.schedule !== "manual") {
+              nextTask.nextRunAt = getNextTaskRunAt(
+                currentTask.schedule,
+                currentTask.scheduleTime,
+              );
+            }
+
+            return nextTask;
+          }),
+        );
+      } catch (error) {
+        const finishedAt = new Date().toISOString();
+        const message =
+          error instanceof Error ? error.message : "Task execution failed.";
+        const run: SavedWorkspaceTask["runs"][number] = {
+          error: message,
+          finishedAt,
+          id: `task_run_${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
+          message,
+          startedAt,
+          status: "failed",
+          trigger,
+        };
+
+        setTasks((currentTasks) =>
+          currentTasks.map((currentTask) => {
+            if (currentTask.id !== task.id) {
+              return currentTask;
+            }
+
+            const nextTask: SavedWorkspaceTask = {
+              ...currentTask,
+              lastModifiedAt: finishedAt,
+              lastRunAt: finishedAt,
+              result: message,
+              runs: [run, ...(currentTask.runs ?? [])].slice(0, 20),
+              status: "failed",
+            };
+
+            if (currentTask.schedule !== "manual") {
+              nextTask.nextRunAt = getNextTaskRunAt(
+                currentTask.schedule,
+                currentTask.scheduleTime,
+              );
+            }
+
+            return nextTask;
+          }),
+        );
+      } finally {
+        runningTaskIdsRef.current.delete(task.id);
+      }
+    },
+    [setTasks],
+  );
+
   const createTaskFromQuery = (query: SavedWorkspaceQuery) => {
     const now = new Date().toISOString();
     const task: SavedWorkspaceTask = {
@@ -611,6 +745,7 @@ export const DocumentWorkspace = ({
       lastModifiedAt: now,
       name: `${query.name} task`,
       schedule: "manual",
+      runs: [],
       sourceQuery: query,
       status: "idle",
       target: `${query.database}.${query.collection}`,
@@ -657,31 +792,7 @@ export const DocumentWorkspace = ({
   };
 
   const performTask = (task: SavedWorkspaceTask) => {
-    const now = new Date().toISOString();
-
-    setTasks((currentTasks) =>
-      currentTasks.map((currentTask) =>
-        currentTask.id === task.id
-          ? { ...currentTask, lastModifiedAt: now, status: "running" }
-          : currentTask,
-      ),
-    );
-    openSavedQuery(task.sourceQuery);
-    window.setTimeout(() => {
-      setTasks((currentTasks) =>
-        currentTasks.map((currentTask) =>
-          currentTask.id === task.id
-            ? {
-                ...currentTask,
-                lastModifiedAt: new Date().toISOString(),
-                lastRunAt: new Date().toISOString(),
-                result: "Opened target query for execution.",
-                status: "success",
-              }
-            : currentTask,
-        ),
-      );
-    }, 160);
+    void executeTask(task, "manual");
   };
 
   const cloneTask = (task: SavedWorkspaceTask) => {
@@ -1033,6 +1144,30 @@ export const DocumentWorkspace = ({
   useEffect(() => {
     writeStoredTasks(savedTasksStorageKey, tasks);
   }, [tasks]);
+
+  useEffect(() => {
+    const runDueTasks = () => {
+      const now = Date.now();
+      const dueTasks = tasks.filter(
+        (task) =>
+          task.schedule !== "manual" &&
+          task.nextRunAt !== undefined &&
+          Date.parse(task.nextRunAt) <= now &&
+          !runningTaskIdsRef.current.has(task.id),
+      );
+
+      for (const task of dueTasks) {
+        void executeTask(task, "schedule");
+      }
+    };
+
+    runDueTasks();
+    const intervalId = window.setInterval(runDueTasks, 15_000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [executeTask, tasks]);
 
   useEffect(() => {
     const handleAddBookmark = (event: Event) => {
@@ -2245,6 +2380,34 @@ const TasksWorkspace = ({
               {selectedTask.result ? (
                 <p className="task-result">{selectedTask.result}</p>
               ) : null}
+              <section className="task-runs-panel">
+                <div className="task-runs-header">
+                  <strong>Runs</strong>
+                  <span>{selectedTask.runs.length}</span>
+                </div>
+                {selectedTask.runs.length > 0 ? (
+                  <div className="task-runs-list">
+                    {selectedTask.runs.map((run) => (
+                      <div className="task-run-item" key={run.id}>
+                        <span className={`task-status is-${run.status}`}>
+                          {run.status === "success" ? "Succeeded" : "Failed"}
+                        </span>
+                        <strong>{run.message}</strong>
+                        <small>
+                          {formatRelativeTime(run.finishedAt)} · {run.trigger}
+                          {run.executionTimeMs !== undefined
+                            ? ` · ${run.executionTimeMs} ms`
+                            : ""}
+                        </small>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="task-runs-empty">
+                    Scheduled and manual executions will appear here.
+                  </p>
+                )}
+              </section>
             </>
           ) : (
             <div className="tasks-empty">
@@ -5467,7 +5630,9 @@ const readStoredTasks = (storageKey: string): SavedWorkspaceTask[] => {
       return [];
     }
 
-    return parsedValue.filter(isSavedWorkspaceTask);
+    return parsedValue
+      .filter(isSavedWorkspaceTask)
+      .map(normalizeSavedWorkspaceTask);
   } catch {
     return [];
   }
@@ -5559,6 +5724,9 @@ const isSavedWorkspaceTask = (value: unknown): value is SavedWorkspaceTask => {
       task.schedule === "weekly") &&
     (task.nextRunAt === undefined || typeof task.nextRunAt === "string") &&
     (task.scheduleTime === undefined || typeof task.scheduleTime === "string") &&
+    (task.runs === undefined ||
+      (Array.isArray(task.runs) &&
+        task.runs.every((run) => isSavedWorkspaceTaskRun(run)))) &&
     (task.status === "idle" ||
       task.status === "running" ||
       task.status === "success" ||
@@ -5569,6 +5737,36 @@ const isSavedWorkspaceTask = (value: unknown): value is SavedWorkspaceTask => {
     isSavedWorkspaceQuery(task.sourceQuery)
   );
 };
+
+const isSavedWorkspaceTaskRun = (
+  value: unknown,
+): value is SavedWorkspaceTask["runs"][number] => {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const run = value as Partial<SavedWorkspaceTask["runs"][number]>;
+
+  return (
+    typeof run.finishedAt === "string" &&
+    typeof run.id === "string" &&
+    typeof run.message === "string" &&
+    typeof run.startedAt === "string" &&
+    (run.status === "failed" || run.status === "success") &&
+    (run.trigger === "manual" || run.trigger === "schedule") &&
+    (run.error === undefined || typeof run.error === "string") &&
+    (run.executionTimeMs === undefined ||
+      typeof run.executionTimeMs === "number") &&
+    (run.resultCount === undefined || typeof run.resultCount === "number")
+  );
+};
+
+const normalizeSavedWorkspaceTask = (
+  task: SavedWorkspaceTask,
+): SavedWorkspaceTask => ({
+  ...task,
+  runs: Array.isArray(task.runs) ? task.runs : [],
+});
 
 const isAddBookmarkEventDetail = (
   value: unknown,

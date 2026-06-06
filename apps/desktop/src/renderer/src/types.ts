@@ -113,6 +113,7 @@ export type SavedWorkspaceTask = {
   lastRunAt?: string;
   nextRunAt?: string;
   result?: string;
+  runs: SavedWorkspaceTaskRun[];
   schedule: "daily" | "daily-at" | "hourly" | "manual" | "minute" | "weekly";
   scheduleTime?: string;
   sourceQuery: SavedWorkspaceQuery;
@@ -120,4 +121,16 @@ export type SavedWorkspaceTask = {
   target: string;
   type: "aggregation" | "find";
   name: string;
+};
+
+export type SavedWorkspaceTaskRun = {
+  error?: string;
+  executionTimeMs?: number;
+  finishedAt: string;
+  id: string;
+  message: string;
+  resultCount?: number;
+  startedAt: string;
+  status: "failed" | "success";
+  trigger: "manual" | "schedule";
 };
