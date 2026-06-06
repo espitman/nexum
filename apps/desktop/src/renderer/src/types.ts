@@ -105,3 +105,17 @@ export type SavedWorkspaceBookmark = {
   tags: string[];
   updatedAt: string;
 };
+
+export type SavedWorkspaceTask = {
+  createdAt: string;
+  id: string;
+  lastModifiedAt: string;
+  lastRunAt?: string;
+  result?: string;
+  schedule: "manual";
+  sourceQuery: SavedWorkspaceQuery;
+  status: "idle" | "running" | "success" | "failed";
+  target: string;
+  type: "aggregation" | "find";
+  name: string;
+};

@@ -67,6 +67,7 @@ import type {
   IndexSummary,
   SavedWorkspaceBookmark,
   SavedWorkspaceQuery,
+  SavedWorkspaceTask,
   SchemaFieldSummary,
 } from "../types";
 import { ConnectionManager } from "./ConnectionManager";
@@ -133,6 +134,7 @@ const defaultQueryState: DocumentQueryState = {
 const savedQueriesStorageKey = "nexum.savedQueries.v1";
 const queryHistoryStorageKey = "nexum.queryHistory.v1";
 const savedBookmarksStorageKey = "nexum.bookmarks.v1";
+const savedTasksStorageKey = "nexum.tasks.v1";
 const addBookmarkEventName = "nexum:add-bookmark";
 const documentIdColumn = "{Document id}";
 const documentTableHorizontalGutter = 96;
@@ -196,6 +198,9 @@ export const DocumentWorkspace = ({
   );
   const [bookmarks, setBookmarks] = useState<SavedWorkspaceBookmark[]>(() =>
     readStoredBookmarks(savedBookmarksStorageKey),
+  );
+  const [tasks, setTasks] = useState<SavedWorkspaceTask[]>(() =>
+    readStoredTasks(savedTasksStorageKey),
   );
   const [aggregationPipelineModel, setAggregationPipelineModel] =
     useState<AggregationPipelineModel>(() =>
@@ -597,6 +602,109 @@ export const DocumentWorkspace = ({
     onSectionChange("Explore");
   };
 
+  const createTaskFromQuery = (query: SavedWorkspaceQuery) => {
+    const now = new Date().toISOString();
+    const task: SavedWorkspaceTask = {
+      createdAt: now,
+      id: `task_${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
+      lastModifiedAt: now,
+      name: `${query.name} task`,
+      schedule: "manual",
+      sourceQuery: query,
+      status: "idle",
+      target: `${query.database}.${query.collection}`,
+      type: query.kind === "aggregation" ? "aggregation" : "find",
+    };
+
+    setTasks((currentTasks) => [task, ...currentTasks]);
+  };
+
+  const createTaskFromCurrentQuery = () => {
+    const nextState = parseDocumentQueryInputs({
+      filterInput,
+      limitInput,
+      projectionInput,
+      skipInput,
+      sortInput,
+    });
+
+    if (!nextState.ok) {
+      onConnectionError("Create task failed", nextState.message);
+      return;
+    }
+
+    const snapshot = buildQuerySnapshot(nextState.value, {
+      name: createSavedQueryName(
+        currentQueryTarget?.collection ?? "Collection",
+        nextState.value.filter,
+      ),
+    });
+
+    if (!snapshot) {
+      onConnectionError(
+        "Create task failed",
+        "Select a connected collection before creating a task.",
+      );
+      return;
+    }
+
+    createTaskFromQuery(snapshot);
+  };
+
+  const previewTask = (task: SavedWorkspaceTask) => {
+    openSavedQuery(task.sourceQuery);
+  };
+
+  const performTask = (task: SavedWorkspaceTask) => {
+    const now = new Date().toISOString();
+
+    setTasks((currentTasks) =>
+      currentTasks.map((currentTask) =>
+        currentTask.id === task.id
+          ? { ...currentTask, lastModifiedAt: now, status: "running" }
+          : currentTask,
+      ),
+    );
+    openSavedQuery(task.sourceQuery);
+    window.setTimeout(() => {
+      setTasks((currentTasks) =>
+        currentTasks.map((currentTask) =>
+          currentTask.id === task.id
+            ? {
+                ...currentTask,
+                lastModifiedAt: new Date().toISOString(),
+                lastRunAt: new Date().toISOString(),
+                result: "Opened target query for execution.",
+                status: "success",
+              }
+            : currentTask,
+        ),
+      );
+    }, 160);
+  };
+
+  const cloneTask = (task: SavedWorkspaceTask) => {
+    const now = new Date().toISOString();
+
+    setTasks((currentTasks) => [
+      {
+        ...task,
+        createdAt: now,
+        id: `task_${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
+        lastModifiedAt: now,
+        name: `${task.name} copy`,
+        status: "idle",
+      },
+      ...currentTasks,
+    ]);
+  };
+
+  const removeTask = (taskId: string) => {
+    setTasks((currentTasks) =>
+      currentTasks.filter((task) => task.id !== taskId),
+    );
+  };
+
   const createBookmark = useCallback(
     (detail: AddBookmarkEventDetail) => {
       const bookmark = buildBookmarkSnapshot({
@@ -871,6 +979,10 @@ export const DocumentWorkspace = ({
   }, [bookmarks]);
 
   useEffect(() => {
+    writeStoredTasks(savedTasksStorageKey, tasks);
+  }, [tasks]);
+
+  useEffect(() => {
     const handleAddBookmark = (event: Event) => {
       const detail = (event as CustomEvent<AddBookmarkEventDetail>).detail;
 
@@ -987,7 +1099,23 @@ export const DocumentWorkspace = ({
         />
       ) : null}
 
-      {activeSection === "Queries" || activeSection === "Bookmarks" ? null : (
+      {activeSection === "Tasks" ? (
+        <TasksWorkspace
+          history={queryHistory}
+          savedQueries={savedQueries}
+          tasks={tasks}
+          onClone={cloneTask}
+          onCreateFromCurrent={createTaskFromCurrentQuery}
+          onCreateFromQuery={createTaskFromQuery}
+          onPerform={performTask}
+          onPreview={previewTask}
+          onRemove={removeTask}
+        />
+      ) : null}
+
+      {activeSection === "Queries" ||
+      activeSection === "Bookmarks" ||
+      activeSection === "Tasks" ? null : (
         <>
       {isConnectionManager ? null : (
         <CollectionTabBar
@@ -1640,6 +1768,272 @@ const QueryCodeBlock = ({
     <pre>{JSON.stringify(value, null, 2)}</pre>
   </div>
 );
+
+type TasksWorkspaceProps = {
+  history: SavedWorkspaceQuery[];
+  savedQueries: SavedWorkspaceQuery[];
+  tasks: SavedWorkspaceTask[];
+  onClone: (task: SavedWorkspaceTask) => void;
+  onCreateFromCurrent: () => void;
+  onCreateFromQuery: (query: SavedWorkspaceQuery) => void;
+  onPerform: (task: SavedWorkspaceTask) => void;
+  onPreview: (task: SavedWorkspaceTask) => void;
+  onRemove: (taskId: string) => void;
+};
+
+const TasksWorkspace = ({
+  history,
+  savedQueries,
+  tasks,
+  onClone,
+  onCreateFromCurrent,
+  onCreateFromQuery,
+  onPerform,
+  onPreview,
+  onRemove,
+}: TasksWorkspaceProps) => {
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(
+    tasks[0]?.id ?? null,
+  );
+  const [isNewTaskMenuOpen, setIsNewTaskMenuOpen] = useState(false);
+  const newTaskMenuRef = useRef<HTMLDivElement | null>(null);
+  const querySources = [...savedQueries, ...history].slice(0, 10);
+  const selectedTask =
+    tasks.find((task) => task.id === selectedTaskId) ?? tasks[0] ?? null;
+
+  useEffect(() => {
+    if (!isNewTaskMenuOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+
+      if (
+        target instanceof Node &&
+        newTaskMenuRef.current?.contains(target)
+      ) {
+        return;
+      }
+
+      setIsNewTaskMenuOpen(false);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsNewTaskMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isNewTaskMenuOpen]);
+
+  return (
+    <section className="tasks-workspace">
+      <header className="tasks-header">
+        <div>
+          <h1>Tasks</h1>
+          <p>
+            Run saved queries, pipelines, and operational jobs from one local
+            queue.
+          </p>
+        </div>
+      </header>
+      <div className="tasks-toolbar">
+        <button
+          disabled={!selectedTask}
+          onClick={() => selectedTask && onPerform(selectedTask)}
+          type="button"
+        >
+          <Icon name="term" />
+          Perform
+        </button>
+        <button
+          disabled={!selectedTask}
+          onClick={() => selectedTask && onPreview(selectedTask)}
+          type="button"
+        >
+          <Icon name="table" />
+          Preview
+        </button>
+        <div className="task-new-menu" ref={newTaskMenuRef}>
+          <button
+            className="is-primary"
+            onClick={() => setIsNewTaskMenuOpen((isOpen) => !isOpen)}
+            type="button"
+          >
+            <span>+</span>
+            New Task
+          </button>
+          {isNewTaskMenuOpen ? (
+            <div className="task-new-menu-popover">
+              <button
+                type="button"
+                onClick={() => {
+                  onCreateFromCurrent();
+                  setIsNewTaskMenuOpen(false);
+                }}
+              >
+                Current document query
+              </button>
+              <div className="task-new-menu-divider" />
+              {querySources.length > 0 ? (
+                querySources.map((query) => (
+                  <button
+                    key={query.id}
+                    type="button"
+                    onClick={() => {
+                      onCreateFromQuery(query);
+                      setIsNewTaskMenuOpen(false);
+                    }}
+                  >
+                    <span>{query.name}</span>
+                    <small>
+                      {query.kind === "aggregation" ? "Pipeline" : "Find"} ·{" "}
+                      {query.database}.{query.collection}
+                    </small>
+                  </button>
+                ))
+              ) : (
+                <p>No saved queries or history yet.</p>
+              )}
+            </div>
+          ) : null}
+        </div>
+        <button
+          disabled={!selectedTask}
+          onClick={() => selectedTask && onClone(selectedTask)}
+          type="button"
+        >
+          Clone
+        </button>
+        <button
+          className="danger-text-button"
+          disabled={!selectedTask}
+          onClick={() => selectedTask && onRemove(selectedTask.id)}
+          type="button"
+        >
+          Remove
+        </button>
+        <button disabled type="button" title="Scheduling is not available yet">
+          Schedule
+        </button>
+        <button disabled type="button" title="Scheduling is not available yet">
+          Unschedule
+        </button>
+      </div>
+
+      <div className="tasks-layout">
+        <section className="tasks-table-panel">
+          {tasks.length > 0 ? (
+            <table className="tasks-table">
+              <thead>
+                <tr>
+                  <th>Task Name</th>
+                  <th>Type</th>
+                  <th>Target</th>
+                  <th>Status</th>
+                  <th>Schedule</th>
+                  <th>Last Modified</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tasks.map((task) => (
+                  <tr
+                    className={selectedTaskId === task.id ? "is-active" : ""}
+                    key={task.id}
+                    onClick={() => setSelectedTaskId(task.id)}
+                  >
+                    <td>{task.name}</td>
+                    <td>{formatTaskType(task.type)}</td>
+                    <td>{task.target}</td>
+                    <td>
+                      <span className={`task-status is-${task.status}`}>
+                        {formatTaskStatus(task.status)}
+                      </span>
+                    </td>
+                    <td>Manual</td>
+                    <td>{formatRelativeTime(task.lastModifiedAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="tasks-empty">
+              <Icon name="check" />
+              <strong>No tasks yet</strong>
+              <span>
+                Create a task from the current query, a saved query, or recent
+                history.
+              </span>
+            </div>
+          )}
+        </section>
+
+        <aside className="task-detail-panel">
+          {selectedTask ? (
+            <>
+              <div>
+                <span className={`task-status is-${selectedTask.status}`}>
+                  {formatTaskStatus(selectedTask.status)}
+                </span>
+                <h2>{selectedTask.name}</h2>
+                <p>
+                  {selectedTask.sourceQuery.connectionName} ·{" "}
+                  {selectedTask.target}
+                </p>
+              </div>
+              <dl>
+                <div>
+                  <dt>Type</dt>
+                  <dd>{formatTaskType(selectedTask.type)}</dd>
+                </div>
+                <div>
+                  <dt>Schedule</dt>
+                  <dd>Manual</dd>
+                </div>
+                <div>
+                  <dt>Last run</dt>
+                  <dd>
+                    {selectedTask.lastRunAt
+                      ? formatRelativeTime(selectedTask.lastRunAt)
+                      : "Never"}
+                  </dd>
+                </div>
+              </dl>
+              <QueryCodeBlock
+                label={
+                  selectedTask.sourceQuery.kind === "aggregation"
+                    ? "Pipeline"
+                    : "Filter"
+                }
+                value={
+                  selectedTask.sourceQuery.pipeline ??
+                  selectedTask.sourceQuery.filter
+                }
+              />
+              {selectedTask.result ? (
+                <p className="task-result">{selectedTask.result}</p>
+              ) : null}
+            </>
+          ) : (
+            <div className="tasks-empty">
+              <Icon name="check" />
+              <strong>Select a task</strong>
+              <span>Task details and last result will appear here.</span>
+            </div>
+          )}
+        </aside>
+      </div>
+    </section>
+  );
+};
 
 type BookmarksWorkspaceProps = {
   bookmarks: SavedWorkspaceBookmark[];
@@ -4689,6 +5083,37 @@ const writeStoredBookmarks = (
   }
 };
 
+const readStoredTasks = (storageKey: string): SavedWorkspaceTask[] => {
+  try {
+    const rawValue = globalThis.localStorage?.getItem(storageKey);
+
+    if (!rawValue) {
+      return [];
+    }
+
+    const parsedValue = JSON.parse(rawValue);
+
+    if (!Array.isArray(parsedValue)) {
+      return [];
+    }
+
+    return parsedValue.filter(isSavedWorkspaceTask);
+  } catch {
+    return [];
+  }
+};
+
+const writeStoredTasks = (
+  storageKey: string,
+  tasks: SavedWorkspaceTask[],
+) => {
+  try {
+    globalThis.localStorage?.setItem(storageKey, JSON.stringify(tasks));
+  } catch {
+    // Local task storage is best-effort and should never block the app shell.
+  }
+};
+
 const isSavedWorkspaceQuery = (value: unknown): value is SavedWorkspaceQuery => {
   if (!value || typeof value !== "object") {
     return false;
@@ -4741,6 +5166,30 @@ const isSavedWorkspaceBookmark = (
     typeof bookmark.database === "string" &&
     (bookmark.kind === "database" || typeof bookmark.collection === "string") &&
     (bookmark.kind !== "document" || typeof bookmark.documentId === "string")
+  );
+};
+
+const isSavedWorkspaceTask = (value: unknown): value is SavedWorkspaceTask => {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const task = value as Partial<SavedWorkspaceTask>;
+
+  return (
+    typeof task.createdAt === "string" &&
+    typeof task.id === "string" &&
+    typeof task.lastModifiedAt === "string" &&
+    typeof task.name === "string" &&
+    task.schedule === "manual" &&
+    (task.status === "idle" ||
+      task.status === "running" ||
+      task.status === "success" ||
+      task.status === "failed") &&
+    typeof task.target === "string" &&
+    (task.type === "find" || task.type === "aggregation") &&
+    task.sourceQuery !== undefined &&
+    isSavedWorkspaceQuery(task.sourceQuery)
   );
 };
 
@@ -4905,6 +5354,25 @@ const createSavedQueryName = (
   }
 
   return `${collectionName} by ${keys.slice(0, 2).join(", ")}`;
+};
+
+const formatTaskType = (type: SavedWorkspaceTask["type"]): string =>
+  type === "aggregation" ? "Aggregation" : "Find query";
+
+const formatTaskStatus = (status: SavedWorkspaceTask["status"]): string => {
+  if (status === "idle") {
+    return "Idle";
+  }
+
+  if (status === "running") {
+    return "Running";
+  }
+
+  if (status === "success") {
+    return "Succeeded";
+  }
+
+  return "Failed";
 };
 
 const formatRelativeTime = (isoDate: string): string => {
