@@ -189,7 +189,11 @@ export const App = () => {
   const handleSectionChange = (section: NavItemLabel) => {
     setActiveSection(section);
 
-    if (section !== "Explore" && section !== "Queries") {
+    if (
+      section !== "Explore" &&
+      section !== "Queries" &&
+      section !== "Bookmarks"
+    ) {
       setSelectedCollectionName(null);
       setSchemaFields([]);
       return;

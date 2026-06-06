@@ -65,6 +65,7 @@ import {
 import type {
   ConnectionProfile,
   IndexSummary,
+  SavedWorkspaceBookmark,
   SavedWorkspaceQuery,
   SchemaFieldSummary,
 } from "../types";
@@ -131,6 +132,8 @@ const defaultQueryState: DocumentQueryState = {
 
 const savedQueriesStorageKey = "nexum.savedQueries.v1";
 const queryHistoryStorageKey = "nexum.queryHistory.v1";
+const savedBookmarksStorageKey = "nexum.bookmarks.v1";
+const addBookmarkEventName = "nexum:add-bookmark";
 const documentIdColumn = "{Document id}";
 const documentTableHorizontalGutter = 96;
 const maxAutoColumnWidth = 1400;
@@ -138,6 +141,15 @@ const maxInitialColumnWidth = 360;
 const objectPreviewGap = 8;
 const objectPreviewHeight = 280;
 const objectPreviewWidth = 360;
+
+type AddBookmarkEventDetail = {
+  collection?: string;
+  connectionId: string;
+  connectionName: string;
+  database: string;
+  documentId?: string;
+  kind: SavedWorkspaceBookmark["kind"];
+};
 
 export const DocumentWorkspace = ({
   activeSection,
@@ -181,6 +193,9 @@ export const DocumentWorkspace = ({
   );
   const [queryHistory, setQueryHistory] = useState<SavedWorkspaceQuery[]>(() =>
     readStoredQueries(queryHistoryStorageKey),
+  );
+  const [bookmarks, setBookmarks] = useState<SavedWorkspaceBookmark[]>(() =>
+    readStoredBookmarks(savedBookmarksStorageKey),
   );
   const [aggregationPipelineModel, setAggregationPipelineModel] =
     useState<AggregationPipelineModel>(() =>
@@ -420,6 +435,7 @@ export const DocumentWorkspace = ({
       lastRunAt: now,
       limit: state.limit,
       name: `${currentQueryTarget.collection} find`,
+      notes: "",
       projection: state.projection,
       skip: state.skip,
       sort: state.sort,
@@ -545,6 +561,20 @@ export const DocumentWorkspace = ({
     );
   };
 
+  const updateSavedQueryNotes = (queryId: string, notes: string) => {
+    setSavedQueries((currentQueries) =>
+      currentQueries.map((query) =>
+        query.id === queryId
+          ? {
+              ...query,
+              notes,
+              updatedAt: new Date().toISOString(),
+            }
+          : query,
+      ),
+    );
+  };
+
   const openSavedQuery = (query: SavedWorkspaceQuery) => {
     onSelectedConnectionChange(query.connectionId);
     onSelectedCollectionChange(`${query.database}.${query.collection}`);
@@ -565,6 +595,121 @@ export const DocumentWorkspace = ({
     });
     onWorkspaceTabChange("Documents");
     onSectionChange("Explore");
+  };
+
+  const createBookmark = useCallback(
+    (detail: AddBookmarkEventDetail) => {
+      const bookmark = buildBookmarkSnapshot({
+        kind: detail.kind,
+        target: detail,
+      });
+
+      if (!bookmark.ok) {
+        onConnectionError("Save bookmark failed", bookmark.message);
+        return;
+      }
+
+      setBookmarks((currentBookmarks) => [bookmark.value, ...currentBookmarks]);
+    },
+    [onConnectionError, setBookmarks],
+  );
+
+  const createDocumentBookmark = useCallback(
+    (document: ParsedDocument) => {
+      if (!selectedConnection || !selectedCollectionPath) {
+        onConnectionError(
+          "Save bookmark failed",
+          "Select a connected collection before saving a document bookmark.",
+        );
+        return;
+      }
+
+      createBookmark({
+        collection: selectedCollectionPath.collection,
+        connectionId: selectedConnection.id,
+        connectionName: selectedConnection.name,
+        database: selectedCollectionPath.database,
+        documentId: document.id,
+        kind: "document",
+      });
+    },
+    [
+      createBookmark,
+      onConnectionError,
+      selectedCollectionPath,
+      selectedConnection,
+    ],
+  );
+
+  const deleteBookmark = (bookmarkId: string) => {
+    setBookmarks((currentBookmarks) =>
+      currentBookmarks.filter((bookmark) => bookmark.id !== bookmarkId),
+    );
+  };
+
+  const moveBookmark = (bookmarkId: string, direction: -1 | 1) => {
+    setBookmarks((currentBookmarks) => {
+      const index = currentBookmarks.findIndex(
+        (bookmark) => bookmark.id === bookmarkId,
+      );
+      const nextIndex = index + direction;
+
+      if (
+        index < 0 ||
+        nextIndex < 0 ||
+        nextIndex >= currentBookmarks.length
+      ) {
+        return currentBookmarks;
+      }
+
+      const nextBookmarks = [...currentBookmarks];
+      const [bookmark] = nextBookmarks.splice(index, 1);
+
+      if (!bookmark) {
+        return currentBookmarks;
+      }
+
+      nextBookmarks.splice(nextIndex, 0, bookmark);
+      return nextBookmarks;
+    });
+  };
+
+  const updateBookmark = (
+    bookmarkId: string,
+    updates: Pick<SavedWorkspaceBookmark, "notes" | "tags">,
+  ) => {
+    setBookmarks((currentBookmarks) =>
+      currentBookmarks.map((bookmark) =>
+        bookmark.id === bookmarkId
+          ? {
+              ...bookmark,
+              notes: updates.notes,
+              tags: updates.tags,
+              updatedAt: new Date().toISOString(),
+            }
+          : bookmark,
+      ),
+    );
+  };
+
+  const openBookmark = (bookmark: SavedWorkspaceBookmark) => {
+    onSelectedConnectionChange(bookmark.connectionId);
+
+    if (bookmark.database && bookmark.collection) {
+      onSelectedCollectionChange(`${bookmark.database}.${bookmark.collection}`);
+      onWorkspaceTabChange("Documents");
+      onSectionChange("Explore");
+      return;
+    }
+
+    if (bookmark.database) {
+      onSelectedCollectionChange(null);
+      onSectionChange("Explore");
+      return;
+    }
+
+    onSelectedCollectionChange(null);
+    onSectionChange("Connections");
   };
 
   const updateDocumentMutation = useMutation({
@@ -722,6 +867,32 @@ export const DocumentWorkspace = ({
   }, [queryHistory]);
 
   useEffect(() => {
+    writeStoredBookmarks(savedBookmarksStorageKey, bookmarks);
+  }, [bookmarks]);
+
+  useEffect(() => {
+    const handleAddBookmark = (event: Event) => {
+      const detail = (event as CustomEvent<AddBookmarkEventDetail>).detail;
+
+      if (!isAddBookmarkEventDetail(detail)) {
+        onConnectionError(
+          "Save bookmark failed",
+          "The bookmark target is incomplete.",
+        );
+        return;
+      }
+
+      createBookmark(detail);
+    };
+
+    window.addEventListener(addBookmarkEventName, handleAddBookmark);
+
+    return () => {
+      window.removeEventListener(addBookmarkEventName, handleAddBookmark);
+    };
+  }, [createBookmark, onConnectionError]);
+
+  useEffect(() => {
     const lastHistoryId = lastRecordedHistoryIdRef.current;
 
     if (!lastHistoryId || !documentsQuery.data) {
@@ -800,12 +971,23 @@ export const DocumentWorkspace = ({
           onDelete={deleteSavedQuery}
           onDuplicate={duplicateSavedQuery}
           onOpen={openSavedQuery}
+          onNotesChange={updateSavedQueryNotes}
           onRename={renameSavedQuery}
           onSaveCurrent={saveCurrentQuery}
         />
       ) : null}
 
-      {activeSection === "Queries" ? null : (
+      {activeSection === "Bookmarks" ? (
+        <BookmarksWorkspace
+          bookmarks={bookmarks}
+          onDelete={deleteBookmark}
+          onMove={moveBookmark}
+          onOpen={openBookmark}
+          onUpdate={updateBookmark}
+        />
+      ) : null}
+
+      {activeSection === "Queries" || activeSection === "Bookmarks" ? null : (
         <>
       {isConnectionManager ? null : (
         <CollectionTabBar
@@ -954,6 +1136,7 @@ export const DocumentWorkspace = ({
                 onCellEdit={applyCellEdit}
                 onCellFilter={applyCellFilter}
                 onCellProjection={applyCellProjection}
+                onDocumentBookmark={createDocumentBookmark}
                 onDocumentOpen={setEditorDocument}
                 onDocumentSelect={setSelectedDocument}
                 onRefresh={() => void documentsQuery.refetch()}
@@ -1137,6 +1320,7 @@ type QueriesWorkspaceProps = {
   onDelete: (queryId: string) => void;
   onDuplicate: (query: SavedWorkspaceQuery) => void;
   onOpen: (query: SavedWorkspaceQuery) => void;
+  onNotesChange: (queryId: string, notes: string) => void;
   onRename: (queryId: string, name: string) => void;
   onSaveCurrent: () => void;
 };
@@ -1148,6 +1332,7 @@ const QueriesWorkspace = ({
   onDelete,
   onDuplicate,
   onOpen,
+  onNotesChange,
   onRename,
   onSaveCurrent,
 }: QueriesWorkspaceProps) => {
@@ -1343,6 +1528,19 @@ const QueriesWorkspace = ({
                 </div>
               </div>
 
+              {isSelectedSavedQuery ? (
+                <label className="query-notes-field">
+                  <span>Notes</span>
+                  <textarea
+                    placeholder="Optional notes for this saved query"
+                    value={selectedQuery.notes}
+                    onChange={(event) =>
+                      onNotesChange(selectedQuery.id, event.target.value)
+                    }
+                  />
+                </label>
+              ) : null}
+
               <div className="query-detail-grid">
                 <QueryCodeBlock
                   label="Filter"
@@ -1442,6 +1640,423 @@ const QueryCodeBlock = ({
     <pre>{JSON.stringify(value, null, 2)}</pre>
   </div>
 );
+
+type BookmarksWorkspaceProps = {
+  bookmarks: SavedWorkspaceBookmark[];
+  onDelete: (bookmarkId: string) => void;
+  onMove: (bookmarkId: string, direction: -1 | 1) => void;
+  onOpen: (bookmark: SavedWorkspaceBookmark) => void;
+  onUpdate: (
+    bookmarkId: string,
+    updates: Pick<SavedWorkspaceBookmark, "notes" | "tags">,
+  ) => void;
+};
+
+const BookmarksWorkspace = ({
+  bookmarks,
+  onDelete,
+  onMove,
+  onOpen,
+  onUpdate,
+}: BookmarksWorkspaceProps) => {
+  const [filterMode, setFilterMode] = useState<"tags" | "type">("type");
+  const [kindFilter, setKindFilter] = useState<
+    "all" | SavedWorkspaceBookmark["kind"]
+  >("all");
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const [selectedBookmarkId, setSelectedBookmarkId] = useState<string | null>(
+    bookmarks[0]?.id ?? null,
+  );
+  const availableTags = useMemo(() => getBookmarkTags(bookmarks), [bookmarks]);
+  const taggedBookmarksCount = useMemo(
+    () => bookmarks.filter((bookmark) => bookmark.tags.length > 0).length,
+    [bookmarks],
+  );
+  const visibleBookmarks = useMemo(
+    () => {
+      if (filterMode === "tags") {
+        return tagFilter
+          ? bookmarks.filter((bookmark) => bookmark.tags.includes(tagFilter))
+          : bookmarks.filter((bookmark) => bookmark.tags.length > 0);
+      }
+
+      return kindFilter === "all"
+        ? bookmarks
+        : bookmarks.filter((bookmark) => bookmark.kind === kindFilter);
+    },
+    [bookmarks, filterMode, kindFilter, tagFilter],
+  );
+  const selectedBookmark =
+    visibleBookmarks.find((bookmark) => bookmark.id === selectedBookmarkId) ??
+    visibleBookmarks[0] ??
+    null;
+  const groupedBookmarks = groupBookmarks(visibleBookmarks);
+  const filterOptions: Array<{
+    count: number;
+    kind: "all" | SavedWorkspaceBookmark["kind"];
+    label: string;
+  }> = [
+    { count: bookmarks.length, kind: "all", label: "All" },
+    {
+      count: bookmarks.filter((bookmark) => bookmark.kind === "database").length,
+      kind: "database",
+      label: "Databases",
+    },
+    {
+      count: bookmarks.filter((bookmark) => bookmark.kind === "collection")
+        .length,
+      kind: "collection",
+      label: "Collections",
+    },
+    {
+      count: bookmarks.filter((bookmark) => bookmark.kind === "document").length,
+      kind: "document",
+      label: "Documents",
+    },
+  ];
+
+  return (
+    <section className="bookmarks-workspace">
+      <header className="bookmarks-header">
+        <div>
+          <h1>Bookmarks</h1>
+          <p>
+            Save databases, collections, and documents from their context menus.
+          </p>
+        </div>
+      </header>
+
+      <div className="bookmarks-layout">
+        <section className="bookmark-create-panel">
+          <div
+            className="bookmark-filter-tabs"
+            role="tablist"
+            aria-label="Bookmark filters"
+          >
+            <button
+              aria-selected={filterMode === "type"}
+              className={filterMode === "type" ? "is-active" : ""}
+              role="tab"
+              type="button"
+              onClick={() => {
+                setFilterMode("type");
+                setSelectedBookmarkId(null);
+              }}
+            >
+              Type
+            </button>
+            <button
+              aria-selected={filterMode === "tags"}
+              className={filterMode === "tags" ? "is-active" : ""}
+              role="tab"
+              type="button"
+              onClick={() => {
+                setFilterMode("tags");
+                setSelectedBookmarkId(null);
+              }}
+            >
+              Tags
+            </button>
+          </div>
+
+          {filterMode === "type" ? (
+            <div className="bookmark-type-filter" role="list">
+              {filterOptions.map((option) => (
+                <button
+                  className={kindFilter === option.kind ? "is-active" : ""}
+                  key={option.kind}
+                  type="button"
+                  onClick={() => {
+                    setKindFilter(option.kind);
+                    setSelectedBookmarkId(null);
+                  }}
+                >
+                  <span>{option.label}</span>
+                  <strong>{option.count}</strong>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="bookmark-type-filter" role="list">
+              {availableTags.length > 0 ? (
+                <>
+                  <button
+                    className={!tagFilter ? "is-active" : ""}
+                    type="button"
+                    onClick={() => {
+                      setTagFilter(null);
+                      setSelectedBookmarkId(null);
+                    }}
+                  >
+                    <span>All tagged</span>
+                    <strong>{taggedBookmarksCount}</strong>
+                  </button>
+                  {availableTags.map((tag) => (
+                    <button
+                      className={tagFilter === tag ? "is-active" : ""}
+                      key={tag}
+                      type="button"
+                      onClick={() => {
+                        setTagFilter(tag);
+                        setSelectedBookmarkId(null);
+                      }}
+                    >
+                      <span>{tag}</span>
+                      <strong>
+                        {
+                          bookmarks.filter((bookmark) =>
+                            bookmark.tags.includes(tag),
+                          ).length
+                        }
+                      </strong>
+                    </button>
+                  ))}
+                </>
+              ) : (
+                <p className="bookmark-filter-empty">
+                  Add tags to bookmarks to filter by them here.
+                </p>
+              )}
+            </div>
+          )}
+        </section>
+
+        <section className="bookmark-list-panel">
+          {groupedBookmarks.length > 0 ? (
+            groupedBookmarks.map((group) => (
+              <div className="bookmark-group" key={group.key}>
+                <div className="bookmark-group-title">
+                  <strong>{group.connectionName}</strong>
+                  <span>{group.databaseName}</span>
+                </div>
+                <div className="bookmark-list">
+                  {group.bookmarks.map((bookmark) => (
+                    <button
+                      className={`bookmark-list-item ${
+                        selectedBookmark?.id === bookmark.id ? "is-active" : ""
+                      }`}
+                      key={bookmark.id}
+                      type="button"
+                      onClick={() => setSelectedBookmarkId(bookmark.id)}
+                    >
+                      <span className="query-kind-badge">
+                        {formatBookmarkKind(bookmark.kind)}
+                      </span>
+                      <span>
+                        <strong>{bookmark.name}</strong>
+                        <small>{formatBookmarkTarget(bookmark)}</small>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="queries-empty">
+              <Icon name="mark" />
+              <strong>No bookmarks yet</strong>
+              <span>Right-click a database, collection, or document to save it.</span>
+            </div>
+          )}
+        </section>
+
+        <section className="bookmark-detail-panel">
+          {selectedBookmark ? (
+            <BookmarkDetail
+              key={selectedBookmark.id}
+              bookmark={selectedBookmark}
+              onDelete={onDelete}
+              onMove={onMove}
+              onOpen={onOpen}
+              onUpdate={onUpdate}
+              tagOptions={availableTags}
+            />
+          ) : (
+            <div className="queries-empty">
+              <Icon name="mark" />
+              <strong>Select a bookmark</strong>
+              <span>Details, notes, and tags appear here.</span>
+            </div>
+          )}
+        </section>
+      </div>
+    </section>
+  );
+};
+
+type BookmarkDetailProps = {
+  bookmark: SavedWorkspaceBookmark;
+  onDelete: (bookmarkId: string) => void;
+  onMove: (bookmarkId: string, direction: -1 | 1) => void;
+  onOpen: (bookmark: SavedWorkspaceBookmark) => void;
+  tagOptions: string[];
+  onUpdate: (
+    bookmarkId: string,
+    updates: Pick<SavedWorkspaceBookmark, "notes" | "tags">,
+  ) => void;
+};
+
+const BookmarkDetail = ({
+  bookmark,
+  onDelete,
+  onMove,
+  onOpen,
+  tagOptions,
+  onUpdate,
+}: BookmarkDetailProps) => {
+  const [notes, setNotes] = useState(bookmark.notes);
+  const [saveState, setSaveState] = useState<"idle" | "saved">("idle");
+  const [tagDraft, setTagDraft] = useState("");
+  const [tags, setTags] = useState<string[]>(bookmark.tags);
+  const unusedTagOptions = tagOptions.filter((tag) => !tags.includes(tag));
+  const isDirty =
+    notes !== bookmark.notes || tags.join("\u0000") !== bookmark.tags.join("\u0000");
+
+  const saveMetadata = () => {
+    onUpdate(bookmark.id, {
+      notes,
+      tags,
+    });
+    setSaveState("saved");
+  };
+
+  const updateNotes = (value: string) => {
+    setNotes(value);
+    setSaveState("idle");
+  };
+
+  const addTag = (value: string) => {
+    const nextTag = value.trim();
+
+    if (!nextTag || tags.includes(nextTag)) {
+      setTagDraft("");
+      return;
+    }
+
+    setTags((currentTags) => [...currentTags, nextTag]);
+    setTagDraft("");
+    setSaveState("idle");
+  };
+
+  const removeTag = (tag: string) => {
+    setTags((currentTags) =>
+      currentTags.filter((currentTag) => currentTag !== tag),
+    );
+    setSaveState("idle");
+  };
+
+  return (
+    <>
+      <div className="bookmark-detail-header">
+        <div>
+          <span className="query-kind-badge">
+            {formatBookmarkKind(bookmark.kind)}
+          </span>
+          <h2>{bookmark.name}</h2>
+          <p>{formatBookmarkTarget(bookmark)}</p>
+        </div>
+        <div className="query-detail-actions">
+          <button type="button" onClick={() => onOpen(bookmark)}>
+            Open
+          </button>
+          <button type="button" onClick={() => onMove(bookmark.id, -1)}>
+            Up
+          </button>
+          <button type="button" onClick={() => onMove(bookmark.id, 1)}>
+            Down
+          </button>
+          <button
+            className="danger-text-button"
+            type="button"
+            onClick={() => onDelete(bookmark.id)}
+          >
+            Remove
+          </button>
+        </div>
+      </div>
+      <div className="bookmark-detail-body">
+        <label>
+          <span>Notes</span>
+          <textarea
+            value={notes}
+            onChange={(event) => updateNotes(event.target.value)}
+          />
+        </label>
+        <label>
+          <span>Tags</span>
+          <div className="bookmark-tags-editor">
+            <div className="bookmark-tag-chips">
+              {tags.map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => removeTag(tag)}
+                  aria-label={`Remove ${tag} tag`}
+                >
+                  <span>{tag}</span>
+                  <span aria-hidden="true">×</span>
+                </button>
+              ))}
+              <input
+                placeholder={tags.length > 0 ? "Add tag" : "prod, important"}
+                value={tagDraft}
+                onBlur={() => {
+                  if (tagDraft.trim()) {
+                    addTag(tagDraft);
+                  }
+                }}
+                onChange={(event) => setTagDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === ",") {
+                    event.preventDefault();
+                    addTag(tagDraft);
+                  }
+
+                  if (
+                    event.key === "Backspace" &&
+                    !tagDraft &&
+                    tags.length > 0
+                  ) {
+                    removeTag(tags[tags.length - 1] ?? "");
+                  }
+                }}
+              />
+            </div>
+            {unusedTagOptions.length > 0 ? (
+              <div className="bookmark-tag-options" aria-label="Existing tags">
+                {unusedTagOptions.map((tag) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      addTag(tag);
+                    }}
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </label>
+        <div className="bookmark-metadata-actions">
+          <button
+            className="run-button compact"
+            type="button"
+            disabled={!isDirty && saveState === "saved"}
+            onClick={saveMetadata}
+          >
+            {saveState === "saved" && !isDirty ? "Saved" : "Save metadata"}
+          </button>
+          {saveState === "saved" && !isDirty ? (
+            <span>Saved locally</span>
+          ) : null}
+        </div>
+      </div>
+    </>
+  );
+};
 
 type QuerySectionProps = {
   filterInput: string;
@@ -2748,6 +3363,7 @@ type ResultsSectionProps = {
   onCellEdit: (request: CellEditRequest) => void;
   onCellFilter: (request: CellFilterRequest) => void;
   onCellProjection: (request: CellProjectionRequest) => void;
+  onDocumentBookmark: (document: ParsedDocument) => void;
   onDocumentOpen: (document: ParsedDocument) => void;
   onDocumentSelect: (document: ParsedDocument) => void;
   onRefresh: () => void;
@@ -2770,6 +3386,7 @@ const ResultsSection = ({
   onCellEdit,
   onCellFilter,
   onCellProjection,
+  onDocumentBookmark,
   onDocumentOpen,
   onDocumentSelect,
   onRefresh,
@@ -2821,6 +3438,7 @@ const ResultsSection = ({
           onCellEdit={onCellEdit}
           onCellFilter={onCellFilter}
           onCellProjection={onCellProjection}
+          onDocumentBookmark={onDocumentBookmark}
           onDocumentOpen={onDocumentOpen}
           onDocumentSelect={onDocumentSelect}
           onObjectOpen={handleObjectOpen}
@@ -2949,6 +3567,7 @@ type DocumentTableProps = {
   onCellEdit: (request: CellEditRequest) => void;
   onCellFilter: (request: CellFilterRequest) => void;
   onCellProjection: (request: CellProjectionRequest) => void;
+  onDocumentBookmark?: (document: ParsedDocument) => void;
   onDocumentOpen: (document: ParsedDocument) => void;
   onDocumentSelect: (document: ParsedDocument) => void;
   onObjectOpen: (field: string) => void;
@@ -3027,6 +3646,7 @@ const DocumentTable = ({
   onCellEdit,
   onCellFilter,
   onCellProjection,
+  onDocumentBookmark,
   onDocumentOpen,
   onDocumentSelect,
   onObjectOpen,
@@ -3390,6 +4010,14 @@ const DocumentTable = ({
             onDocumentOpen(document);
             closeCellContextMenu();
           }}
+          {...(onDocumentBookmark
+            ? {
+                onBookmarkDocument: (document: ParsedDocument) => {
+                  onDocumentBookmark(document);
+                  closeCellContextMenu();
+                },
+              }
+            : {})}
           onClose={closeCellContextMenu}
         />
       ) : null}
@@ -3527,6 +4155,7 @@ type CellContextMenuProps = {
   menu: CellContextMenuState;
   onApplyFilter: (request: CellFilterRequest) => void;
   onApplyProjection: (request: CellProjectionRequest) => void;
+  onBookmarkDocument?: (document: ParsedDocument) => void;
   onEditDocument: (document: ParsedDocument) => void;
   onClose: () => void;
 };
@@ -3535,6 +4164,7 @@ const CellContextMenu = ({
   menu,
   onApplyFilter,
   onApplyProjection,
+  onBookmarkDocument,
   onEditDocument,
   onClose,
 }: CellContextMenuProps) => {
@@ -3617,6 +4247,11 @@ const CellContextMenu = ({
         </div>
       ) : null}
       <span className="cell-context-menu-separator" />
+      {onBookmarkDocument ? (
+        <button type="button" onClick={() => onBookmarkDocument(menu.document)}>
+          Add document to bookmarks
+        </button>
+      ) : null}
       <button type="button" onClick={() => onEditDocument(menu.document)}>
         Edit document
       </button>
@@ -3999,7 +4634,9 @@ const readStoredQueries = (storageKey: string): SavedWorkspaceQuery[] => {
       return [];
     }
 
-    return parsedValue.filter(isSavedWorkspaceQuery);
+    return parsedValue
+      .filter(isSavedWorkspaceQuery)
+      .map(normalizeSavedWorkspaceQuery);
   } catch {
     return [];
   }
@@ -4013,6 +4650,37 @@ const writeStoredQueries = (
     globalThis.localStorage?.setItem(storageKey, JSON.stringify(queries));
   } catch {
     // Local query storage is best-effort and should never break the workspace.
+  }
+};
+
+const readStoredBookmarks = (storageKey: string): SavedWorkspaceBookmark[] => {
+  try {
+    const rawValue = globalThis.localStorage?.getItem(storageKey);
+
+    if (!rawValue) {
+      return [];
+    }
+
+    const parsedValue = JSON.parse(rawValue);
+
+    if (!Array.isArray(parsedValue)) {
+      return [];
+    }
+
+    return parsedValue.filter(isSavedWorkspaceBookmark);
+  } catch {
+    return [];
+  }
+};
+
+const writeStoredBookmarks = (
+  storageKey: string,
+  bookmarks: SavedWorkspaceBookmark[],
+) => {
+  try {
+    globalThis.localStorage?.setItem(storageKey, JSON.stringify(bookmarks));
+  } catch {
+    // Local bookmark storage is best-effort and should not break navigation.
   }
 };
 
@@ -4034,6 +4702,191 @@ const isSavedWorkspaceQuery = (value: unknown): value is SavedWorkspaceQuery => 
     typeof query.name === "string" &&
     typeof query.skip === "number"
   );
+};
+
+const normalizeSavedWorkspaceQuery = (
+  query: SavedWorkspaceQuery,
+): SavedWorkspaceQuery => ({
+  ...query,
+  notes: typeof query.notes === "string" ? query.notes : "",
+});
+
+const isSavedWorkspaceBookmark = (
+  value: unknown,
+): value is SavedWorkspaceBookmark => {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const bookmark = value as Partial<SavedWorkspaceBookmark>;
+
+  return (
+    typeof bookmark.connectionId === "string" &&
+    typeof bookmark.connectionName === "string" &&
+    typeof bookmark.createdAt === "string" &&
+    typeof bookmark.id === "string" &&
+    typeof bookmark.name === "string" &&
+    typeof bookmark.notes === "string" &&
+    Array.isArray(bookmark.tags) &&
+    bookmark.tags.every((tag) => typeof tag === "string") &&
+    typeof bookmark.updatedAt === "string" &&
+    (bookmark.kind === "database" ||
+      bookmark.kind === "collection" ||
+      bookmark.kind === "document") &&
+    typeof bookmark.database === "string" &&
+    (bookmark.kind === "database" || typeof bookmark.collection === "string") &&
+    (bookmark.kind !== "document" || typeof bookmark.documentId === "string")
+  );
+};
+
+const isAddBookmarkEventDetail = (
+  value: unknown,
+): value is AddBookmarkEventDetail => {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const detail = value as Partial<AddBookmarkEventDetail>;
+
+  return (
+    typeof detail.connectionId === "string" &&
+    typeof detail.connectionName === "string" &&
+    typeof detail.database === "string" &&
+    (detail.kind === "database" ||
+      detail.kind === "collection" ||
+      detail.kind === "document") &&
+    (detail.kind === "database" || typeof detail.collection === "string") &&
+    (detail.kind !== "document" || typeof detail.documentId === "string")
+  );
+};
+
+type BookmarkSnapshotTarget = {
+  collection?: string;
+  connectionId: string;
+  connectionName: string;
+  database: string;
+  documentId?: string;
+};
+
+const buildBookmarkSnapshot = ({
+  kind,
+  target,
+}: {
+  kind: SavedWorkspaceBookmark["kind"];
+  target: BookmarkSnapshotTarget;
+}):
+  | { ok: true; value: SavedWorkspaceBookmark }
+  | { ok: false; message: string } => {
+  if ((kind === "collection" || kind === "document") && !target.collection) {
+    return {
+      message: "Select a collection before saving this bookmark.",
+      ok: false,
+    };
+  }
+
+  if (kind === "document" && !target.documentId) {
+    return { message: "Select a document before saving it.", ok: false };
+  }
+
+  const now = new Date().toISOString();
+  const bookmark: SavedWorkspaceBookmark = {
+    connectionId: target.connectionId,
+    connectionName: target.connectionName,
+    createdAt: now,
+    id: `bookmark_${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
+    kind,
+    name: createBookmarkName(kind, target),
+    notes: "",
+    tags: [],
+    updatedAt: now,
+    database: target.database,
+    ...(target.collection ? { collection: target.collection } : {}),
+    ...(kind === "document" && target.documentId
+      ? { documentId: target.documentId }
+      : {}),
+  };
+
+  return { ok: true, value: bookmark };
+};
+
+const createBookmarkName = (
+  kind: SavedWorkspaceBookmark["kind"],
+  target: BookmarkSnapshotTarget,
+): string => {
+  if (kind === "document") {
+    return target.documentId ?? "Document";
+  }
+
+  if (kind === "collection") {
+    return target.collection ?? "Collection";
+  }
+
+  if (kind === "database") {
+    return target.database ?? "Database";
+  }
+
+  return target.connectionName;
+};
+
+const groupBookmarks = (
+  bookmarks: SavedWorkspaceBookmark[],
+): Array<{
+  bookmarks: SavedWorkspaceBookmark[];
+  connectionName: string;
+  databaseName: string;
+  key: string;
+}> => {
+  const groups = new Map<
+    string,
+    {
+      bookmarks: SavedWorkspaceBookmark[];
+      connectionName: string;
+      databaseName: string;
+      key: string;
+    }
+  >();
+
+  for (const bookmark of bookmarks) {
+    const databaseName = bookmark.database ?? "Connection";
+    const key = `${bookmark.connectionId}:${databaseName}`;
+    const group =
+      groups.get(key) ??
+      {
+        bookmarks: [],
+        connectionName: bookmark.connectionName,
+        databaseName,
+        key,
+      };
+
+    group.bookmarks.push(bookmark);
+    groups.set(key, group);
+  }
+
+  return [...groups.values()];
+};
+
+const getBookmarkTags = (bookmarks: SavedWorkspaceBookmark[]): string[] =>
+  [
+    ...new Set(
+      bookmarks.flatMap((bookmark) =>
+        bookmark.tags.map((tag) => tag.trim()).filter(Boolean),
+      ),
+    ),
+  ].sort((firstTag, secondTag) => firstTag.localeCompare(secondTag));
+
+const formatBookmarkKind = (kind: SavedWorkspaceBookmark["kind"]): string =>
+  kind.charAt(0).toUpperCase() + kind.slice(1);
+
+const formatBookmarkTarget = (bookmark: SavedWorkspaceBookmark): string => {
+  const path = [bookmark.database, bookmark.collection]
+    .filter(Boolean)
+    .join(".");
+
+  if (bookmark.documentId) {
+    return `${path} · ${bookmark.documentId}`;
+  }
+
+  return path || bookmark.connectionName;
 };
 
 const createSavedQueryName = (

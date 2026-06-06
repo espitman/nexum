@@ -1,9 +1,11 @@
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
   type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ExplorerNodeDto } from "../../../ipc/contracts";
@@ -18,13 +20,34 @@ type DatabasePanelProps = {
 
 type ExplorerTreeNodeProps = {
   connectionId: string;
+  contextNodeId: string | null;
   depth: number;
   expandedNodeIds: Set<string>;
   node: ExplorerNodeDto;
+  onBookmarkMenuOpen: (
+    node: ExplorerNodeDto,
+    event: ReactMouseEvent<HTMLButtonElement>,
+  ) => void;
   onCollectionSelect: (collectionName: string) => void;
   onToggleNode: (nodeId: string) => void;
   selectedCollectionName: string | null;
 };
+
+type ExplorerBookmarkContextMenu = {
+  left: number;
+  node: ExplorerNodeDto;
+  top: number;
+};
+
+type ExplorerBookmarkEventDetail = {
+  collection?: string;
+  connectionId: string;
+  connectionName: string;
+  database: string;
+  kind: "collection" | "database";
+};
+
+const addBookmarkEventName = "nexum:add-bookmark";
 
 const getNodeIconName = (node: ExplorerNodeDto): string =>
   node.type === "view" ? "table" : node.type;
@@ -59,6 +82,17 @@ const createFolderNodeId = (
     folder,
   ].join(":");
 
+const isBookmarkableExplorerNode = (node: ExplorerNodeDto): boolean =>
+  node.type === "database" || node.type === "collection" || node.type === "view";
+
+const getExplorerContextMenuPosition = (
+  clientX: number,
+  clientY: number,
+): { left: number; top: number } => ({
+  left: Math.max(10, Math.min(clientX, window.innerWidth - 230)),
+  top: Math.max(10, Math.min(clientY, window.innerHeight - 72)),
+});
+
 export const DatabasePanel = ({
   connectionId,
   connectionName,
@@ -66,6 +100,8 @@ export const DatabasePanel = ({
   onCollectionSelect,
 }: DatabasePanelProps) => {
   const queryClient = useQueryClient();
+  const [bookmarkMenu, setBookmarkMenu] =
+    useState<ExplorerBookmarkContextMenu | null>(null);
   const [expandedNodeIds, setExpandedNodeIds] = useState<Set<string>>(
     () => new Set([connectionId]),
   );
@@ -119,6 +155,85 @@ export const DatabasePanel = ({
     });
   };
 
+  const openBookmarkMenu = useCallback(
+    (node: ExplorerNodeDto, event: ReactMouseEvent<HTMLButtonElement>) => {
+      if (!isBookmarkableExplorerNode(node)) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      const position = getExplorerContextMenuPosition(
+        event.clientX,
+        event.clientY,
+      );
+      setBookmarkMenu({ ...position, node });
+    },
+    [],
+  );
+
+  const addExplorerBookmark = () => {
+    if (!bookmarkMenu) {
+      return;
+    }
+
+    const [database, collection] = bookmarkMenu.node.path;
+
+    if (!database) {
+      return;
+    }
+
+    const detail: ExplorerBookmarkEventDetail =
+      bookmarkMenu.node.type === "database" || !collection
+        ? {
+            connectionId,
+            connectionName,
+            database,
+            kind: "database",
+          }
+        : {
+            collection,
+            connectionId,
+            connectionName,
+            database,
+            kind: "collection",
+          };
+
+    window.dispatchEvent(
+      new CustomEvent<ExplorerBookmarkEventDetail>(addBookmarkEventName, {
+        detail,
+      }),
+    );
+    setBookmarkMenu(null);
+  };
+
+  useEffect(() => {
+    if (!bookmarkMenu) {
+      return undefined;
+    }
+
+    const closeMenu = () => setBookmarkMenu(null);
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeMenu();
+      }
+    };
+
+    window.addEventListener("click", closeMenu);
+    window.addEventListener("contextmenu", closeMenu);
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("resize", closeMenu);
+    window.addEventListener("scroll", closeMenu, true);
+
+    return () => {
+      window.removeEventListener("click", closeMenu);
+      window.removeEventListener("contextmenu", closeMenu);
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("resize", closeMenu);
+      window.removeEventListener("scroll", closeMenu, true);
+    };
+  }, [bookmarkMenu]);
+
   return (
     <aside className="database-panel">
       <div className="panel-title-row">
@@ -160,10 +275,12 @@ export const DatabasePanel = ({
             (rootNodesQuery.data ?? []).map((node) => (
               <ExplorerTreeNode
                 connectionId={connectionId}
+                contextNodeId={bookmarkMenu?.node.id ?? null}
                 depth={1}
                 expandedNodeIds={selectedPathExpandedNodeIds}
                 key={node.id}
                 node={node}
+                onBookmarkMenuOpen={openBookmarkMenu}
                 onCollectionSelect={onCollectionSelect}
                 onToggleNode={toggleNode}
                 selectedCollectionName={selectedCollectionName}
@@ -172,15 +289,32 @@ export const DatabasePanel = ({
           )
         ) : null}
       </div>
+      {bookmarkMenu ? (
+        <div
+          className="explorer-context-menu"
+          onClick={(event) => event.stopPropagation()}
+          onContextMenu={(event) => event.preventDefault()}
+          style={{
+            left: `${bookmarkMenu.left}px`,
+            top: `${bookmarkMenu.top}px`,
+          }}
+        >
+          <button type="button" onClick={addExplorerBookmark}>
+            Add to bookmarks
+          </button>
+        </div>
+      ) : null}
     </aside>
   );
 };
 
 const ExplorerTreeNode = ({
   connectionId,
+  contextNodeId,
   depth,
   expandedNodeIds,
   node,
+  onBookmarkMenuOpen,
   onCollectionSelect,
   onToggleNode,
   selectedCollectionName,
@@ -202,6 +336,7 @@ const ExplorerTreeNode = ({
   });
   const isSelectable = node.type === "collection" || node.type === "view";
   const selectionKey = getNodeSelectionKey(node);
+  const isContextTarget = contextNodeId === node.id;
   const isSelected = selectionKey === selectedCollectionName;
   const rowRef = useRef<HTMLButtonElement | null>(null);
 
@@ -220,7 +355,9 @@ const ExplorerTreeNode = ({
     <>
       <button
         ref={rowRef}
-        className={`tree-row ${isSelected ? "is-active" : ""}`}
+        className={`tree-row ${isSelected ? "is-active" : ""} ${
+          isContextTarget ? "is-context-target" : ""
+        }`}
         onClick={() => {
           if (isSelectable) {
             onCollectionSelect(selectionKey);
@@ -231,6 +368,7 @@ const ExplorerTreeNode = ({
             onToggleNode(node.id);
           }
         }}
+        onContextMenu={(event) => onBookmarkMenuOpen(node, event)}
         style={{ "--depth": depth } as CSSProperties}
         type="button"
       >
@@ -257,10 +395,12 @@ const ExplorerTreeNode = ({
           (childrenQuery.data ?? []).map((childNode) => (
             <ExplorerTreeNode
               connectionId={connectionId}
+              contextNodeId={contextNodeId}
               depth={depth + 1}
               expandedNodeIds={expandedNodeIds}
               key={childNode.id}
               node={childNode}
+              onBookmarkMenuOpen={onBookmarkMenuOpen}
               onCollectionSelect={onCollectionSelect}
               onToggleNode={onToggleNode}
               selectedCollectionName={selectedCollectionName}

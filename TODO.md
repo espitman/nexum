@@ -327,12 +327,12 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
   - [x] Store query name, target connection, database, collection, filter, projection, sort, limit, and pipeline
   - [x] Open a saved query into the active collection workspace
   - [x] Add last-run status and execution metadata
-- [ ] Build Bookmarks workspace
-  - [ ] Save bookmarked connections, databases, collections, documents, and field paths
-  - [ ] Group bookmarks by connection and database
-  - [ ] Jump directly from a bookmark to its target
-  - [ ] Add notes and tags for each bookmark
-  - [ ] Add remove and reorder actions
+- [x] Build Bookmarks workspace
+  - [x] Save bookmarked databases, collections, and documents
+  - [x] Group bookmarks by connection and database
+  - [x] Jump directly from a bookmark to its target
+  - [x] Add notes and tags for each bookmark
+  - [x] Add remove and reorder actions
 - [ ] Build Snippets workspace
   - [ ] Save reusable filter, projection, sort, update, and aggregation snippets
   - [ ] Add snippet variables/placeholders

@@ -82,10 +82,26 @@ export type SavedWorkspaceQuery = {
   lastRunAt?: string;
   limit: number;
   name: string;
+  notes: string;
   pipeline?: Record<string, unknown>[];
   projection: Record<string, unknown>;
   resultCount?: number;
   skip: number;
   sort: Record<string, 1 | -1>;
+  updatedAt: string;
+};
+
+export type SavedWorkspaceBookmark = {
+  collection?: string;
+  connectionId: string;
+  connectionName: string;
+  createdAt: string;
+  database?: string;
+  documentId?: string;
+  id: string;
+  kind: "database" | "collection" | "document";
+  name: string;
+  notes: string;
+  tags: string[];
   updatedAt: string;
 };
