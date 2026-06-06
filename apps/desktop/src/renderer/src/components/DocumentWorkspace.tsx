@@ -2245,6 +2245,7 @@ const QueryFieldAutocompleteInput = ({
       context,
       mode,
       path: suggestion.path,
+      type: suggestion.type,
       value,
     });
 
@@ -2264,7 +2265,11 @@ const QueryFieldAutocompleteInput = ({
       const insertedValueSuffix =
         mode === "field"
           ? ""
-          : getQueryFieldSuggestionValueSuffix(afterSuggestion, mode);
+          : getQueryFieldSuggestionValueSuffix(
+              afterSuggestion,
+              mode,
+              suggestion.type,
+            );
       const nextCaret = Math.min(
         nextValue.length,
         mode === "field"
@@ -5769,11 +5774,13 @@ const insertQueryFieldSuggestion = ({
   context,
   mode,
   path,
+  type,
   value,
 }: {
   context: QueryFieldSuggestionContext;
   mode: "field" | "filter" | "projection";
   path: string;
+  type: string;
   value: string;
 }): string => {
   if (mode === "field") {
@@ -5781,17 +5788,23 @@ const insertQueryFieldSuggestion = ({
   }
 
   const trimmedValue = value.trim();
+  const fieldValue = getQueryFieldSuggestionDefaultValue(mode, type);
 
   if (!trimmedValue || trimmedValue === "{}") {
-    return `{"${path}":${mode === "filter" ? '""' : "1"}}`;
+    return `{"${path}":${fieldValue}}`;
+  }
+
+  if (!trimmedValue.startsWith("{")) {
+    return `{"${path}":${fieldValue}}`;
   }
 
   const before = value.slice(0, context.start);
   const after = value.slice(context.start + context.fragment.length);
   const formattedKey = getFormattedQueryFieldKey(context, path);
-  const valueSuffix = getQueryFieldSuggestionValueSuffix(after, mode);
+  const valueSuffix = getQueryFieldSuggestionValueSuffix(after, mode, type);
+  const nextValue = `${before}${formattedKey}${valueSuffix}${after}`;
 
-  return `${before}${formattedKey}${valueSuffix}${after}`;
+  return trimmedValue.endsWith("}") ? nextValue : `${nextValue}}`;
 };
 
 const getFormattedQueryFieldKey = (
@@ -5802,6 +5815,7 @@ const getFormattedQueryFieldKey = (
 const getQueryFieldSuggestionValueSuffix = (
   after: string,
   mode: "filter" | "projection",
+  type: string,
 ): string => {
   const nextAfter = after.trimStart();
 
@@ -5809,7 +5823,40 @@ const getQueryFieldSuggestionValueSuffix = (
     return "";
   }
 
-  return mode === "filter" ? ':""' : ":1";
+  return `:${getQueryFieldSuggestionDefaultValue(mode, type)}`;
+};
+
+const getQueryFieldSuggestionDefaultValue = (
+  mode: "filter" | "projection",
+  type: string,
+): string => {
+  if (mode === "projection") {
+    return "1";
+  }
+
+  const normalizedType = type.toLowerCase();
+
+  if (/\b(bool|boolean)\b/.test(normalizedType)) {
+    return "true";
+  }
+
+  if (
+    /\b(int|int32|int64|long|double|decimal|decimal128|number|float)\b/.test(
+      normalizedType,
+    )
+  ) {
+    return "0";
+  }
+
+  if (/\b(array)\b/.test(normalizedType)) {
+    return "[]";
+  }
+
+  if (/\b(object)\b/.test(normalizedType)) {
+    return "{}";
+  }
+
+  return '""';
 };
 
 const parseJsonObject = (

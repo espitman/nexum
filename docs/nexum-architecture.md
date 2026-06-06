@@ -1495,7 +1495,6 @@ PostgreSQL plugin
 Redis plugin
 Plugin marketplace/internal plugin registry
 Workspace-level settings
-Team shared snippets
 ```
 
 v0.4:

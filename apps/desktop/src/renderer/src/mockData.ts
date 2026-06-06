@@ -12,7 +12,6 @@ export const navItems = [
   ["database", "Explore"],
   ["term", "Queries"],
   ["mark", "Bookmarks"],
-  ["code", "Snippets"],
   ["check", "Tasks"],
   ["gear", "Settings"],
 ] as const;
