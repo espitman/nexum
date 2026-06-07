@@ -6858,3 +6858,141 @@ input:disabled {
     border-color: #2b3948;
   }
 }
+
+.app-shell.appearance-dark .task-run-modal-message p {
+  color: #d8e1ec;
+}
+
+.app-shell.appearance-dark .task-run-modal-message.is-error p {
+  color: #ffb4ab;
+}
+
+.app-shell.appearance-dark .query-section,
+.app-shell.appearance-dark .query-controls,
+.app-shell.appearance-dark .query-line,
+.app-shell.appearance-dark .results-header {
+  background: #101820;
+  border-color: #2b3948;
+}
+
+.app-shell.appearance-dark .query-label,
+.app-shell.appearance-dark .query-controls label,
+.app-shell.appearance-dark .document-breadcrumbs,
+.app-shell.appearance-dark .document-breadcrumbs button,
+.app-shell.appearance-dark .document-breadcrumb-segment {
+  color: #d8e1ec;
+}
+
+.app-shell.appearance-dark .query-line code,
+.app-shell.appearance-dark .query-line input,
+.app-shell.appearance-dark .query-controls input {
+  color: #e8eef6;
+}
+
+.app-shell.appearance-dark .query-autocomplete-action {
+  color: #9fb0c3;
+}
+
+.app-shell.appearance-dark .query-autocomplete-action:hover {
+  background: #172635;
+  color: #e8eef6;
+}
+
+.app-shell.appearance-dark .breadcrumb-separator {
+  color: #8090a4;
+}
+
+.app-shell.appearance-dark .view-mode-toggle {
+  background: #0d141c;
+  border-color: #334456;
+}
+
+.app-shell.appearance-dark .view-mode-toggle button {
+  color: #9fb0c3;
+}
+
+.app-shell.appearance-dark .view-mode-toggle button.is-active {
+  background: #172635;
+  color: #66d9e8;
+  box-shadow: none;
+}
+
+.app-shell.appearance-dark .object-preview-popover {
+  background: #101820;
+  border-color: #3a4d61;
+  box-shadow: 0 18px 42px rgb(0 0 0 / 42%);
+}
+
+.app-shell.appearance-dark .object-preview-popover pre {
+  color: #66d9e8;
+}
+
+@media (prefers-color-scheme: dark) {
+  .app-shell.appearance-system .task-run-modal-message p {
+    color: #d8e1ec;
+  }
+
+  .app-shell.appearance-system .task-run-modal-message.is-error p {
+    color: #ffb4ab;
+  }
+
+  .app-shell.appearance-system .query-section,
+  .app-shell.appearance-system .query-controls,
+  .app-shell.appearance-system .query-line,
+  .app-shell.appearance-system .results-header {
+    background: #101820;
+    border-color: #2b3948;
+  }
+
+  .app-shell.appearance-system .query-label,
+  .app-shell.appearance-system .query-controls label,
+  .app-shell.appearance-system .document-breadcrumbs,
+  .app-shell.appearance-system .document-breadcrumbs button,
+  .app-shell.appearance-system .document-breadcrumb-segment {
+    color: #d8e1ec;
+  }
+
+  .app-shell.appearance-system .query-line code,
+  .app-shell.appearance-system .query-line input,
+  .app-shell.appearance-system .query-controls input {
+    color: #e8eef6;
+  }
+
+  .app-shell.appearance-system .query-autocomplete-action {
+    color: #9fb0c3;
+  }
+
+  .app-shell.appearance-system .query-autocomplete-action:hover {
+    background: #172635;
+    color: #e8eef6;
+  }
+
+  .app-shell.appearance-system .breadcrumb-separator {
+    color: #8090a4;
+  }
+
+  .app-shell.appearance-system .view-mode-toggle {
+    background: #0d141c;
+    border-color: #334456;
+  }
+
+  .app-shell.appearance-system .view-mode-toggle button {
+    color: #9fb0c3;
+  }
+
+  .app-shell.appearance-system .view-mode-toggle button.is-active {
+    background: #172635;
+    color: #66d9e8;
+    box-shadow: none;
+  }
+
+  .app-shell.appearance-system .object-preview-popover {
+    background: #101820;
+    border-color: #3a4d61;
+    box-shadow: 0 18px 42px rgb(0 0 0 / 42%);
+  }
+
+  .app-shell.appearance-system .object-preview-popover pre {
+    color: #66d9e8;
+  }
+}

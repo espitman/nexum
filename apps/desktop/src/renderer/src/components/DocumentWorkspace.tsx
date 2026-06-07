@@ -258,6 +258,28 @@ export const DocumentWorkspace = ({
     collectionName: string | null;
     path: string[];
   }>({ collectionName: null, path: [] });
+  const [isSystemDark, setIsSystemDark] = useState(() =>
+    globalThis.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false,
+  );
+  useEffect(() => {
+    const mediaQuery = globalThis.matchMedia?.("(prefers-color-scheme: dark)");
+
+    if (!mediaQuery) {
+      return undefined;
+    }
+
+    const handleChange = (event: MediaQueryListEvent) =>
+      setIsSystemDark(event.matches);
+
+    mediaQuery.addEventListener("change", handleChange);
+
+    return () => mediaQuery.removeEventListener("change", handleChange);
+  }, []);
+  const editorTheme =
+    settings.appearance === "dark" ||
+    (settings.appearance === "system" && isSystemDark)
+      ? "vs-dark"
+      : "vs";
   const isCollectionWorkspace =
     activeSection === "Explore" && selectedCollectionName !== null;
   const isMetadataWorkspace =
@@ -1533,6 +1555,7 @@ export const DocumentWorkspace = ({
           ) : null}
           {isAggregationWorkspace ? (
             <AggregationPipelineWorkspace
+              editorTheme={editorTheme}
               model={aggregationPipelineModel}
               result={aggregationRunResult}
               schemaFields={schemaFields}
@@ -1645,6 +1668,7 @@ export const DocumentWorkspace = ({
                 isFetching={documentsQuery.isFetching}
                 isInitialLoading={documentsQuery.isLoading}
                 isSavingDocument={updateDocumentMutation.isPending}
+                editorTheme={editorTheme}
                 onCellEdit={applyCellEdit}
                 onCellFilter={applyCellFilter}
                 onCellProjection={applyCellProjection}
@@ -1696,6 +1720,7 @@ export const DocumentWorkspace = ({
             <DocumentEditorPanel
               key={`${selectedCollectionName ?? "collection"}:${editorDocument.id}:${editorDocument.ejson}`}
               document={editorDocument}
+              editorTheme={editorTheme}
               isProduction={selectedConnection?.environment === "production"}
               isReadOnly={selectedConnection?.readOnly ?? true}
               isSaving={updateDocumentMutation.isPending}
@@ -4176,6 +4201,7 @@ const MetadataWorkspace = ({
 );
 
 type AggregationPipelineWorkspaceProps = {
+  editorTheme: "vs" | "vs-dark";
   model: AggregationPipelineModel;
   result: AggregationRunResult | null;
   schemaFields: SchemaFieldSummary[];
@@ -4184,6 +4210,7 @@ type AggregationPipelineWorkspaceProps = {
 };
 
 const AggregationPipelineWorkspace = ({
+  editorTheme,
   model,
   result,
   schemaFields,
@@ -4386,7 +4413,10 @@ const AggregationPipelineWorkspace = ({
               <strong>Raw pipeline</strong>
               <span>{rawPipeline.ok ? "Valid" : "Invalid"}</span>
             </header>
-            <RawPipelineEditor value={rawPipelineText} />
+            <RawPipelineEditor
+              editorTheme={editorTheme}
+              value={rawPipelineText}
+            />
           </div>
           <button
             className="run-button compact aggregation-run-button"
@@ -4430,7 +4460,10 @@ const AggregationPipelineWorkspace = ({
             }
           />
         ) : resultViewMode === "json" ? (
-          <AggregationJsonResults documents={resultDocuments} />
+          <AggregationJsonResults
+            documents={resultDocuments}
+            editorTheme={editorTheme}
+          />
         ) : (
           <DocumentTable
             key={`aggregation:${resultTablePath.join(".")}:${
@@ -4456,10 +4489,11 @@ const AggregationPipelineWorkspace = ({
 };
 
 type RawPipelineEditorProps = {
+  editorTheme: "vs" | "vs-dark";
   value: string;
 };
 
-const RawPipelineEditor = ({ value }: RawPipelineEditorProps) => (
+const RawPipelineEditor = ({ editorTheme, value }: RawPipelineEditorProps) => (
   <div className="document-editor-monaco aggregation-raw-editor">
     <Editor
       defaultLanguage="json"
@@ -4480,7 +4514,7 @@ const RawPipelineEditor = ({ value }: RawPipelineEditorProps) => (
         tabSize: 2,
         wordWrap: "off",
       }}
-      theme="vs"
+      theme={editorTheme}
     />
   </div>
 );
@@ -5104,6 +5138,7 @@ const QueryBuilderCondition = ({
 type ResultsSectionProps = {
   collectionLabel: string;
   documents: ParsedDocument[];
+  editorTheme: "vs" | "vs-dark";
   error: Error | null;
   hasMore: boolean;
   isFetching: boolean;
@@ -5127,6 +5162,7 @@ type ResultsSectionProps = {
 const ResultsSection = ({
   collectionLabel,
   documents,
+  editorTheme,
   error,
   hasMore,
   isFetching,
@@ -5178,7 +5214,11 @@ const ResultsSection = ({
       ) : isInitialLoading ? (
         <ResultsLoadingState />
       ) : viewMode === "json" ? (
-        <JsonResults documents={documents} onDocumentOpen={onDocumentOpen} />
+        <JsonResults
+          documents={documents}
+          editorTheme={editorTheme}
+          onDocumentOpen={onDocumentOpen}
+        />
       ) : (
         <DocumentTable
           key={`${tablePath.join(".")}:${tableDocuments[0]?.id ?? "empty"}:${tableDocuments.length}`}
@@ -6013,10 +6053,15 @@ const CellContextMenu = ({
 
 type JsonResultsProps = {
   documents: ParsedDocument[];
+  editorTheme: "vs" | "vs-dark";
   onDocumentOpen: (document: ParsedDocument) => void;
 };
 
-const JsonResults = ({ documents, onDocumentOpen }: JsonResultsProps) => {
+const JsonResults = ({
+  documents,
+  editorTheme,
+  onDocumentOpen,
+}: JsonResultsProps) => {
   const parentRef = useRef<HTMLDivElement | null>(null);
   // eslint-disable-next-line react-hooks/incompatible-library
   const rowVirtualizer = useVirtualizer({
@@ -6066,6 +6111,7 @@ const JsonResults = ({ documents, onDocumentOpen }: JsonResultsProps) => {
                 </button>
               </header>
               <ReadOnlyJsonDocumentEditor
+                editorTheme={editorTheme}
                 path={`document-json-${document.id}.json`}
                 value={formatEditableEjson(document.ejson)}
               />
@@ -6079,9 +6125,13 @@ const JsonResults = ({ documents, onDocumentOpen }: JsonResultsProps) => {
 
 type AggregationJsonResultsProps = {
   documents: ParsedDocument[];
+  editorTheme: "vs" | "vs-dark";
 };
 
-const AggregationJsonResults = ({ documents }: AggregationJsonResultsProps) => {
+const AggregationJsonResults = ({
+  documents,
+  editorTheme,
+}: AggregationJsonResultsProps) => {
   const parentRef = useRef<HTMLDivElement | null>(null);
   // eslint-disable-next-line react-hooks/incompatible-library
   const rowVirtualizer = useVirtualizer({
@@ -6115,6 +6165,7 @@ const AggregationJsonResults = ({ documents }: AggregationJsonResultsProps) => {
                 <strong>{document.id}</strong>
               </header>
               <ReadOnlyJsonDocumentEditor
+                editorTheme={editorTheme}
                 path={`aggregation-json-${document.id}.json`}
                 value={formatEditableEjson(document.ejson)}
               />
@@ -6127,11 +6178,13 @@ const AggregationJsonResults = ({ documents }: AggregationJsonResultsProps) => {
 };
 
 type ReadOnlyJsonDocumentEditorProps = {
+  editorTheme: "vs" | "vs-dark";
   path: string;
   value: string;
 };
 
 const ReadOnlyJsonDocumentEditor = ({
+  editorTheme,
   path,
   value,
 }: ReadOnlyJsonDocumentEditorProps) => (
@@ -6155,13 +6208,14 @@ const ReadOnlyJsonDocumentEditor = ({
         tabSize: 2,
         wordWrap: "off",
       }}
-      theme="vs"
+      theme={editorTheme}
     />
   </div>
 );
 
 type DocumentEditorPanelProps = {
   document: ParsedDocument;
+  editorTheme: "vs" | "vs-dark";
   isProduction: boolean;
   isReadOnly: boolean;
   isSaving: boolean;
@@ -6172,6 +6226,7 @@ type DocumentEditorPanelProps = {
 
 const DocumentEditorPanel = ({
   document,
+  editorTheme,
   isProduction,
   isReadOnly,
   isSaving,
@@ -6261,7 +6316,7 @@ const DocumentEditorPanel = ({
                 tabSize: 2,
                 wordWrap: "off",
               }}
-              theme="vs"
+              theme={editorTheme}
             />
           </div>
         </div>
