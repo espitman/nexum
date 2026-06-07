@@ -333,11 +333,11 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
   - [x] Jump directly from a bookmark to its target
   - [x] Add notes and tags for each bookmark
   - [x] Add remove and reorder actions
-- [ ] Build Tasks workspace
+- [x] Build Tasks workspace
   - [x] Show recent and scheduled local operations
-  - [ ] Track running queries, exports, schema inference, and audit cleanup jobs
+  - [x] Track running queries, exports, schema inference, and audit cleanup jobs
   - [x] Show status, duration, target, and error details
-  - [ ] Add cancel/retry actions where safe
+  - [x] Add cancel/retry actions where safe
   - [x] Keep task history local and free of secrets
 - [ ] Build Settings workspace
   - [ ] Add appearance and density settings

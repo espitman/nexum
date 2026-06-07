@@ -114,12 +114,19 @@ export type SavedWorkspaceTask = {
   nextRunAt?: string;
   result?: string;
   runs: SavedWorkspaceTaskRun[];
-  schedule: "daily" | "daily-at" | "hourly" | "manual" | "minute" | "weekly";
+  schedule:
+    | "custom-minutes"
+    | "daily"
+    | "daily-at"
+    | "hourly"
+    | "manual"
+    | "minute"
+    | "weekly";
   scheduleTime?: string;
   sourceQuery: SavedWorkspaceQuery;
   status: "idle" | "running" | "success" | "failed";
   target: string;
-  type: "aggregation" | "find";
+  type: "aggregation" | "audit-cleanup" | "export" | "find" | "schema-inference";
   name: string;
 };
 

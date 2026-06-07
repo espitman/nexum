@@ -59,6 +59,24 @@ export const ConnectionManager = ({
       ) ?? null,
     [connections, selectedConnectionId],
   );
+
+  useEffect(() => {
+    if (!deleteCandidate || isSubmitting) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setDeleteCandidate(null);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [deleteCandidate, isSubmitting]);
   const normalizedName = form.name.trim();
   const normalizedUri = form.uri.trim();
   const canSave =

@@ -1246,6 +1246,28 @@ button {
   margin: 0;
 }
 
+.task-new-query-group {
+  border-radius: 5px;
+  display: grid;
+  gap: 4px;
+  padding: 2px;
+}
+
+.task-new-query-group > div {
+  display: flex;
+  gap: 5px;
+  padding: 0 8px 6px;
+}
+
+.task-new-query-group > div button {
+  background: #f6fafb;
+  border: 1px solid #dbe3ec;
+  font-size: 11px;
+  min-height: 26px;
+  padding: 0 8px;
+  width: auto;
+}
+
 .task-new-menu-divider {
   border-top: 1px solid #e4eaf1;
   margin: 4px 2px;
@@ -1540,14 +1562,25 @@ button {
 }
 
 .task-run-item {
+  background: transparent;
+  border: 0;
   border-bottom: 1px solid #edf2f7;
+  border-radius: 0;
+  color: inherit;
+  cursor: pointer;
   display: grid;
   gap: 6px;
   padding: 10px 11px;
+  text-align: left;
+  width: 100%;
 }
 
 .task-run-item:last-child {
   border-bottom: 0;
+}
+
+.task-run-item:hover {
+  background: #f6fafb;
 }
 
 .task-run-item .task-status {
@@ -1567,6 +1600,195 @@ button {
 .task-runs-empty {
   margin: 0;
   padding: 12px;
+}
+
+.task-run-modal-overlay {
+  align-items: center;
+  background: rgb(15 23 42 / 28%);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 24px;
+  position: fixed;
+  z-index: 90;
+}
+
+.task-run-modal {
+  background: #ffffff;
+  border: 1px solid #dfe6ee;
+  border-radius: 8px;
+  box-shadow: 0 18px 48px rgb(31 41 55 / 18%);
+  color: #263142;
+  display: grid;
+  max-width: 560px;
+  overflow: hidden;
+  width: min(560px, 100%);
+}
+
+.task-run-modal header {
+  align-items: start;
+  border-bottom: 1px solid #e4eaf1;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+}
+
+.task-run-modal h2 {
+  color: #263142;
+  font-size: 18px;
+  line-height: 1.2;
+  margin: 10px 0 4px;
+}
+
+.task-run-modal header p {
+  color: #667286;
+  font-size: 12px;
+  margin: 0;
+}
+
+.task-run-modal header button {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #dbe3ec;
+  border-radius: 6px;
+  color: #526071;
+  display: inline-flex;
+  font-size: 22px;
+  height: 34px;
+  justify-content: center;
+  line-height: 1;
+  width: 34px;
+}
+
+.task-run-modal header button:hover {
+  background: #f6fafb;
+  border-color: #c8d3df;
+}
+
+.task-run-modal-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 8px 16px;
+}
+
+.task-run-modal-summary div {
+  border-bottom: 1px solid #edf2f7;
+  display: grid;
+  gap: 4px;
+  padding: 10px 0;
+}
+
+.task-run-modal-summary div:nth-last-child(-n + 2) {
+  border-bottom: 0;
+}
+
+.task-run-modal-summary span,
+.task-run-modal-message span {
+  color: #667286;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.task-run-modal-summary strong {
+  color: #263142;
+  font-size: 13px;
+}
+
+.task-run-modal-message {
+  border-top: 1px solid #e4eaf1;
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+}
+
+.task-run-modal-message p {
+  color: #263142;
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.task-run-modal-message.is-error {
+  background: #fff7f6;
+}
+
+.task-run-modal-message.is-error p {
+  color: #b7241c;
+}
+
+.task-schedule-modal {
+  max-width: 440px;
+  width: min(440px, 100%);
+}
+
+.task-schedule-options,
+.task-schedule-daily-at {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+}
+
+.task-schedule-options {
+  border-bottom: 1px solid #e4eaf1;
+}
+
+.task-schedule-options button,
+.task-schedule-daily-at button {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #dbe3ec;
+  border-radius: 6px;
+  color: #263142;
+  display: flex;
+  justify-content: space-between;
+  min-height: 42px;
+  padding: 0 12px;
+  text-align: left;
+}
+
+.task-schedule-options button:hover,
+.task-schedule-daily-at button:hover,
+.task-schedule-options button.is-active,
+.task-schedule-daily-at button.is-active {
+  background: #eef9fb;
+  border-color: #9bd8e0;
+}
+
+.task-schedule-options button span,
+.task-schedule-daily-at button span {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.task-schedule-options button small,
+.task-schedule-daily-at button small {
+  color: #667286;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.task-schedule-daily-at label {
+  display: grid;
+  gap: 6px;
+}
+
+.task-schedule-daily-at label span {
+  color: #667286;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.task-schedule-daily-at input {
+  border: 1px solid #dbe3ec;
+  border-radius: 6px;
+  color: #263142;
+  font: inherit;
+  height: 36px;
+  padding: 0 10px;
 }
 
 .tasks-empty {

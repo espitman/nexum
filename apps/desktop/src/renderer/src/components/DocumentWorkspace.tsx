@@ -223,6 +223,7 @@ export const DocumentWorkspace = ({
     null,
   );
   const runningTaskIdsRef = useRef<Set<string>>(new Set());
+  const cancelRequestedTaskIdsRef = useRef<Set<string>>(new Set());
   const [pendingInlineDocuments, setPendingInlineDocuments] = useState<
     Map<string, ParsedDocument>
   >(() => new Map());
@@ -625,42 +626,123 @@ export const DocumentWorkspace = ({
       );
 
       try {
-        if (!window.nexum) {
-          throw new Error("Preload API is unavailable");
-        }
-
         const query = task.sourceQuery;
-        const result =
-          query.kind === "aggregation"
-            ? await window.nexum.mongodb.aggregate({
-                collection: query.collection,
-                connectionId: query.connectionId,
-                database: query.database,
-                limit: query.limit,
-                pipeline: query.pipeline ?? [],
-              })
-            : await window.nexum.mongodb.findDocuments({
-                collection: query.collection,
-                connectionId: query.connectionId,
-                database: query.database,
-                filter: query.filter,
-                limit: query.limit,
-                projection: query.projection,
-                skip: query.skip,
-                sort: query.sort,
+        let executionTimeMs: number | undefined;
+        let resultCount: number | undefined;
+        let message: string;
+
+        if (task.type === "audit-cleanup") {
+          const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+          const removedRuns = tasks.reduce(
+            (total, currentTask) =>
+              total +
+              (currentTask.runs ?? []).filter((run) => {
+                const finishedAt = Date.parse(run.finishedAt);
+
+                return Number.isFinite(finishedAt) && finishedAt < cutoff;
+              }).length,
+            0,
+          );
+
+          setTasks((currentTasks) =>
+            currentTasks.map((currentTask) => {
+              const currentRuns = currentTask.runs ?? [];
+              const keptRuns = currentRuns.filter((run) => {
+                const finishedAt = Date.parse(run.finishedAt);
+
+                return !Number.isFinite(finishedAt) || finishedAt >= cutoff;
               });
 
+              return keptRuns.length === currentRuns.length
+                ? currentTask
+                : {
+                    ...currentTask,
+                    runs: keptRuns,
+                  };
+            }),
+          );
+
+          message =
+            removedRuns === 0
+              ? "No local task run records needed cleanup."
+              : `Cleaned ${removedRuns} local task run record${
+                  removedRuns === 1 ? "" : "s"
+                } older than 30 days.`;
+        } else {
+          if (!window.nexum) {
+            throw new Error("Preload API is unavailable");
+          }
+
+          if (task.type === "schema-inference") {
+            const result = await window.nexum.mongodb.findDocuments({
+              collection: query.collection,
+              connectionId: query.connectionId,
+              database: query.database,
+              filter: {},
+              limit: 100,
+              projection: {},
+              skip: 0,
+              sort: {},
+            });
+            const fields = inferDocumentSchema(
+              parseEjsonDocuments(result.documents),
+            );
+
+            executionTimeMs = result.executionTimeMs;
+            resultCount = fields.length;
+            message = `Inferred ${fields.length} schema field${
+              fields.length === 1 ? "" : "s"
+            } from ${result.documents.length} sampled document${
+              result.documents.length === 1 ? "" : "s"
+            }.`;
+          } else {
+            const result =
+              query.kind === "aggregation"
+                ? await window.nexum.mongodb.aggregate({
+                    collection: query.collection,
+                    connectionId: query.connectionId,
+                    database: query.database,
+                    limit: query.limit,
+                    pipeline: query.pipeline ?? [],
+                  })
+                : await window.nexum.mongodb.findDocuments({
+                    collection: query.collection,
+                    connectionId: query.connectionId,
+                    database: query.database,
+                    filter: query.filter,
+                    limit: query.limit,
+                    projection: query.projection,
+                    skip: query.skip,
+                    sort: query.sort,
+                  });
+
+            executionTimeMs = result.executionTimeMs;
+            resultCount = result.documents.length;
+            message =
+              task.type === "export"
+                ? `Prepared JSON export for ${result.documents.length} document${
+                    result.documents.length === 1 ? "" : "s"
+                  } in ${result.executionTimeMs} ms.`
+                : `${result.documents.length} document${
+                    result.documents.length === 1 ? "" : "s"
+                  } returned in ${result.executionTimeMs} ms.`;
+          }
+        }
+
         const finishedAt = new Date().toISOString();
-        const resultCount = result.documents.length;
-        const message = `${resultCount} document${
-          resultCount === 1 ? "" : "s"
-        } returned in ${result.executionTimeMs} ms.`;
+
+        if (cancelRequestedTaskIdsRef.current.has(task.id)) {
+          cancelRequestedTaskIdsRef.current.delete(task.id);
+
+          throw new Error("Task canceled by user.");
+        }
+
         const run: SavedWorkspaceTask["runs"][number] = {
-          executionTimeMs: result.executionTimeMs,
+          ...(executionTimeMs !== undefined ? { executionTimeMs } : {}),
           finishedAt,
           id: `task_run_${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
           message,
-          resultCount,
+          ...(resultCount !== undefined ? { resultCount } : {}),
           startedAt,
           status: "success",
           trigger,
@@ -732,30 +814,38 @@ export const DocumentWorkspace = ({
         );
       } finally {
         runningTaskIdsRef.current.delete(task.id);
+        cancelRequestedTaskIdsRef.current.delete(task.id);
       }
     },
-    [setTasks],
+    [setTasks, tasks],
   );
 
-  const createTaskFromQuery = (query: SavedWorkspaceQuery) => {
+  const createTaskFromQuery = (
+    query: SavedWorkspaceQuery,
+    type: SavedWorkspaceTask["type"] = query.kind === "aggregation"
+      ? "aggregation"
+      : "find",
+  ) => {
     const now = new Date().toISOString();
     const task: SavedWorkspaceTask = {
       createdAt: now,
       id: `task_${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
       lastModifiedAt: now,
-      name: `${query.name} task`,
+      name: `${query.name} ${getTaskTypeSuffix(type)}`,
       schedule: "manual",
       runs: [],
       sourceQuery: query,
       status: "idle",
       target: `${query.database}.${query.collection}`,
-      type: query.kind === "aggregation" ? "aggregation" : "find",
+      type,
     };
 
     setTasks((currentTasks) => [task, ...currentTasks]);
   };
 
-  const createTaskFromCurrentQuery = () => {
+  const createTaskFromCurrentQuery = (
+    type: SavedWorkspaceTask["type"] = "find",
+  ) => {
     const nextState = parseDocumentQueryInputs({
       filterInput,
       limitInput,
@@ -784,7 +874,7 @@ export const DocumentWorkspace = ({
       return;
     }
 
-    createTaskFromQuery(snapshot);
+    createTaskFromQuery(snapshot, type);
   };
 
   const previewTask = (task: SavedWorkspaceTask) => {
@@ -792,6 +882,31 @@ export const DocumentWorkspace = ({
   };
 
   const performTask = (task: SavedWorkspaceTask) => {
+    void executeTask(task, "manual");
+  };
+
+  const cancelTask = (task: SavedWorkspaceTask) => {
+    if (!runningTaskIdsRef.current.has(task.id)) {
+      return;
+    }
+
+    const now = new Date().toISOString();
+    cancelRequestedTaskIdsRef.current.add(task.id);
+    setTasks((currentTasks) =>
+      currentTasks.map((currentTask) =>
+        currentTask.id === task.id
+          ? {
+              ...currentTask,
+              lastModifiedAt: now,
+              result: "Cancel requested. The active operation will be ignored.",
+              status: "failed",
+            }
+          : currentTask,
+      ),
+    );
+  };
+
+  const retryTask = (task: SavedWorkspaceTask) => {
     void executeTask(task, "manual");
   };
 
@@ -803,6 +918,7 @@ export const DocumentWorkspace = ({
       id: `task_${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
       lastModifiedAt: now,
       name: `${task.name} copy`,
+      runs: [],
       status: "idle",
     };
 
@@ -1291,12 +1407,14 @@ export const DocumentWorkspace = ({
           history={queryHistory}
           savedQueries={savedQueries}
           tasks={tasks}
+          onCancel={cancelTask}
           onClone={cloneTask}
           onCreateFromCurrent={createTaskFromCurrentQuery}
           onCreateFromQuery={createTaskFromQuery}
           onPerform={performTask}
           onPreview={previewTask}
           onRemove={removeTask}
+          onRetry={retryTask}
           onSchedule={scheduleTask}
           onUnschedule={unscheduleTask}
         />
@@ -1962,12 +2080,17 @@ type TasksWorkspaceProps = {
   history: SavedWorkspaceQuery[];
   savedQueries: SavedWorkspaceQuery[];
   tasks: SavedWorkspaceTask[];
+  onCancel: (task: SavedWorkspaceTask) => void;
   onClone: (task: SavedWorkspaceTask) => void;
-  onCreateFromCurrent: () => void;
-  onCreateFromQuery: (query: SavedWorkspaceQuery) => void;
+  onCreateFromCurrent: (type?: SavedWorkspaceTask["type"]) => void;
+  onCreateFromQuery: (
+    query: SavedWorkspaceQuery,
+    type?: SavedWorkspaceTask["type"],
+  ) => void;
   onPerform: (task: SavedWorkspaceTask) => void;
   onPreview: (task: SavedWorkspaceTask) => void;
   onRemove: (taskId: string) => void;
+  onRetry: (task: SavedWorkspaceTask) => void;
   onSchedule: (
     taskId: string,
     schedule: Exclude<SavedWorkspaceTask["schedule"], "manual">,
@@ -1980,12 +2103,14 @@ const TasksWorkspace = ({
   history,
   savedQueries,
   tasks,
+  onCancel,
   onClone,
   onCreateFromCurrent,
   onCreateFromQuery,
   onPerform,
   onPreview,
   onRemove,
+  onRetry,
   onSchedule,
   onUnschedule,
 }: TasksWorkspaceProps) => {
@@ -1993,15 +2118,24 @@ const TasksWorkspace = ({
     tasks[0]?.id ?? null,
   );
   const [isNewTaskMenuOpen, setIsNewTaskMenuOpen] = useState(false);
-  const [isScheduleMenuOpen, setIsScheduleMenuOpen] = useState(false);
+  const [customScheduleMinutes, setCustomScheduleMinutes] = useState("5");
   const [dailyScheduleTime, setDailyScheduleTime] = useState("09:00");
+  const [scheduleCountdownNow, setScheduleCountdownNow] = useState(() =>
+    Date.now(),
+  );
+  const [scheduleModalTaskId, setScheduleModalTaskId] = useState<string | null>(
+    null,
+  );
+  const [selectedRun, setSelectedRun] = useState<{
+    run: SavedWorkspaceTask["runs"][number];
+    task: SavedWorkspaceTask;
+  } | null>(null);
   const [taskContextMenu, setTaskContextMenu] = useState<{
     taskId: string;
     x: number;
     y: number;
   } | null>(null);
   const newTaskMenuRef = useRef<HTMLDivElement | null>(null);
-  const scheduleMenuRef = useRef<HTMLDivElement | null>(null);
   const taskContextMenuRef = useRef<HTMLDivElement | null>(null);
   const querySources = [...savedQueries, ...history].slice(0, 10);
   const selectedTask =
@@ -2009,6 +2143,43 @@ const TasksWorkspace = ({
   const contextTask = taskContextMenu
     ? (tasks.find((task) => task.id === taskContextMenu.taskId) ?? null)
     : null;
+  const scheduleModalTask = scheduleModalTaskId
+    ? (tasks.find((task) => task.id === scheduleModalTaskId) ?? null)
+    : null;
+  const hasScheduledFutureTask = tasks.some((task) => {
+    if (!task.nextRunAt) {
+      return false;
+    }
+
+    const nextRunAt = Date.parse(task.nextRunAt);
+
+    return Number.isFinite(nextRunAt) && nextRunAt > scheduleCountdownNow;
+  });
+  const openScheduleModal = (task: SavedWorkspaceTask) => {
+    if (task.schedule === "custom-minutes" && task.scheduleTime) {
+      setCustomScheduleMinutes(task.scheduleTime);
+    }
+
+    if (task.schedule === "daily-at" && task.scheduleTime) {
+      setDailyScheduleTime(task.scheduleTime);
+    }
+
+    setScheduleModalTaskId(task.id);
+  };
+
+  useEffect(() => {
+    if (!hasScheduledFutureTask) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setScheduleCountdownNow(Date.now());
+    }, 1_000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [hasScheduledFutureTask]);
 
   useEffect(() => {
     if (!isNewTaskMenuOpen) {
@@ -2044,37 +2215,25 @@ const TasksWorkspace = ({
   }, [isNewTaskMenuOpen]);
 
   useEffect(() => {
-    if (!isScheduleMenuOpen) {
+    if (!selectedRun && !scheduleModalTaskId) {
       return;
     }
 
-    const handlePointerDown = (event: PointerEvent) => {
-      const target = event.target;
-
-      if (
-        target instanceof Node &&
-        scheduleMenuRef.current?.contains(target)
-      ) {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") {
         return;
       }
 
-      setIsScheduleMenuOpen(false);
+      setSelectedRun(null);
+      setScheduleModalTaskId(null);
     };
 
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setIsScheduleMenuOpen(false);
-      }
-    };
-
-    document.addEventListener("pointerdown", handlePointerDown);
     document.addEventListener("keydown", handleKeyDown);
 
     return () => {
-      document.removeEventListener("pointerdown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [isScheduleMenuOpen]);
+  }, [scheduleModalTaskId, selectedRun]);
 
   useEffect(() => {
     if (!taskContextMenu) {
@@ -2122,12 +2281,26 @@ const TasksWorkspace = ({
       </header>
       <div className="tasks-toolbar">
         <button
-          disabled={!selectedTask}
+          disabled={!selectedTask || selectedTask.status === "running"}
           onClick={() => selectedTask && onPerform(selectedTask)}
           type="button"
         >
           <Icon name="term" />
           Perform
+        </button>
+        <button
+          disabled={!selectedTask || selectedTask.status === "running"}
+          onClick={() => selectedTask && onRetry(selectedTask)}
+          type="button"
+        >
+          Retry
+        </button>
+        <button
+          disabled={!selectedTask || selectedTask.status !== "running"}
+          onClick={() => selectedTask && onCancel(selectedTask)}
+          type="button"
+        >
+          Cancel
         </button>
         <button
           disabled={!selectedTask}
@@ -2157,23 +2330,71 @@ const TasksWorkspace = ({
               >
                 Current document query
               </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onCreateFromCurrent("export");
+                  setIsNewTaskMenuOpen(false);
+                }}
+              >
+                Export current result
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onCreateFromCurrent("schema-inference");
+                  setIsNewTaskMenuOpen(false);
+                }}
+              >
+                Analyze current schema
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onCreateFromCurrent("audit-cleanup");
+                  setIsNewTaskMenuOpen(false);
+                }}
+              >
+                Clean local task history
+              </button>
               <div className="task-new-menu-divider" />
               {querySources.length > 0 ? (
                 querySources.map((query) => (
-                  <button
-                    key={query.id}
-                    type="button"
-                    onClick={() => {
-                      onCreateFromQuery(query);
-                      setIsNewTaskMenuOpen(false);
-                    }}
-                  >
-                    <span>{query.name}</span>
-                    <small>
-                      {query.kind === "aggregation" ? "Pipeline" : "Find"} ·{" "}
-                      {query.database}.{query.collection}
-                    </small>
-                  </button>
+                  <div className="task-new-query-group" key={query.id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onCreateFromQuery(query);
+                        setIsNewTaskMenuOpen(false);
+                      }}
+                    >
+                      <span>{query.name}</span>
+                      <small>
+                        {query.kind === "aggregation" ? "Pipeline" : "Find"} ·{" "}
+                        {query.database}.{query.collection}
+                      </small>
+                    </button>
+                    <div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onCreateFromQuery(query, "export");
+                          setIsNewTaskMenuOpen(false);
+                        }}
+                      >
+                        Export
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onCreateFromQuery(query, "schema-inference");
+                          setIsNewTaskMenuOpen(false);
+                        }}
+                      >
+                        Schema
+                      </button>
+                    </div>
+                  </div>
                 ))
               ) : (
                 <p>No saved queries or history yet.</p>
@@ -2196,60 +2417,13 @@ const TasksWorkspace = ({
         >
           Remove
         </button>
-        <div className="task-new-menu task-schedule-menu" ref={scheduleMenuRef}>
-          <button
-            disabled={!selectedTask}
-            onClick={() => setIsScheduleMenuOpen((isOpen) => !isOpen)}
-            type="button"
-          >
-            Schedule
-          </button>
-          {isScheduleMenuOpen && selectedTask ? (
-            <div className="task-new-menu-popover task-schedule-menu-popover">
-              {(["minute", "hourly", "daily", "weekly"] as const).map((schedule) => (
-                <button
-                  key={schedule}
-                  type="button"
-                  onClick={() => {
-                    onSchedule(selectedTask.id, schedule);
-                    setIsScheduleMenuOpen(false);
-                  }}
-                >
-                  <span>{formatTaskSchedule(schedule)}</span>
-                  <small>
-                    Next run {formatRelativeTime(getNextTaskRunAt(schedule))}
-                  </small>
-                </button>
-              ))}
-              <div className="task-new-menu-divider" />
-              <label className="task-schedule-time-field">
-                <span>Every day at</span>
-                <input
-                  type="time"
-                  value={dailyScheduleTime}
-                  onChange={(event) =>
-                    setDailyScheduleTime(event.target.value)
-                  }
-                />
-              </label>
-              <button
-                type="button"
-                onClick={() => {
-                  onSchedule(selectedTask.id, "daily-at", dailyScheduleTime);
-                  setIsScheduleMenuOpen(false);
-                }}
-              >
-                <span>{formatTaskSchedule("daily-at", dailyScheduleTime)}</span>
-                <small>
-                  Next run{" "}
-                  {formatRelativeTime(
-                    getNextTaskRunAt("daily-at", dailyScheduleTime),
-                  )}
-                </small>
-              </button>
-            </div>
-          ) : null}
-        </div>
+        <button
+          disabled={!selectedTask}
+          onClick={() => selectedTask && openScheduleModal(selectedTask)}
+          type="button"
+        >
+          Schedule
+        </button>
         <button
           disabled={!selectedTask || selectedTask.schedule === "manual"}
           onClick={() => selectedTask && onUnschedule(selectedTask.id)}
@@ -2290,7 +2464,7 @@ const TasksWorkspace = ({
                     }}
                   >
                     <td>{task.name}</td>
-                    <td>{formatTaskType(task.type)}</td>
+                    <td>{formatTaskType(task)}</td>
                     <td>{task.target}</td>
                     <td>
                       <span className={`task-status is-${task.status}`}>
@@ -2301,11 +2475,12 @@ const TasksWorkspace = ({
                       {formatTaskSchedule(task.schedule, task.scheduleTime)}
                       {task.nextRunAt ? (
                         <small className="task-next-run">
-                          Next {formatRelativeTime(task.nextRunAt)}
+                          Next{" "}
+                          {formatTaskNextRun(task.nextRunAt, scheduleCountdownNow)}
                         </small>
                       ) : null}
                     </td>
-                    <td>{formatRelativeTime(task.lastModifiedAt)}</td>
+                    <td>{formatAbsoluteTime(task.lastModifiedAt)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -2338,7 +2513,7 @@ const TasksWorkspace = ({
               <dl>
                 <div>
                   <dt>Type</dt>
-                  <dd>{formatTaskType(selectedTask.type)}</dd>
+                  <dd>{formatTaskType(selectedTask)}</dd>
                 </div>
                 <div>
                   <dt>Schedule</dt>
@@ -2353,7 +2528,10 @@ const TasksWorkspace = ({
                   <dt>Next run</dt>
                   <dd>
                     {selectedTask.nextRunAt
-                      ? formatRelativeTime(selectedTask.nextRunAt)
+                      ? formatTaskNextRun(
+                          selectedTask.nextRunAt,
+                          scheduleCountdownNow,
+                        )
                       : "Not scheduled"}
                   </dd>
                 </div>
@@ -2361,18 +2539,23 @@ const TasksWorkspace = ({
                   <dt>Last run</dt>
                   <dd>
                     {selectedTask.lastRunAt
-                      ? formatRelativeTime(selectedTask.lastRunAt)
+                      ? formatAbsoluteTime(selectedTask.lastRunAt)
                       : "Never"}
                   </dd>
                 </div>
               </dl>
               <QueryCodeBlock
                 label={
-                  selectedTask.sourceQuery.kind === "aggregation"
+                  selectedTask.type === "audit-cleanup"
+                    ? "Cleanup"
+                    : selectedTask.sourceQuery.kind === "aggregation"
                     ? "Pipeline"
                     : "Filter"
                 }
                 value={
+                  selectedTask.type === "audit-cleanup"
+                    ? { retention: "30 days", scope: "local task run history" }
+                    :
                   selectedTask.sourceQuery.pipeline ??
                   selectedTask.sourceQuery.filter
                 }
@@ -2388,18 +2571,23 @@ const TasksWorkspace = ({
                 {selectedTask.runs.length > 0 ? (
                   <div className="task-runs-list">
                     {selectedTask.runs.map((run) => (
-                      <div className="task-run-item" key={run.id}>
+                      <button
+                        className="task-run-item"
+                        key={run.id}
+                        onClick={() => setSelectedRun({ run, task: selectedTask })}
+                        type="button"
+                      >
                         <span className={`task-status is-${run.status}`}>
                           {run.status === "success" ? "Succeeded" : "Failed"}
                         </span>
                         <strong>{run.message}</strong>
                         <small>
-                          {formatRelativeTime(run.finishedAt)} · {run.trigger}
+                          {formatAbsoluteTime(run.finishedAt)} · {run.trigger}
                           {run.executionTimeMs !== undefined
                             ? ` · ${run.executionTimeMs} ms`
                             : ""}
                         </small>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 ) : (
@@ -2420,7 +2608,6 @@ const TasksWorkspace = ({
       </div>
       {taskContextMenu && contextTask ? (
         <TaskContextMenu
-          dailyScheduleTime={dailyScheduleTime}
           menuRef={taskContextMenuRef}
           task={contextTask}
           x={taskContextMenu.x}
@@ -2429,7 +2616,10 @@ const TasksWorkspace = ({
             onClone(contextTask);
             setTaskContextMenu(null);
           }}
-          onDailyScheduleTimeChange={setDailyScheduleTime}
+          onCancel={() => {
+            onCancel(contextTask);
+            setTaskContextMenu(null);
+          }}
           onPerform={() => {
             onPerform(contextTask);
             setTaskContextMenu(null);
@@ -2442,8 +2632,12 @@ const TasksWorkspace = ({
             onRemove(contextTask.id);
             setTaskContextMenu(null);
           }}
-          onSchedule={(schedule, scheduleTime) => {
-            onSchedule(contextTask.id, schedule, scheduleTime);
+          onRetry={() => {
+            onRetry(contextTask);
+            setTaskContextMenu(null);
+          }}
+          onSchedule={() => {
+            openScheduleModal(contextTask);
             setTaskContextMenu(null);
           }}
           onUnschedule={() => {
@@ -2452,39 +2646,257 @@ const TasksWorkspace = ({
           }}
         />
       ) : null}
+      {selectedRun ? (
+        <TaskRunResultModal
+          run={selectedRun.run}
+          task={selectedRun.task}
+          onClose={() => setSelectedRun(null)}
+        />
+      ) : null}
+      {scheduleModalTask ? (
+        <TaskScheduleModal
+          customScheduleMinutes={customScheduleMinutes}
+          dailyScheduleTime={dailyScheduleTime}
+          now={scheduleCountdownNow}
+          task={scheduleModalTask}
+          onClose={() => setScheduleModalTaskId(null)}
+          onCustomScheduleMinutesChange={setCustomScheduleMinutes}
+          onDailyScheduleTimeChange={setDailyScheduleTime}
+          onSchedule={(schedule, scheduleTime) => {
+            onSchedule(scheduleModalTask.id, schedule, scheduleTime);
+            setScheduleModalTaskId(null);
+          }}
+        />
+      ) : null}
     </section>
   );
 };
 
-type TaskContextMenuProps = {
-  dailyScheduleTime: string;
-  menuRef: RefObject<HTMLDivElement | null>;
+type TaskRunResultModalProps = {
+  run: SavedWorkspaceTask["runs"][number];
   task: SavedWorkspaceTask;
-  x: number;
-  y: number;
-  onClone: () => void;
+  onClose: () => void;
+};
+
+const TaskRunResultModal = ({
+  run,
+  task,
+  onClose,
+}: TaskRunResultModalProps) => (
+  <div
+    aria-modal="true"
+    className="task-run-modal-overlay"
+    role="dialog"
+    onClick={onClose}
+  >
+    <div className="task-run-modal" onClick={(event) => event.stopPropagation()}>
+      <header>
+        <div>
+          <span className={`task-status is-${run.status}`}>
+            {run.status === "success" ? "Succeeded" : "Failed"}
+          </span>
+          <h2>Run result</h2>
+          <p>{task.name}</p>
+        </div>
+        <button aria-label="Close run result" onClick={onClose} type="button">
+          ×
+        </button>
+      </header>
+      <div className="task-run-modal-summary">
+        <div>
+          <span>Target</span>
+          <strong>{task.target}</strong>
+        </div>
+        <div>
+          <span>Trigger</span>
+          <strong>{run.trigger}</strong>
+        </div>
+        <div>
+          <span>Started</span>
+          <strong>{formatAbsoluteTime(run.startedAt)}</strong>
+        </div>
+        <div>
+          <span>Finished</span>
+          <strong>{formatAbsoluteTime(run.finishedAt)}</strong>
+        </div>
+        {run.executionTimeMs !== undefined ? (
+          <div>
+            <span>Duration</span>
+            <strong>{run.executionTimeMs} ms</strong>
+          </div>
+        ) : null}
+        {run.resultCount !== undefined ? (
+          <div>
+            <span>Result</span>
+            <strong>
+              {run.resultCount} document{run.resultCount === 1 ? "" : "s"}
+            </strong>
+          </div>
+        ) : null}
+      </div>
+      <section className="task-run-modal-message">
+        <span>Message</span>
+        <p>{run.message}</p>
+      </section>
+      {run.error ? (
+        <section className="task-run-modal-message is-error">
+          <span>Error</span>
+          <p>{run.error}</p>
+        </section>
+      ) : null}
+    </div>
+  </div>
+);
+
+type TaskScheduleModalProps = {
+  customScheduleMinutes: string;
+  dailyScheduleTime: string;
+  now: number;
+  task: SavedWorkspaceTask;
+  onClose: () => void;
+  onCustomScheduleMinutesChange: (value: string) => void;
   onDailyScheduleTimeChange: (value: string) => void;
-  onPerform: () => void;
-  onPreview: () => void;
-  onRemove: () => void;
   onSchedule: (
     schedule: Exclude<SavedWorkspaceTask["schedule"], "manual">,
     scheduleTime?: string,
   ) => void;
+};
+
+const TaskScheduleModal = ({
+  customScheduleMinutes,
+  dailyScheduleTime,
+  now,
+  task,
+  onClose,
+  onCustomScheduleMinutesChange,
+  onDailyScheduleTimeChange,
+  onSchedule,
+}: TaskScheduleModalProps) => {
+  const customMinutes = parseTaskScheduleMinutes(customScheduleMinutes);
+  const isCustomMinutesValid = customMinutes !== null;
+  const customScheduleLabel = isCustomMinutesValid
+    ? formatTaskSchedule("custom-minutes", customScheduleMinutes)
+    : "Every N minutes";
+
+  return (
+    <div
+      aria-modal="true"
+      className="task-run-modal-overlay"
+      role="dialog"
+      onClick={onClose}
+    >
+      <div
+        className="task-run-modal task-schedule-modal"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header>
+          <div>
+            <span className="task-status is-idle">Schedule</span>
+            <h2>Schedule task</h2>
+            <p>{task.name}</p>
+          </div>
+          <button aria-label="Close schedule" onClick={onClose} type="button">
+            ×
+          </button>
+        </header>
+        <div className="task-schedule-options">
+          {(["minute", "hourly", "daily", "weekly"] as const).map((schedule) => (
+            <button
+              className={task.schedule === schedule ? "is-active" : ""}
+              key={schedule}
+              onClick={() => onSchedule(schedule)}
+              type="button"
+            >
+              <span>{formatTaskSchedule(schedule)}</span>
+              <small>Next {formatTaskNextRun(getNextTaskRunAt(schedule), now)}</small>
+            </button>
+          ))}
+        </div>
+        <div className="task-schedule-daily-at">
+          <label>
+            <span>Every few minutes</span>
+            <input
+              min="1"
+              step="1"
+              type="number"
+              value={customScheduleMinutes}
+              onChange={(event) =>
+                onCustomScheduleMinutesChange(event.target.value)
+              }
+            />
+          </label>
+          <button
+            className={task.schedule === "custom-minutes" ? "is-active" : ""}
+            disabled={!isCustomMinutesValid}
+            onClick={() => onSchedule("custom-minutes", customScheduleMinutes)}
+            type="button"
+          >
+            <span>{customScheduleLabel}</span>
+            <small>
+              {isCustomMinutesValid
+                ? `Next ${formatTaskNextRun(
+                    getNextTaskRunAt("custom-minutes", customScheduleMinutes),
+                    now,
+                  )}`
+                : "Enter at least 1 minute"}
+            </small>
+          </button>
+        </div>
+        <div className="task-schedule-daily-at">
+          <label>
+            <span>Every day at</span>
+            <input
+              type="time"
+              value={dailyScheduleTime}
+              onChange={(event) => onDailyScheduleTimeChange(event.target.value)}
+            />
+          </label>
+          <button
+            className={task.schedule === "daily-at" ? "is-active" : ""}
+            onClick={() => onSchedule("daily-at", dailyScheduleTime)}
+            type="button"
+          >
+            <span>{formatTaskSchedule("daily-at", dailyScheduleTime)}</span>
+            <small>
+              Next{" "}
+              {formatTaskNextRun(
+                getNextTaskRunAt("daily-at", dailyScheduleTime),
+                now,
+              )}
+            </small>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+type TaskContextMenuProps = {
+  menuRef: RefObject<HTMLDivElement | null>;
+  task: SavedWorkspaceTask;
+  x: number;
+  y: number;
+  onCancel: () => void;
+  onClone: () => void;
+  onPerform: () => void;
+  onPreview: () => void;
+  onRemove: () => void;
+  onRetry: () => void;
+  onSchedule: () => void;
   onUnschedule: () => void;
 };
 
 const TaskContextMenu = ({
-  dailyScheduleTime,
   menuRef,
   task,
   x,
   y,
+  onCancel,
   onClone,
-  onDailyScheduleTimeChange,
   onPerform,
   onPreview,
   onRemove,
+  onRetry,
   onSchedule,
   onUnschedule,
 }: TaskContextMenuProps) => {
@@ -2498,52 +2910,36 @@ const TaskContextMenu = ({
       style={{ left, top }}
       role="menu"
     >
-    <button type="button" role="menuitem" onClick={onPerform}>
+    <button
+      type="button"
+      role="menuitem"
+      disabled={task.status === "running"}
+      onClick={onPerform}
+    >
       Perform
+    </button>
+    <button
+      type="button"
+      role="menuitem"
+      disabled={task.status === "running"}
+      onClick={onRetry}
+    >
+      Retry
+    </button>
+    <button
+      type="button"
+      role="menuitem"
+      disabled={task.status !== "running"}
+      onClick={onCancel}
+    >
+      Cancel
     </button>
     <button type="button" role="menuitem" onClick={onPreview}>
       Preview
     </button>
-    <div className="task-context-submenu">
-      <button type="button" role="menuitem">
-        Schedule
-        <span>›</span>
-      </button>
-      <div className="task-context-submenu-panel">
-        {(["minute", "hourly", "daily", "weekly"] as const).map((schedule) => (
-          <button
-            key={schedule}
-            type="button"
-            role="menuitem"
-            onClick={() => onSchedule(schedule)}
-          >
-            <span>{formatTaskSchedule(schedule)}</span>
-            <small>Next {formatRelativeTime(getNextTaskRunAt(schedule))}</small>
-          </button>
-        ))}
-        <div className="task-new-menu-divider" />
-        <label className="task-schedule-time-field">
-          <span>Every day at</span>
-          <input
-            type="time"
-            value={dailyScheduleTime}
-            onChange={(event) =>
-              onDailyScheduleTimeChange(event.target.value)
-            }
-          />
-        </label>
-        <button
-          type="button"
-          role="menuitem"
-          onClick={() => onSchedule("daily-at", dailyScheduleTime)}
-        >
-          <span>{formatTaskSchedule("daily-at", dailyScheduleTime)}</span>
-          <small>
-            Next {formatRelativeTime(getNextTaskRunAt("daily-at", dailyScheduleTime))}
-          </small>
-        </button>
-      </div>
-    </div>
+    <button type="button" role="menuitem" onClick={onSchedule}>
+      Schedule
+    </button>
     <button
       type="button"
       role="menuitem"
@@ -5717,6 +6113,7 @@ const isSavedWorkspaceTask = (value: unknown): value is SavedWorkspaceTask => {
     typeof task.lastModifiedAt === "string" &&
     typeof task.name === "string" &&
     (task.schedule === "manual" ||
+      task.schedule === "custom-minutes" ||
       task.schedule === "minute" ||
       task.schedule === "hourly" ||
       task.schedule === "daily" ||
@@ -5732,11 +6129,20 @@ const isSavedWorkspaceTask = (value: unknown): value is SavedWorkspaceTask => {
       task.status === "success" ||
       task.status === "failed") &&
     typeof task.target === "string" &&
-    (task.type === "find" || task.type === "aggregation") &&
+    isSavedWorkspaceTaskType(task.type) &&
     task.sourceQuery !== undefined &&
     isSavedWorkspaceQuery(task.sourceQuery)
   );
 };
+
+const isSavedWorkspaceTaskType = (
+  value: unknown,
+): value is SavedWorkspaceTask["type"] =>
+  value === "find" ||
+  value === "aggregation" ||
+  value === "export" ||
+  value === "schema-inference" ||
+  value === "audit-cleanup";
 
 const isSavedWorkspaceTaskRun = (
   value: unknown,
@@ -5763,10 +6169,19 @@ const isSavedWorkspaceTaskRun = (
 
 const normalizeSavedWorkspaceTask = (
   task: SavedWorkspaceTask,
-): SavedWorkspaceTask => ({
-  ...task,
-  runs: Array.isArray(task.runs) ? task.runs : [],
-});
+): SavedWorkspaceTask => {
+  const normalizedTask: SavedWorkspaceTask = {
+    ...task,
+    runs: Array.isArray(task.runs) ? task.runs : [],
+    status: task.status === "running" ? "idle" : task.status,
+  };
+
+  if (task.status === "running") {
+    normalizedTask.result = "Interrupted before completion.";
+  }
+
+  return normalizedTask;
+};
 
 const isAddBookmarkEventDetail = (
   value: unknown,
@@ -5931,13 +6346,50 @@ const createSavedQueryName = (
   return `${collectionName} by ${keys.slice(0, 2).join(", ")}`;
 };
 
-const formatTaskType = (type: SavedWorkspaceTask["type"]): string =>
-  type === "aggregation" ? "Aggregation" : "Find query";
+const getTaskTypeSuffix = (type: SavedWorkspaceTask["type"]): string => {
+  if (type === "export") {
+    return "export";
+  }
+
+  if (type === "schema-inference") {
+    return "schema task";
+  }
+
+  if (type === "audit-cleanup") {
+    return "cleanup task";
+  }
+
+  return "task";
+};
+
+const formatTaskType = (task: SavedWorkspaceTask): string => {
+  if (task.type === "export") {
+    return "Export";
+  }
+
+  if (task.type === "schema-inference") {
+    return "Schema inference";
+  }
+
+  if (task.type === "audit-cleanup") {
+    return "Audit cleanup";
+  }
+
+  return task.type === "aggregation" ? "Aggregation" : "Find query";
+};
 
 const formatTaskSchedule = (
   schedule: SavedWorkspaceTask["schedule"],
   scheduleTime?: string,
 ): string => {
+  if (schedule === "custom-minutes") {
+    const minutes = parseTaskScheduleMinutes(scheduleTime);
+
+    return minutes === null
+      ? "Every few minutes"
+      : `Every ${minutes} minute${minutes === 1 ? "" : "s"}`;
+  }
+
   if (schedule === "minute") {
     return "Every minute";
   }
@@ -5983,7 +6435,11 @@ const getNextTaskRunAt = (
 ): string => {
   const nextRunAt = new Date();
 
-  if (schedule === "minute") {
+  if (schedule === "custom-minutes") {
+    nextRunAt.setMinutes(
+      nextRunAt.getMinutes() + (parseTaskScheduleMinutes(scheduleTime) ?? 1),
+    );
+  } else if (schedule === "minute") {
     nextRunAt.setMinutes(nextRunAt.getMinutes() + 1);
   } else if (schedule === "hourly") {
     nextRunAt.setHours(nextRunAt.getHours() + 1);
@@ -6001,6 +6457,48 @@ const getNextTaskRunAt = (
   }
 
   return nextRunAt.toISOString();
+};
+
+const parseTaskScheduleMinutes = (value: string | undefined): number | null => {
+  const minutes = Number(value);
+
+  if (!Number.isInteger(minutes) || minutes < 1) {
+    return null;
+  }
+
+  return minutes;
+};
+
+const formatTaskNextRun = (isoDate: string, now: number): string => {
+  const timestamp = Date.parse(isoDate);
+
+  if (!Number.isFinite(timestamp)) {
+    return "recently";
+  }
+
+  const millisecondsUntilRun = timestamp - now;
+
+  if (millisecondsUntilRun > 0 && millisecondsUntilRun <= 60_000) {
+    return `in ${Math.max(1, Math.ceil(millisecondsUntilRun / 1000))}s`;
+  }
+
+  return formatRelativeTime(isoDate);
+};
+
+const formatAbsoluteTime = (isoDate: string): string => {
+  const timestamp = Date.parse(isoDate);
+
+  if (!Number.isFinite(timestamp)) {
+    return "Unknown";
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(timestamp));
 };
 
 const formatRelativeTime = (isoDate: string): string => {
