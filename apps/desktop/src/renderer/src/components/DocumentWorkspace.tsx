@@ -3492,11 +3492,11 @@ const SettingsWorkspace = ({
     });
   };
   const groupItems = [
-    ["appearance", "Appearance", "Theme and workspace density"],
-    ["query", "Query defaults", "Page size, timeout, and samples"],
-    ["safety", "Safety", "Production and read-only defaults"],
-    ["local", "Local data", "Audit logs and cached metadata"],
-    ["about", "About", "Version and diagnostics"],
+    ["appearance", "gear", "Appearance", "Theme and workspace density"],
+    ["query", "query", "Query defaults", "Page size, timeout, and samples"],
+    ["safety", "check", "Safety", "Production and read-only defaults"],
+    ["local", "database", "Local data", "Audit logs and cached metadata"],
+    ["about", "explain", "About", "Version and diagnostics"],
   ] as const;
 
   return (
@@ -3512,15 +3512,18 @@ const SettingsWorkspace = ({
       </header>
       <div className="settings-layout">
         <nav className="settings-nav" aria-label="Settings sections">
-          {groupItems.map(([id, label, description]) => (
+          {groupItems.map(([id, iconName, label, description]) => (
             <button
               key={id}
               className={activeGroup === id ? "is-active" : ""}
               type="button"
               onClick={() => setActiveGroup(id)}
             >
-              <strong>{label}</strong>
-              <span>{description}</span>
+              <Icon name={iconName} />
+              <span>
+                <strong>{label}</strong>
+                <small>{description}</small>
+              </span>
             </button>
           ))}
         </nav>
