@@ -5362,3 +5362,1499 @@ input:disabled {
   height: 100%;
   width: 100%;
 }
+
+.app-shell.appearance-dark {
+  background: #101820;
+  color: #d8e1ec;
+}
+
+.app-shell.appearance-dark .connection-rail,
+.app-shell.appearance-dark .app-topbar,
+.app-shell.appearance-dark .database-panel,
+.app-shell.appearance-dark .document-workspace,
+.app-shell.appearance-dark .inspector-panel,
+.app-shell.appearance-dark .connection-manager-list,
+.app-shell.appearance-dark .connection-manager-detail,
+.app-shell.appearance-dark .queries-list-panel,
+.app-shell.appearance-dark .bookmark-create-panel,
+.app-shell.appearance-dark .bookmark-list-panel,
+.app-shell.appearance-dark .tasks-table-panel,
+.app-shell.appearance-dark .settings-nav,
+.app-shell.appearance-dark .aggregation-stage-list,
+.app-shell.appearance-dark .aggregation-preview,
+.app-shell.appearance-dark .query-builder-section {
+  border-color: #2b3948;
+}
+
+.app-shell.appearance-dark .connection-rail,
+.app-shell.appearance-dark .app-topbar,
+.app-shell.appearance-dark .database-panel,
+.app-shell.appearance-dark .document-workspace,
+.app-shell.appearance-dark .connection-manager,
+.app-shell.appearance-dark .connection-manager-list,
+.app-shell.appearance-dark .connection-manager-detail,
+.app-shell.appearance-dark .queries-workspace,
+.app-shell.appearance-dark .bookmarks-workspace,
+.app-shell.appearance-dark .tasks-workspace,
+.app-shell.appearance-dark .settings-workspace {
+  background: #101820;
+}
+
+.app-shell.appearance-dark .connection-rail {
+  background: linear-gradient(180deg, #111b25 0%, #0d151d 100%);
+}
+
+.app-shell.appearance-dark .settings-card,
+.app-shell.appearance-dark .settings-nav button,
+.app-shell.appearance-dark .query-list-item,
+.app-shell.appearance-dark .query-code-block,
+.app-shell.appearance-dark .bookmark-target-summary,
+.app-shell.appearance-dark .bookmark-list-item,
+.app-shell.appearance-dark .task-runs-panel,
+.app-shell.appearance-dark .task-result,
+.app-shell.appearance-dark .aggregation-preview-panel,
+.app-shell.appearance-dark .aggregation-stage-card,
+.app-shell.appearance-dark .query-builder-shell,
+.app-shell.appearance-dark .query-builder-group,
+.app-shell.appearance-dark .query-builder-condition,
+.app-shell.appearance-dark .metadata-workspace-body .schema-tree-card,
+.app-shell.appearance-dark .metadata-workspace-body .index-list-row,
+.app-shell.appearance-dark .document-editor-panel,
+.app-shell.appearance-dark .connection-profile-card,
+.app-shell.appearance-dark .connection-form,
+.app-shell.appearance-dark .task-run-modal {
+  background: #131f2a;
+  border-color: #2d3c4d;
+}
+
+.app-shell.appearance-dark .settings-nav button:hover,
+.app-shell.appearance-dark .settings-nav button.is-active,
+.app-shell.appearance-dark .query-list-item.is-active,
+.app-shell.appearance-dark .bookmark-list-item.is-active,
+.app-shell.appearance-dark .tasks-table tbody tr:hover,
+.app-shell.appearance-dark .tasks-table tbody tr.is-active,
+.app-shell.appearance-dark .aggregation-stage-card.is-active,
+.app-shell.appearance-dark .connection-profile-card.is-active {
+  background: #14303a;
+  border-color: #1f7481;
+}
+
+.app-shell.appearance-dark .settings-header,
+.app-shell.appearance-dark .queries-header,
+.app-shell.appearance-dark .bookmarks-header,
+.app-shell.appearance-dark .tasks-header,
+.app-shell.appearance-dark .settings-card header,
+.app-shell.appearance-dark .settings-row,
+.app-shell.appearance-dark .query-detail-header,
+.app-shell.appearance-dark .query-notes-field,
+.app-shell.appearance-dark .query-detail-footer,
+.app-shell.appearance-dark .bookmark-detail-header,
+.app-shell.appearance-dark .query-section,
+.app-shell.appearance-dark .workspace-tabs,
+.app-shell.appearance-dark .collection-tabbar,
+.app-shell.appearance-dark .workspace-footer,
+.app-shell.appearance-dark .results-header,
+.app-shell.appearance-dark .tasks-toolbar,
+.app-shell.appearance-dark .task-runs-header,
+.app-shell.appearance-dark .task-run-item,
+.app-shell.appearance-dark .task-run-modal header,
+.app-shell.appearance-dark .task-run-modal-message,
+.app-shell.appearance-dark .aggregation-toolbar,
+.app-shell.appearance-dark .aggregation-editor-header,
+.app-shell.appearance-dark .aggregation-preview-panel header,
+.app-shell.appearance-dark .document-editor-header,
+.app-shell.appearance-dark .document-editor-footer,
+.app-shell.appearance-dark .connection-manager-header,
+.app-shell.appearance-dark .connection-form-section,
+.app-shell.appearance-dark .inspector-document-viewer,
+.app-shell.appearance-dark .inspector-empty-state {
+  border-color: #2b3948;
+}
+
+.app-shell.appearance-dark .settings-header h1,
+.app-shell.appearance-dark .settings-card h2,
+.app-shell.appearance-dark .settings-row strong,
+.app-shell.appearance-dark .settings-nav strong,
+.app-shell.appearance-dark .queries-header h1,
+.app-shell.appearance-dark .query-list-item-main strong,
+.app-shell.appearance-dark .query-detail-header h2,
+.app-shell.appearance-dark .query-code-block span,
+.app-shell.appearance-dark .bookmarks-header h1,
+.app-shell.appearance-dark .bookmark-detail-header h2,
+.app-shell.appearance-dark .bookmark-group-title,
+.app-shell.appearance-dark .tasks-header h1,
+.app-shell.appearance-dark .task-detail-panel h2,
+.app-shell.appearance-dark .task-detail-panel dd,
+.app-shell.appearance-dark .task-runs-header strong,
+.app-shell.appearance-dark .task-run-item strong,
+.app-shell.appearance-dark .task-run-modal h2,
+.app-shell.appearance-dark .task-run-modal-summary strong,
+.app-shell.appearance-dark .aggregation-preview-panel header strong,
+.app-shell.appearance-dark .aggregation-editor-header strong,
+.app-shell.appearance-dark .aggregation-stage-card strong,
+.app-shell.appearance-dark .connection-manager-header strong,
+.app-shell.appearance-dark .connection-manager-title,
+.app-shell.appearance-dark .connection-profile-card strong,
+.app-shell.appearance-dark .schema-tree-card strong,
+.app-shell.appearance-dark .index-list-row strong,
+.app-shell.appearance-dark .workspace-tab,
+.app-shell.appearance-dark .workspace-tool-button {
+  color: #e8eef6;
+}
+
+.app-shell.appearance-dark .settings-header p,
+.app-shell.appearance-dark .settings-card header p,
+.app-shell.appearance-dark .settings-row span,
+.app-shell.appearance-dark .settings-nav small,
+.app-shell.appearance-dark .queries-header p,
+.app-shell.appearance-dark .query-list-item-main small,
+.app-shell.appearance-dark .query-detail-header p,
+.app-shell.appearance-dark .query-detail-footer,
+.app-shell.appearance-dark .bookmarks-header p,
+.app-shell.appearance-dark .bookmark-detail-header p,
+.app-shell.appearance-dark .bookmark-detail-body label > span,
+.app-shell.appearance-dark .tasks-header p,
+.app-shell.appearance-dark .task-detail-panel p,
+.app-shell.appearance-dark .task-detail-panel dt,
+.app-shell.appearance-dark .task-run-item small,
+.app-shell.appearance-dark .task-run-modal header p,
+.app-shell.appearance-dark .task-run-modal-summary span,
+.app-shell.appearance-dark .task-run-modal-message span,
+.app-shell.appearance-dark .aggregation-editor-header span,
+.app-shell.appearance-dark .aggregation-preview-panel header span,
+.app-shell.appearance-dark .connection-manager-header span,
+.app-shell.appearance-dark .connection-profile-card small,
+.app-shell.appearance-dark .schema-tree-card span,
+.app-shell.appearance-dark .index-list-row span,
+.app-shell.appearance-dark .workspace-empty-state p,
+.app-shell.appearance-dark .queries-empty {
+  color: #9aa8ba;
+}
+
+.app-shell.appearance-dark input,
+.app-shell.appearance-dark textarea,
+.app-shell.appearance-dark select,
+.app-shell.appearance-dark .query-line,
+.app-shell.appearance-dark .bookmark-tag-chips,
+.app-shell.appearance-dark .bookmark-detail-body input,
+.app-shell.appearance-dark .bookmark-detail-body textarea,
+.app-shell.appearance-dark .query-notes-field textarea,
+.app-shell.appearance-dark .settings-number-control input,
+.app-shell.appearance-dark .connection-manager-tools button,
+.app-shell.appearance-dark .connection-manager-tools input,
+.app-shell.appearance-dark .connection-form input,
+.app-shell.appearance-dark .connection-form textarea,
+.app-shell.appearance-dark .document-editor-monaco,
+.app-shell.appearance-dark .aggregation-field input,
+.app-shell.appearance-dark .aggregation-field textarea,
+.app-shell.appearance-dark .query-builder-condition input,
+.app-shell.appearance-dark .query-builder-condition select,
+.app-shell.appearance-dark .query-builder-group-toolbar select,
+.app-shell.appearance-dark .workspace-footer input {
+  background: #0d141c;
+  border-color: #334456;
+  color: #e8eef6;
+}
+
+.app-shell.appearance-dark input::placeholder,
+.app-shell.appearance-dark textarea::placeholder {
+  color: #6f7e90;
+}
+
+.app-shell.appearance-dark .settings-segmented,
+.app-shell.appearance-dark .query-list-tabs,
+.app-shell.appearance-dark .bookmark-filter-tabs {
+  background: #0d141c;
+  border-color: #334456;
+}
+
+.app-shell.appearance-dark .settings-segmented button,
+.app-shell.appearance-dark .query-list-tabs button,
+.app-shell.appearance-dark .bookmark-filter-tabs button {
+  color: #9aa8ba;
+}
+
+.app-shell.appearance-dark .settings-segmented button.is-active,
+.app-shell.appearance-dark .query-list-tabs button.is-active,
+.app-shell.appearance-dark .bookmark-filter-tabs button.is-active {
+  background: #172635;
+  color: #55c7d4;
+}
+
+.app-shell.appearance-dark .secondary-button,
+.app-shell.appearance-dark .compact-button,
+.app-shell.appearance-dark .query-detail-actions button,
+.app-shell.appearance-dark .tasks-toolbar button,
+.app-shell.appearance-dark .settings-header button,
+.app-shell.appearance-dark .plain-icon,
+.app-shell.appearance-dark .tool-button,
+.app-shell.appearance-dark .ghost-icon,
+.app-shell.appearance-dark .workspace-tool-button {
+  border-color: #334456;
+  color: #d8e1ec;
+}
+
+.app-shell.appearance-dark .secondary-button:hover,
+.app-shell.appearance-dark .compact-button:hover,
+.app-shell.appearance-dark .query-detail-actions button:hover,
+.app-shell.appearance-dark .tasks-toolbar button:hover:not(:disabled),
+.app-shell.appearance-dark .settings-header button:hover,
+.app-shell.appearance-dark .plain-icon:hover,
+.app-shell.appearance-dark .tool-button:hover,
+.app-shell.appearance-dark .ghost-icon:hover,
+.app-shell.appearance-dark .workspace-tool-button:hover {
+  background: #172635;
+  border-color: #3c5368;
+}
+
+.app-shell.appearance-dark .workspace-tab.is-active,
+.app-shell.appearance-dark .workspace-tool-button.is-active,
+.app-shell.appearance-dark .query-builder-tabs button.is-active,
+.app-shell.appearance-dark .settings-nav button.is-active strong {
+  color: #55c7d4;
+}
+
+.app-shell.appearance-dark .workspace-tab.is-active::after,
+.app-shell.appearance-dark .workspace-tool-button.is-active::after,
+.app-shell.appearance-dark .query-builder-tabs button.is-active::after {
+  background: #55c7d4;
+}
+
+.app-shell.appearance-dark .query-code-block pre,
+.app-shell.appearance-dark .query-builder-preview pre,
+.app-shell.appearance-dark .aggregation-raw-editor,
+.app-shell.appearance-dark .schema-tree-card code,
+.app-shell.appearance-dark .index-list-row code,
+.app-shell.appearance-dark .aggregation-result-documents article {
+  color: #66d9e8;
+}
+
+.app-shell.appearance-dark .tasks-table th {
+  background: #0d141c;
+  color: #d8e1ec;
+}
+
+.app-shell.appearance-dark .tasks-table td,
+.app-shell.appearance-dark .tasks-table th {
+  border-color: #2b3948;
+}
+
+.app-shell.appearance-dark .task-status.is-idle {
+  background: #253344;
+  color: #cbd5e1;
+}
+
+.app-shell.appearance-dark .task-status.is-running {
+  background: #4a3214;
+  color: #f7c56b;
+}
+
+.app-shell.appearance-dark .task-status.is-success {
+  background: #123b2a;
+  color: #67d391;
+}
+
+.app-shell.appearance-dark .task-status.is-failed {
+  background: #4b1d1b;
+  color: #ff9f96;
+}
+
+.app-shell.appearance-dark .run-button {
+  background: #087b86;
+  border-color: #075f68;
+  color: #ffffff;
+}
+
+.app-shell.appearance-dark .run-button:hover:not(:disabled) {
+  background: #0b8d99;
+}
+
+.app-shell.appearance-dark .run-button:disabled {
+  background: #35515a;
+  color: #aebbc7;
+}
+
+@media (prefers-color-scheme: dark) {
+  .app-shell.appearance-system {
+    background: #101820;
+    color: #d8e1ec;
+  }
+
+  .app-shell.appearance-system .connection-rail,
+  .app-shell.appearance-system .app-topbar,
+  .app-shell.appearance-system .database-panel,
+  .app-shell.appearance-system .document-workspace,
+  .app-shell.appearance-system .inspector-panel,
+  .app-shell.appearance-system .connection-manager-list,
+  .app-shell.appearance-system .connection-manager-detail,
+  .app-shell.appearance-system .queries-list-panel,
+  .app-shell.appearance-system .bookmark-create-panel,
+  .app-shell.appearance-system .bookmark-list-panel,
+  .app-shell.appearance-system .tasks-table-panel,
+  .app-shell.appearance-system .settings-nav,
+  .app-shell.appearance-system .aggregation-stage-list,
+  .app-shell.appearance-system .aggregation-preview,
+  .app-shell.appearance-system .query-builder-section {
+    border-color: #2b3948;
+  }
+
+  .app-shell.appearance-system .connection-rail,
+  .app-shell.appearance-system .app-topbar,
+  .app-shell.appearance-system .database-panel,
+  .app-shell.appearance-system .document-workspace,
+  .app-shell.appearance-system .connection-manager,
+  .app-shell.appearance-system .connection-manager-list,
+  .app-shell.appearance-system .connection-manager-detail,
+  .app-shell.appearance-system .queries-workspace,
+  .app-shell.appearance-system .bookmarks-workspace,
+  .app-shell.appearance-system .tasks-workspace,
+  .app-shell.appearance-system .settings-workspace {
+    background: #101820;
+  }
+
+  .app-shell.appearance-system .connection-rail {
+    background: linear-gradient(180deg, #111b25 0%, #0d151d 100%);
+  }
+
+  .app-shell.appearance-system .settings-card,
+  .app-shell.appearance-system .settings-nav button,
+  .app-shell.appearance-system .query-list-item,
+  .app-shell.appearance-system .query-code-block,
+  .app-shell.appearance-system .bookmark-target-summary,
+  .app-shell.appearance-system .bookmark-list-item,
+  .app-shell.appearance-system .task-runs-panel,
+  .app-shell.appearance-system .task-result,
+  .app-shell.appearance-system .aggregation-preview-panel,
+  .app-shell.appearance-system .aggregation-stage-card,
+  .app-shell.appearance-system .query-builder-shell,
+  .app-shell.appearance-system .query-builder-group,
+  .app-shell.appearance-system .query-builder-condition,
+  .app-shell.appearance-system .metadata-workspace-body .schema-tree-card,
+  .app-shell.appearance-system .metadata-workspace-body .index-list-row,
+  .app-shell.appearance-system .document-editor-panel,
+  .app-shell.appearance-system .connection-profile-card,
+  .app-shell.appearance-system .connection-form,
+  .app-shell.appearance-system .task-run-modal {
+    background: #131f2a;
+    border-color: #2d3c4d;
+  }
+
+  .app-shell.appearance-system .settings-nav button:hover,
+  .app-shell.appearance-system .settings-nav button.is-active,
+  .app-shell.appearance-system .query-list-item.is-active,
+  .app-shell.appearance-system .bookmark-list-item.is-active,
+  .app-shell.appearance-system .tasks-table tbody tr:hover,
+  .app-shell.appearance-system .tasks-table tbody tr.is-active,
+  .app-shell.appearance-system .aggregation-stage-card.is-active,
+  .app-shell.appearance-system .connection-profile-card.is-active {
+    background: #14303a;
+    border-color: #1f7481;
+  }
+
+  .app-shell.appearance-system .settings-header,
+  .app-shell.appearance-system .queries-header,
+  .app-shell.appearance-system .bookmarks-header,
+  .app-shell.appearance-system .tasks-header,
+  .app-shell.appearance-system .settings-card header,
+  .app-shell.appearance-system .settings-row,
+  .app-shell.appearance-system .query-detail-header,
+  .app-shell.appearance-system .query-notes-field,
+  .app-shell.appearance-system .query-detail-footer,
+  .app-shell.appearance-system .bookmark-detail-header,
+  .app-shell.appearance-system .query-section,
+  .app-shell.appearance-system .workspace-tabs,
+  .app-shell.appearance-system .collection-tabbar,
+  .app-shell.appearance-system .workspace-footer,
+  .app-shell.appearance-system .results-header,
+  .app-shell.appearance-system .tasks-toolbar,
+  .app-shell.appearance-system .task-runs-header,
+  .app-shell.appearance-system .task-run-item,
+  .app-shell.appearance-system .task-run-modal header,
+  .app-shell.appearance-system .task-run-modal-message,
+  .app-shell.appearance-system .aggregation-toolbar,
+  .app-shell.appearance-system .aggregation-editor-header,
+  .app-shell.appearance-system .aggregation-preview-panel header,
+  .app-shell.appearance-system .document-editor-header,
+  .app-shell.appearance-system .document-editor-footer,
+  .app-shell.appearance-system .connection-manager-header,
+  .app-shell.appearance-system .connection-form-section,
+  .app-shell.appearance-system .inspector-document-viewer,
+  .app-shell.appearance-system .inspector-empty-state {
+    border-color: #2b3948;
+  }
+
+  .app-shell.appearance-system .settings-header h1,
+  .app-shell.appearance-system .settings-card h2,
+  .app-shell.appearance-system .settings-row strong,
+  .app-shell.appearance-system .settings-nav strong,
+  .app-shell.appearance-system .queries-header h1,
+  .app-shell.appearance-system .query-list-item-main strong,
+  .app-shell.appearance-system .query-detail-header h2,
+  .app-shell.appearance-system .query-code-block span,
+  .app-shell.appearance-system .bookmarks-header h1,
+  .app-shell.appearance-system .bookmark-detail-header h2,
+  .app-shell.appearance-system .bookmark-group-title,
+  .app-shell.appearance-system .tasks-header h1,
+  .app-shell.appearance-system .task-detail-panel h2,
+  .app-shell.appearance-system .task-detail-panel dd,
+  .app-shell.appearance-system .task-runs-header strong,
+  .app-shell.appearance-system .task-run-item strong,
+  .app-shell.appearance-system .task-run-modal h2,
+  .app-shell.appearance-system .task-run-modal-summary strong,
+  .app-shell.appearance-system .aggregation-preview-panel header strong,
+  .app-shell.appearance-system .aggregation-editor-header strong,
+  .app-shell.appearance-system .aggregation-stage-card strong,
+  .app-shell.appearance-system .connection-manager-header strong,
+  .app-shell.appearance-system .connection-manager-title,
+  .app-shell.appearance-system .connection-profile-card strong,
+  .app-shell.appearance-system .schema-tree-card strong,
+  .app-shell.appearance-system .index-list-row strong,
+  .app-shell.appearance-system .workspace-tab,
+  .app-shell.appearance-system .workspace-tool-button {
+    color: #e8eef6;
+  }
+
+  .app-shell.appearance-system .settings-header p,
+  .app-shell.appearance-system .settings-card header p,
+  .app-shell.appearance-system .settings-row span,
+  .app-shell.appearance-system .settings-nav small,
+  .app-shell.appearance-system .queries-header p,
+  .app-shell.appearance-system .query-list-item-main small,
+  .app-shell.appearance-system .query-detail-header p,
+  .app-shell.appearance-system .query-detail-footer,
+  .app-shell.appearance-system .bookmarks-header p,
+  .app-shell.appearance-system .bookmark-detail-header p,
+  .app-shell.appearance-system .bookmark-detail-body label > span,
+  .app-shell.appearance-system .tasks-header p,
+  .app-shell.appearance-system .task-detail-panel p,
+  .app-shell.appearance-system .task-detail-panel dt,
+  .app-shell.appearance-system .task-run-item small,
+  .app-shell.appearance-system .task-run-modal header p,
+  .app-shell.appearance-system .task-run-modal-summary span,
+  .app-shell.appearance-system .task-run-modal-message span,
+  .app-shell.appearance-system .aggregation-editor-header span,
+  .app-shell.appearance-system .aggregation-preview-panel header span,
+  .app-shell.appearance-system .connection-manager-header span,
+  .app-shell.appearance-system .connection-profile-card small,
+  .app-shell.appearance-system .schema-tree-card span,
+  .app-shell.appearance-system .index-list-row span,
+  .app-shell.appearance-system .workspace-empty-state p,
+  .app-shell.appearance-system .queries-empty {
+    color: #9aa8ba;
+  }
+
+  .app-shell.appearance-system input,
+  .app-shell.appearance-system textarea,
+  .app-shell.appearance-system select,
+  .app-shell.appearance-system .query-line,
+  .app-shell.appearance-system .bookmark-tag-chips,
+  .app-shell.appearance-system .bookmark-detail-body input,
+  .app-shell.appearance-system .bookmark-detail-body textarea,
+  .app-shell.appearance-system .query-notes-field textarea,
+  .app-shell.appearance-system .settings-number-control input,
+  .app-shell.appearance-system .connection-manager-tools button,
+  .app-shell.appearance-system .connection-manager-tools input,
+  .app-shell.appearance-system .connection-form input,
+  .app-shell.appearance-system .connection-form textarea,
+  .app-shell.appearance-system .document-editor-monaco,
+  .app-shell.appearance-system .aggregation-field input,
+  .app-shell.appearance-system .aggregation-field textarea,
+  .app-shell.appearance-system .query-builder-condition input,
+  .app-shell.appearance-system .query-builder-condition select,
+  .app-shell.appearance-system .query-builder-group-toolbar select,
+  .app-shell.appearance-system .workspace-footer input {
+    background: #0d141c;
+    border-color: #334456;
+    color: #e8eef6;
+  }
+
+  .app-shell.appearance-system input::placeholder,
+  .app-shell.appearance-system textarea::placeholder {
+    color: #6f7e90;
+  }
+
+  .app-shell.appearance-system .settings-segmented,
+  .app-shell.appearance-system .query-list-tabs,
+  .app-shell.appearance-system .bookmark-filter-tabs {
+    background: #0d141c;
+    border-color: #334456;
+  }
+
+  .app-shell.appearance-system .settings-segmented button,
+  .app-shell.appearance-system .query-list-tabs button,
+  .app-shell.appearance-system .bookmark-filter-tabs button {
+    color: #9aa8ba;
+  }
+
+  .app-shell.appearance-system .settings-segmented button.is-active,
+  .app-shell.appearance-system .query-list-tabs button.is-active,
+  .app-shell.appearance-system .bookmark-filter-tabs button.is-active {
+    background: #172635;
+    color: #55c7d4;
+  }
+
+  .app-shell.appearance-system .secondary-button,
+  .app-shell.appearance-system .compact-button,
+  .app-shell.appearance-system .query-detail-actions button,
+  .app-shell.appearance-system .tasks-toolbar button,
+  .app-shell.appearance-system .settings-header button,
+  .app-shell.appearance-system .plain-icon,
+  .app-shell.appearance-system .tool-button,
+  .app-shell.appearance-system .ghost-icon,
+  .app-shell.appearance-system .workspace-tool-button {
+    border-color: #334456;
+    color: #d8e1ec;
+  }
+
+  .app-shell.appearance-system .secondary-button:hover,
+  .app-shell.appearance-system .compact-button:hover,
+  .app-shell.appearance-system .query-detail-actions button:hover,
+  .app-shell.appearance-system .tasks-toolbar button:hover:not(:disabled),
+  .app-shell.appearance-system .settings-header button:hover,
+  .app-shell.appearance-system .plain-icon:hover,
+  .app-shell.appearance-system .tool-button:hover,
+  .app-shell.appearance-system .ghost-icon:hover,
+  .app-shell.appearance-system .workspace-tool-button:hover {
+    background: #172635;
+    border-color: #3c5368;
+  }
+
+  .app-shell.appearance-system .workspace-tab.is-active,
+  .app-shell.appearance-system .workspace-tool-button.is-active,
+  .app-shell.appearance-system .query-builder-tabs button.is-active,
+  .app-shell.appearance-system .settings-nav button.is-active strong {
+    color: #55c7d4;
+  }
+
+  .app-shell.appearance-system .workspace-tab.is-active::after,
+  .app-shell.appearance-system .workspace-tool-button.is-active::after,
+  .app-shell.appearance-system .query-builder-tabs button.is-active::after {
+    background: #55c7d4;
+  }
+
+  .app-shell.appearance-system .query-code-block pre,
+  .app-shell.appearance-system .query-builder-preview pre,
+  .app-shell.appearance-system .aggregation-raw-editor,
+  .app-shell.appearance-system .schema-tree-card code,
+  .app-shell.appearance-system .index-list-row code,
+  .app-shell.appearance-system .aggregation-result-documents article {
+    color: #66d9e8;
+  }
+
+  .app-shell.appearance-system .tasks-table th {
+    background: #0d141c;
+    color: #d8e1ec;
+  }
+
+  .app-shell.appearance-system .tasks-table td,
+  .app-shell.appearance-system .tasks-table th {
+    border-color: #2b3948;
+  }
+
+  .app-shell.appearance-system .task-status.is-idle {
+    background: #253344;
+    color: #cbd5e1;
+  }
+
+  .app-shell.appearance-system .task-status.is-running {
+    background: #4a3214;
+    color: #f7c56b;
+  }
+
+  .app-shell.appearance-system .task-status.is-success {
+    background: #123b2a;
+    color: #67d391;
+  }
+
+  .app-shell.appearance-system .task-status.is-failed {
+    background: #4b1d1b;
+    color: #ff9f96;
+  }
+
+  .app-shell.appearance-system .run-button {
+    background: #087b86;
+    border-color: #075f68;
+    color: #ffffff;
+  }
+
+  .app-shell.appearance-system .run-button:hover:not(:disabled) {
+    background: #0b8d99;
+  }
+
+  .app-shell.appearance-system .run-button:disabled {
+    background: #35515a;
+    color: #aebbc7;
+  }
+}
+
+.app-shell.appearance-dark .breadcrumb,
+.app-shell.appearance-dark .connection-detail-panel,
+.app-shell.appearance-dark .connection-form-sections,
+.app-shell.appearance-dark .connection-form-section,
+.app-shell.appearance-dark .connection-editor-statusbar,
+.app-shell.appearance-dark .connection-list-footer,
+.app-shell.appearance-dark .connection-plugin-pill,
+.app-shell.appearance-dark .connection-icon-button,
+.app-shell.appearance-dark .secondary-button {
+  background: #131f2a;
+}
+
+.app-shell.appearance-dark .breadcrumb,
+.app-shell.appearance-dark .connection-detail-panel,
+.app-shell.appearance-dark .connection-editor-header,
+.app-shell.appearance-dark .connection-form-section,
+.app-shell.appearance-dark .connection-editor-statusbar,
+.app-shell.appearance-dark .connection-list-footer {
+  border-color: #2b3948;
+}
+
+.app-shell.appearance-dark .breadcrumb-item,
+.app-shell.appearance-dark .connection-section-title strong,
+.app-shell.appearance-dark .field-row,
+.app-shell.appearance-dark .environment-selector legend,
+.app-shell.appearance-dark .readonly-toggle strong,
+.app-shell.appearance-dark .connection-editor-statusbar > div:first-child,
+.app-shell.appearance-dark .connection-editor-title h1 {
+  color: #e8eef6;
+}
+
+.app-shell.appearance-dark .connection-editor-header p,
+.app-shell.appearance-dark .connection-section-title span,
+.app-shell.appearance-dark .readonly-toggle small,
+.app-shell.appearance-dark .connection-editor-statusbar,
+.app-shell.appearance-dark .connection-list-footer,
+.app-shell.appearance-dark .connection-list-label {
+  color: #9aa8ba;
+}
+
+.app-shell.appearance-dark .breadcrumb {
+  box-shadow: none;
+}
+
+.app-shell.appearance-dark .breadcrumb strong {
+  color: #f5f8fc;
+}
+
+.app-shell.appearance-dark .connection-form input[readonly],
+.app-shell.appearance-dark .connection-form input:disabled {
+  background: #0b1118;
+  border-color: #334456;
+  color: #dce6f1;
+  opacity: 1;
+}
+
+.app-shell.appearance-dark .environment-selector > div {
+  background: #0d141c;
+  border-color: #334456;
+}
+
+.app-shell.appearance-dark .environment-selector button {
+  color: #9aa8ba;
+}
+
+.app-shell.appearance-dark .environment-selector button.is-active {
+  background: #172635;
+  border-color: #63cdda;
+  color: #8ee7f0;
+}
+
+.app-shell.appearance-dark .readonly-toggle input {
+  background: #334456;
+}
+
+.app-shell.appearance-dark .readonly-toggle input:checked {
+  background: #087b86;
+}
+
+.app-shell.appearance-dark .connection-plugin-pill {
+  border-color: #334456;
+  color: #d8e1ec;
+}
+
+.app-shell.appearance-dark .connection-icon-button,
+.app-shell.appearance-dark .secondary-button,
+.app-shell.appearance-dark .test-connection-button {
+  border-color: #334456;
+  color: #d8e1ec;
+}
+
+.app-shell.appearance-dark .connection-icon-button:hover,
+.app-shell.appearance-dark .secondary-button:hover,
+.app-shell.appearance-dark .test-connection-button:hover:not(:disabled) {
+  background: #172635;
+  border-color: #3c5368;
+}
+
+.app-shell.appearance-dark .connection-delete-button {
+  background: #201417;
+  border-color: #f19a91;
+  color: #ff8f86;
+}
+
+.app-shell.appearance-dark .connection-delete-button:hover {
+  background: #351918;
+}
+
+.app-shell.appearance-dark button:disabled,
+.app-shell.appearance-dark .test-connection-button:disabled {
+  background: #182331;
+  border-color: #2f4052;
+  color: #78889b;
+  opacity: 1;
+}
+
+.app-shell.appearance-dark .tasks-table tbody tr {
+  color: #d8e1ec;
+}
+
+.app-shell.appearance-dark .tasks-table tbody tr.is-active {
+  background: #16303a;
+}
+
+.app-shell.appearance-dark .tasks-table tbody tr.is-active td,
+.app-shell.appearance-dark .tasks-table tbody tr.is-active strong,
+.app-shell.appearance-dark .tasks-table tbody tr.is-active span,
+.app-shell.appearance-dark .tasks-table tbody tr.is-active small {
+  color: #e8eef6;
+}
+
+.app-shell.appearance-dark .task-run-item:hover {
+  background: #172635;
+}
+
+.app-shell.appearance-dark .task-run-item:hover strong,
+.app-shell.appearance-dark .task-run-item:hover small {
+  color: #e8eef6;
+}
+
+@media (prefers-color-scheme: dark) {
+  .app-shell.appearance-system .breadcrumb,
+  .app-shell.appearance-system .connection-detail-panel,
+  .app-shell.appearance-system .connection-form-sections,
+  .app-shell.appearance-system .connection-form-section,
+  .app-shell.appearance-system .connection-editor-statusbar,
+  .app-shell.appearance-system .connection-list-footer,
+  .app-shell.appearance-system .connection-plugin-pill,
+  .app-shell.appearance-system .connection-icon-button,
+  .app-shell.appearance-system .secondary-button {
+    background: #131f2a;
+  }
+
+  .app-shell.appearance-system .breadcrumb,
+  .app-shell.appearance-system .connection-detail-panel,
+  .app-shell.appearance-system .connection-editor-header,
+  .app-shell.appearance-system .connection-form-section,
+  .app-shell.appearance-system .connection-editor-statusbar,
+  .app-shell.appearance-system .connection-list-footer {
+    border-color: #2b3948;
+  }
+
+  .app-shell.appearance-system .breadcrumb-item,
+  .app-shell.appearance-system .connection-section-title strong,
+  .app-shell.appearance-system .field-row,
+  .app-shell.appearance-system .environment-selector legend,
+  .app-shell.appearance-system .readonly-toggle strong,
+  .app-shell.appearance-system .connection-editor-statusbar > div:first-child,
+  .app-shell.appearance-system .connection-editor-title h1 {
+    color: #e8eef6;
+  }
+
+  .app-shell.appearance-system .connection-editor-header p,
+  .app-shell.appearance-system .connection-section-title span,
+  .app-shell.appearance-system .readonly-toggle small,
+  .app-shell.appearance-system .connection-editor-statusbar,
+  .app-shell.appearance-system .connection-list-footer,
+  .app-shell.appearance-system .connection-list-label {
+    color: #9aa8ba;
+  }
+
+  .app-shell.appearance-system .breadcrumb {
+    box-shadow: none;
+  }
+
+  .app-shell.appearance-system .breadcrumb strong {
+    color: #f5f8fc;
+  }
+
+  .app-shell.appearance-system .connection-form input[readonly],
+  .app-shell.appearance-system .connection-form input:disabled {
+    background: #0b1118;
+    border-color: #334456;
+    color: #dce6f1;
+    opacity: 1;
+  }
+
+  .app-shell.appearance-system .environment-selector > div {
+    background: #0d141c;
+    border-color: #334456;
+  }
+
+  .app-shell.appearance-system .environment-selector button {
+    color: #9aa8ba;
+  }
+
+  .app-shell.appearance-system .environment-selector button.is-active {
+    background: #172635;
+    border-color: #63cdda;
+    color: #8ee7f0;
+  }
+
+  .app-shell.appearance-system .readonly-toggle input {
+    background: #334456;
+  }
+
+  .app-shell.appearance-system .readonly-toggle input:checked {
+    background: #087b86;
+  }
+
+  .app-shell.appearance-system .connection-plugin-pill {
+    border-color: #334456;
+    color: #d8e1ec;
+  }
+
+  .app-shell.appearance-system .connection-icon-button,
+  .app-shell.appearance-system .secondary-button,
+  .app-shell.appearance-system .test-connection-button {
+    border-color: #334456;
+    color: #d8e1ec;
+  }
+
+  .app-shell.appearance-system .connection-icon-button:hover,
+  .app-shell.appearance-system .secondary-button:hover,
+  .app-shell.appearance-system .test-connection-button:hover:not(:disabled) {
+    background: #172635;
+    border-color: #3c5368;
+  }
+
+  .app-shell.appearance-system .connection-delete-button {
+    background: #201417;
+    border-color: #f19a91;
+    color: #ff8f86;
+  }
+
+  .app-shell.appearance-system .connection-delete-button:hover {
+    background: #351918;
+  }
+
+  .app-shell.appearance-system button:disabled,
+  .app-shell.appearance-system .test-connection-button:disabled {
+    background: #182331;
+    border-color: #2f4052;
+    color: #78889b;
+    opacity: 1;
+  }
+
+  .app-shell.appearance-system .tasks-table tbody tr {
+    color: #d8e1ec;
+  }
+
+  .app-shell.appearance-system .tasks-table tbody tr.is-active {
+    background: #16303a;
+  }
+
+  .app-shell.appearance-system .tasks-table tbody tr.is-active td,
+  .app-shell.appearance-system .tasks-table tbody tr.is-active strong,
+  .app-shell.appearance-system .tasks-table tbody tr.is-active span,
+  .app-shell.appearance-system .tasks-table tbody tr.is-active small {
+    color: #e8eef6;
+  }
+
+  .app-shell.appearance-system .task-run-item:hover {
+    background: #172635;
+  }
+
+  .app-shell.appearance-system .task-run-item:hover strong,
+  .app-shell.appearance-system .task-run-item:hover small {
+    color: #e8eef6;
+  }
+}
+
+.app-shell.appearance-dark .primary-nav .nav-row {
+  border-color: #2b3948;
+  color: #8ea0b5;
+}
+
+.app-shell.appearance-dark .primary-nav .nav-row:hover {
+  background: #172635;
+  color: #d8e1ec;
+}
+
+.app-shell.appearance-dark .primary-nav .nav-row.is-active {
+  background: #14303a;
+  border-color: #55c7d4;
+  color: #8ee7f0;
+}
+
+.app-shell.appearance-dark .database-panel {
+  background: #101820;
+}
+
+.app-shell.appearance-dark .panel-title-row,
+.app-shell.appearance-dark .tree-caret,
+.app-shell.appearance-dark .tree-row {
+  color: #9fb0c3;
+}
+
+.app-shell.appearance-dark .panel-title-row {
+  color: #c8d3e0;
+}
+
+.app-shell.appearance-dark .tree-row:hover {
+  background: #172635;
+  color: #e8eef6;
+}
+
+.app-shell.appearance-dark .tree-row.is-active,
+.app-shell.appearance-dark .tree-row.is-context-target {
+  background: #14303a;
+  color: #e8eef6;
+}
+
+.app-shell.appearance-dark .explorer-root-row,
+.app-shell.appearance-dark .workspace-empty-state h1 {
+  color: #e8eef6;
+}
+
+.app-shell.appearance-dark .workspace-empty-state > div {
+  color: #aab8c9;
+}
+
+@media (prefers-color-scheme: dark) {
+  .app-shell.appearance-system .primary-nav .nav-row {
+    border-color: #2b3948;
+    color: #8ea0b5;
+  }
+
+  .app-shell.appearance-system .primary-nav .nav-row:hover {
+    background: #172635;
+    color: #d8e1ec;
+  }
+
+  .app-shell.appearance-system .primary-nav .nav-row.is-active {
+    background: #14303a;
+    border-color: #55c7d4;
+    color: #8ee7f0;
+  }
+
+  .app-shell.appearance-system .database-panel {
+    background: #101820;
+  }
+
+  .app-shell.appearance-system .panel-title-row,
+  .app-shell.appearance-system .tree-caret,
+  .app-shell.appearance-system .tree-row {
+    color: #9fb0c3;
+  }
+
+  .app-shell.appearance-system .panel-title-row {
+    color: #c8d3e0;
+  }
+
+  .app-shell.appearance-system .tree-row:hover {
+    background: #172635;
+    color: #e8eef6;
+  }
+
+  .app-shell.appearance-system .tree-row.is-active,
+  .app-shell.appearance-system .tree-row.is-context-target {
+    background: #14303a;
+    color: #e8eef6;
+  }
+
+  .app-shell.appearance-system .explorer-root-row,
+  .app-shell.appearance-system .workspace-empty-state h1 {
+    color: #e8eef6;
+  }
+
+  .app-shell.appearance-system .workspace-empty-state > div {
+    color: #aab8c9;
+  }
+}
+
+.app-shell.appearance-dark .brand-lockup strong {
+  color: #f3f7fb;
+}
+
+.app-shell.appearance-dark .brand-lockup span {
+  color: #a9b7c8;
+}
+
+.app-shell.appearance-dark .bookmark-detail-panel,
+.app-shell.appearance-dark .bookmark-detail-body,
+.app-shell.appearance-dark .bookmark-list-panel,
+.app-shell.appearance-dark .bookmark-create-panel {
+  background: #101820;
+  border-color: #2b3948;
+}
+
+.app-shell.appearance-dark .bookmark-list-item {
+  background: #131f2a;
+  border-color: #334456;
+}
+
+.app-shell.appearance-dark .bookmark-list-item.is-active {
+  background: #14303a;
+  border-color: #1f7481;
+}
+
+.app-shell.appearance-dark .bookmark-list-item strong,
+.app-shell.appearance-dark .bookmark-detail-header h2 {
+  color: #e8eef6;
+}
+
+.app-shell.appearance-dark .bookmark-list-item small,
+.app-shell.appearance-dark .bookmark-detail-header p {
+  color: #9fb0c3;
+}
+
+.app-shell.appearance-dark .bookmark-filter-tabs {
+  background: #0d141c;
+  border-color: #334456;
+}
+
+.app-shell.appearance-dark .bookmark-filter-tabs button {
+  color: #9fb0c3;
+}
+
+.app-shell.appearance-dark .bookmark-filter-tabs button.is-active {
+  background: #172635;
+  box-shadow: none;
+  color: #66d9e8;
+}
+
+.app-shell.appearance-dark .bookmark-type-filter button {
+  background: #131f2a;
+  border-color: #334456;
+  color: #d8e1ec;
+}
+
+.app-shell.appearance-dark .bookmark-type-filter button:hover {
+  background: #172635;
+}
+
+.app-shell.appearance-dark .bookmark-type-filter button.is-active {
+  background: #14303a;
+  border-color: #55c7d4;
+  color: #8ee7f0;
+}
+
+.app-shell.appearance-dark .bookmark-type-filter button.is-active strong,
+.app-shell.appearance-dark .bookmark-type-filter button.is-active span {
+  color: #8ee7f0;
+}
+
+.app-shell.appearance-dark .bookmark-filter-empty {
+  color: #9fb0c3;
+}
+
+.app-shell.appearance-dark .settings-diagnostics div {
+  border-color: #2b3948;
+}
+
+.app-shell.appearance-dark .settings-diagnostics span {
+  color: #9fb0c3;
+}
+
+.app-shell.appearance-dark .settings-diagnostics strong {
+  color: #e8eef6;
+}
+
+.app-shell.appearance-dark .collection-tabbar,
+.app-shell.appearance-dark .workspace-tabs {
+  background: #101820;
+  border-color: #2b3948;
+}
+
+.app-shell.appearance-dark .workspace-tab,
+.app-shell.appearance-dark .workspace-tab .icon,
+.app-shell.appearance-dark .workspace-tab button {
+  color: #9fb0c3;
+}
+
+.app-shell.appearance-dark .workspace-tab:hover {
+  background: #172635;
+  color: #e8eef6;
+}
+
+.app-shell.appearance-dark .workspace-tab.is-active {
+  color: #e8eef6;
+}
+
+.app-shell.appearance-dark .collection-tab,
+.app-shell.appearance-dark .collection-tab button,
+.app-shell.appearance-dark .collection-tab .icon,
+.app-shell.appearance-dark .tab-plus {
+  color: #9fb0c3;
+}
+
+.app-shell.appearance-dark .collection-tab.is-active,
+.app-shell.appearance-dark .collection-tab.is-active .icon {
+  color: #e8eef6;
+}
+
+.app-shell.appearance-dark .collection-tab:hover,
+.app-shell.appearance-dark .tab-plus:hover {
+  background: #172635;
+  color: #e8eef6;
+}
+
+.app-shell.appearance-dark .results-header,
+.app-shell.appearance-dark .json-results,
+.app-shell.appearance-dark .document-table-body {
+  background: #101820;
+  border-color: #2b3948;
+}
+
+.app-shell.appearance-dark .results-header strong,
+.app-shell.appearance-dark .range-status,
+.app-shell.appearance-dark .status-metric {
+  color: #d8e1ec;
+}
+
+.app-shell.appearance-dark .document-table-head {
+  background: #182331;
+  border-color: #3a4d61;
+  color: #e8eef6;
+}
+
+.app-shell.appearance-dark .document-table-row {
+  border-color: #3a4d61;
+  color: #d8e1ec;
+}
+
+.app-shell.appearance-dark .document-table-cell {
+  border-color: #3a4d61;
+}
+
+.app-shell.appearance-dark .document-table-row.is-row-selected .document-table-cell {
+  background: #263645;
+}
+
+.app-shell.appearance-dark .document-table-row.is-row-selected .document-table-cell.is-selected,
+.app-shell.appearance-dark .document-table-cell.is-selected {
+  background: #0b6ed8;
+  color: #ffffff;
+}
+
+.app-shell.appearance-dark .mono {
+  color: #dbe7f5;
+}
+
+.app-shell.appearance-dark .object-cell {
+  color: #61d6bd;
+}
+
+.app-shell.appearance-dark .object-cell-icon {
+  border-color: #8190a3;
+  color: #b7c5d7;
+}
+
+.app-shell.appearance-dark .json-document-card,
+.app-shell.appearance-dark .json-document-card-header,
+.app-shell.appearance-dark .json-document-editor,
+.app-shell.appearance-dark .json-tree-viewer,
+.app-shell.appearance-dark .query-builder-preview {
+  background: #101820;
+  border-color: #334456;
+}
+
+.app-shell.appearance-dark .json-document-card-header {
+  color: #9fb0c3;
+}
+
+.app-shell.appearance-dark .json-document-card-header strong {
+  color: #e8eef6;
+}
+
+.app-shell.appearance-dark .json-tree-viewer {
+  color: #d8e1ec;
+}
+
+.app-shell.appearance-dark .json-tree-viewer-label,
+.app-shell.appearance-dark .json-tree-viewer-clickable-label {
+  color: #f08a63;
+}
+
+.app-shell.appearance-dark .json-tree-viewer-string {
+  color: #7bd88f;
+}
+
+.app-shell.appearance-dark .json-tree-viewer-number,
+.app-shell.appearance-dark .json-tree-viewer-boolean {
+  color: #7ab7ff;
+}
+
+.app-shell.appearance-dark .json-tree-viewer-null,
+.app-shell.appearance-dark .json-tree-viewer-undefined,
+.app-shell.appearance-dark .json-tree-viewer-other,
+.app-shell.appearance-dark .json-tree-viewer-punctuation {
+  color: #aebbc7;
+}
+
+.app-shell.appearance-dark .query-builder-preview pre {
+  background: transparent;
+  color: #66d9e8;
+}
+
+.app-shell.appearance-dark .results-loading-state {
+  background: #101820;
+  border-color: #2b3948;
+}
+
+.app-shell.appearance-dark .results-loading-state span {
+  background:
+    linear-gradient(
+        90deg,
+        transparent,
+        rgba(139, 163, 184, 0.18),
+        transparent
+      ) -220px
+      0 / 220px 100% no-repeat,
+    #131f2a;
+  border-color: #2b3948;
+}
+
+@media (prefers-color-scheme: dark) {
+  .app-shell.appearance-system .brand-lockup strong {
+    color: #f3f7fb;
+  }
+
+  .app-shell.appearance-system .brand-lockup span {
+    color: #a9b7c8;
+  }
+
+  .app-shell.appearance-system .bookmark-detail-panel,
+  .app-shell.appearance-system .bookmark-detail-body,
+  .app-shell.appearance-system .bookmark-list-panel,
+  .app-shell.appearance-system .bookmark-create-panel {
+    background: #101820;
+    border-color: #2b3948;
+  }
+
+  .app-shell.appearance-system .bookmark-list-item {
+    background: #131f2a;
+    border-color: #334456;
+  }
+
+  .app-shell.appearance-system .bookmark-list-item.is-active {
+    background: #14303a;
+    border-color: #1f7481;
+  }
+
+  .app-shell.appearance-system .bookmark-list-item strong,
+  .app-shell.appearance-system .bookmark-detail-header h2 {
+    color: #e8eef6;
+  }
+
+  .app-shell.appearance-system .bookmark-list-item small,
+  .app-shell.appearance-system .bookmark-detail-header p {
+    color: #9fb0c3;
+  }
+
+  .app-shell.appearance-system .bookmark-filter-tabs {
+    background: #0d141c;
+    border-color: #334456;
+  }
+
+  .app-shell.appearance-system .bookmark-filter-tabs button {
+    color: #9fb0c3;
+  }
+
+  .app-shell.appearance-system .bookmark-filter-tabs button.is-active {
+    background: #172635;
+    box-shadow: none;
+    color: #66d9e8;
+  }
+
+  .app-shell.appearance-system .bookmark-type-filter button {
+    background: #131f2a;
+    border-color: #334456;
+    color: #d8e1ec;
+  }
+
+  .app-shell.appearance-system .bookmark-type-filter button:hover {
+    background: #172635;
+  }
+
+  .app-shell.appearance-system .bookmark-type-filter button.is-active {
+    background: #14303a;
+    border-color: #55c7d4;
+    color: #8ee7f0;
+  }
+
+  .app-shell.appearance-system .bookmark-type-filter button.is-active strong,
+  .app-shell.appearance-system .bookmark-type-filter button.is-active span {
+    color: #8ee7f0;
+  }
+
+  .app-shell.appearance-system .bookmark-filter-empty {
+    color: #9fb0c3;
+  }
+
+  .app-shell.appearance-system .settings-diagnostics div {
+    border-color: #2b3948;
+  }
+
+  .app-shell.appearance-system .settings-diagnostics span {
+    color: #9fb0c3;
+  }
+
+  .app-shell.appearance-system .settings-diagnostics strong {
+    color: #e8eef6;
+  }
+
+  .app-shell.appearance-system .collection-tabbar,
+  .app-shell.appearance-system .workspace-tabs {
+    background: #101820;
+    border-color: #2b3948;
+  }
+
+  .app-shell.appearance-system .workspace-tab,
+  .app-shell.appearance-system .workspace-tab .icon,
+  .app-shell.appearance-system .workspace-tab button {
+    color: #9fb0c3;
+  }
+
+  .app-shell.appearance-system .workspace-tab:hover {
+    background: #172635;
+    color: #e8eef6;
+  }
+
+  .app-shell.appearance-system .workspace-tab.is-active {
+    color: #e8eef6;
+  }
+
+  .app-shell.appearance-system .collection-tab,
+  .app-shell.appearance-system .collection-tab button,
+  .app-shell.appearance-system .collection-tab .icon,
+  .app-shell.appearance-system .tab-plus {
+    color: #9fb0c3;
+  }
+
+  .app-shell.appearance-system .collection-tab.is-active,
+  .app-shell.appearance-system .collection-tab.is-active .icon {
+    color: #e8eef6;
+  }
+
+  .app-shell.appearance-system .collection-tab:hover,
+  .app-shell.appearance-system .tab-plus:hover {
+    background: #172635;
+    color: #e8eef6;
+  }
+
+  .app-shell.appearance-system .results-header,
+  .app-shell.appearance-system .json-results,
+  .app-shell.appearance-system .document-table-body {
+    background: #101820;
+    border-color: #2b3948;
+  }
+
+  .app-shell.appearance-system .results-header strong,
+  .app-shell.appearance-system .range-status,
+  .app-shell.appearance-system .status-metric {
+    color: #d8e1ec;
+  }
+
+  .app-shell.appearance-system .document-table-head {
+    background: #182331;
+    border-color: #3a4d61;
+    color: #e8eef6;
+  }
+
+  .app-shell.appearance-system .document-table-row {
+    border-color: #3a4d61;
+    color: #d8e1ec;
+  }
+
+  .app-shell.appearance-system .document-table-cell {
+    border-color: #3a4d61;
+  }
+
+  .app-shell.appearance-system .document-table-row.is-row-selected .document-table-cell {
+    background: #263645;
+  }
+
+  .app-shell.appearance-system .document-table-row.is-row-selected .document-table-cell.is-selected,
+  .app-shell.appearance-system .document-table-cell.is-selected {
+    background: #0b6ed8;
+    color: #ffffff;
+  }
+
+  .app-shell.appearance-system .mono {
+    color: #dbe7f5;
+  }
+
+  .app-shell.appearance-system .object-cell {
+    color: #61d6bd;
+  }
+
+  .app-shell.appearance-system .object-cell-icon {
+    border-color: #8190a3;
+    color: #b7c5d7;
+  }
+
+  .app-shell.appearance-system .json-document-card,
+  .app-shell.appearance-system .json-document-card-header,
+  .app-shell.appearance-system .json-document-editor,
+  .app-shell.appearance-system .json-tree-viewer,
+  .app-shell.appearance-system .query-builder-preview {
+    background: #101820;
+    border-color: #334456;
+  }
+
+  .app-shell.appearance-system .json-document-card-header {
+    color: #9fb0c3;
+  }
+
+  .app-shell.appearance-system .json-document-card-header strong {
+    color: #e8eef6;
+  }
+
+  .app-shell.appearance-system .json-tree-viewer {
+    color: #d8e1ec;
+  }
+
+  .app-shell.appearance-system .json-tree-viewer-label,
+  .app-shell.appearance-system .json-tree-viewer-clickable-label {
+    color: #f08a63;
+  }
+
+  .app-shell.appearance-system .json-tree-viewer-string {
+    color: #7bd88f;
+  }
+
+  .app-shell.appearance-system .json-tree-viewer-number,
+  .app-shell.appearance-system .json-tree-viewer-boolean {
+    color: #7ab7ff;
+  }
+
+  .app-shell.appearance-system .json-tree-viewer-null,
+  .app-shell.appearance-system .json-tree-viewer-undefined,
+  .app-shell.appearance-system .json-tree-viewer-other,
+  .app-shell.appearance-system .json-tree-viewer-punctuation {
+    color: #aebbc7;
+  }
+
+  .app-shell.appearance-system .query-builder-preview pre {
+    background: transparent;
+    color: #66d9e8;
+  }
+
+  .app-shell.appearance-system .results-loading-state {
+    background: #101820;
+    border-color: #2b3948;
+  }
+
+  .app-shell.appearance-system .results-loading-state span {
+    background:
+      linear-gradient(
+          90deg,
+          transparent,
+          rgba(139, 163, 184, 0.18),
+          transparent
+        ) -220px
+        0 / 220px 100% no-repeat,
+      #131f2a;
+    border-color: #2b3948;
+  }
+}
