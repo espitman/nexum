@@ -4558,6 +4558,154 @@ input:disabled {
   content: "...";
 }
 
+.tree-results {
+  border-top: 1px solid #e1e6ee;
+  min-height: 0;
+  overflow: auto;
+}
+
+.tree-results-grid {
+  color: #263142;
+  font-size: 13px;
+  min-width: 860px;
+}
+
+.tree-results-head,
+.tree-results-row {
+  display: grid;
+  grid-template-columns: minmax(320px, 40%) minmax(280px, 40%) minmax(140px, 20%);
+}
+
+.tree-results-head {
+  background: #f7f9fb;
+  border-bottom: 1px solid #dfe5ed;
+  color: #4a5565;
+  font-weight: 700;
+  height: 34px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.tree-results-head span,
+.tree-results-row > div {
+  align-items: center;
+  border-right: 1px solid #dfe5ed;
+  display: flex;
+  min-width: 0;
+  padding: 0 8px;
+}
+
+.tree-results-head span:last-child,
+.tree-results-row > div:last-child {
+  border-right: 0;
+}
+
+.tree-results-row {
+  border-bottom: 1px solid #e7ecf3;
+  min-height: 28px;
+}
+
+.tree-results-row:nth-child(odd) {
+  background: #ffffff;
+}
+
+.tree-results-row:nth-child(even) {
+  background: #f7f9fb;
+}
+
+.tree-results-key {
+  gap: 5px;
+  padding-left: calc(8px + var(--tree-depth) * 18px) !important;
+}
+
+.tree-results-toggle,
+.tree-results-toggle-placeholder {
+  color: #657284;
+  flex: 0 0 16px;
+  font-size: 17px;
+  height: 20px;
+  line-height: 1;
+  width: 16px;
+}
+
+.tree-results-toggle:hover {
+  color: #00717d;
+}
+
+.tree-results-kind-icon {
+  align-items: center;
+  border: 1px solid #8d99a8;
+  color: #566174;
+  display: inline-flex;
+  flex: 0 0 18px;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 10px;
+  height: 16px;
+  justify-content: center;
+  width: 18px;
+}
+
+.tree-results-kind-icon::before {
+  content: "--";
+}
+
+.tree-results-kind-icon.is-object::before,
+.tree-results-kind-icon.is-document::before {
+  content: "{}";
+}
+
+.tree-results-kind-icon.is-array::before {
+  content: "[]";
+}
+
+.tree-results-key-label,
+.tree-results-value,
+.tree-results-type {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tree-results-key-label {
+  font-weight: 700;
+}
+
+.tree-results-value {
+  color: #2b3848;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+.tree-results-value.is-object {
+  color: #12bfa5;
+  font-weight: 700;
+}
+
+.tree-results-value.is-array {
+  color: #b86f35;
+}
+
+.tree-results-value.is-string {
+  color: #4a8a15;
+}
+
+.tree-results-value.is-number {
+  color: #2563eb;
+}
+
+.tree-results-value.is-boolean {
+  color: #9333ea;
+}
+
+.tree-results-value.is-null {
+  color: #647084;
+}
+
+.tree-results-type {
+  color: #4b5563;
+  font-weight: 600;
+}
+
 .results-state {
   align-content: center;
   border-top: 1px solid #e1e6ee;
@@ -6927,6 +7075,77 @@ input:disabled {
   color: #66d9e8;
 }
 
+.app-shell.appearance-dark .tree-results {
+  background: #101820;
+  border-color: #2b3948;
+}
+
+.app-shell.appearance-dark .tree-results-grid {
+  color: #d8e1ec;
+}
+
+.app-shell.appearance-dark .tree-results-head {
+  background: #26313d;
+  border-color: #3a4d61;
+  color: #e8eef6;
+}
+
+.app-shell.appearance-dark .tree-results-head span,
+.app-shell.appearance-dark .tree-results-row > div {
+  border-color: #3a4d61;
+}
+
+.app-shell.appearance-dark .tree-results-row {
+  border-color: #2b3948;
+}
+
+.app-shell.appearance-dark .tree-results-row:nth-child(odd) {
+  background: #101820;
+}
+
+.app-shell.appearance-dark .tree-results-row:nth-child(even) {
+  background: #17222d;
+}
+
+.app-shell.appearance-dark .tree-results-toggle {
+  color: #9fb0c3;
+}
+
+.app-shell.appearance-dark .tree-results-toggle:hover {
+  color: #66d9e8;
+}
+
+.app-shell.appearance-dark .tree-results-kind-icon {
+  border-color: #8190a3;
+  color: #b7c5d7;
+}
+
+.app-shell.appearance-dark .tree-results-value {
+  color: #dbe7f5;
+}
+
+.app-shell.appearance-dark .tree-results-value.is-object {
+  color: #61d6bd;
+}
+
+.app-shell.appearance-dark .tree-results-value.is-array {
+  color: #d79a65;
+}
+
+.app-shell.appearance-dark .tree-results-value.is-string {
+  color: #7bd88f;
+}
+
+.app-shell.appearance-dark .tree-results-value.is-number,
+.app-shell.appearance-dark .tree-results-value.is-boolean {
+  color: #7ab7ff;
+}
+
+.app-shell.appearance-dark .tree-results-value.is-null,
+.app-shell.appearance-dark .tree-results-type {
+  color: #aebbc7;
+}
+
 @media (prefers-color-scheme: dark) {
   .app-shell.appearance-system .task-run-modal-message p {
     color: #d8e1ec;
@@ -6994,5 +7213,76 @@ input:disabled {
 
   .app-shell.appearance-system .object-preview-popover pre {
     color: #66d9e8;
+  }
+
+  .app-shell.appearance-system .tree-results {
+    background: #101820;
+    border-color: #2b3948;
+  }
+
+  .app-shell.appearance-system .tree-results-grid {
+    color: #d8e1ec;
+  }
+
+  .app-shell.appearance-system .tree-results-head {
+    background: #26313d;
+    border-color: #3a4d61;
+    color: #e8eef6;
+  }
+
+  .app-shell.appearance-system .tree-results-head span,
+  .app-shell.appearance-system .tree-results-row > div {
+    border-color: #3a4d61;
+  }
+
+  .app-shell.appearance-system .tree-results-row {
+    border-color: #2b3948;
+  }
+
+  .app-shell.appearance-system .tree-results-row:nth-child(odd) {
+    background: #101820;
+  }
+
+  .app-shell.appearance-system .tree-results-row:nth-child(even) {
+    background: #17222d;
+  }
+
+  .app-shell.appearance-system .tree-results-toggle {
+    color: #9fb0c3;
+  }
+
+  .app-shell.appearance-system .tree-results-toggle:hover {
+    color: #66d9e8;
+  }
+
+  .app-shell.appearance-system .tree-results-kind-icon {
+    border-color: #8190a3;
+    color: #b7c5d7;
+  }
+
+  .app-shell.appearance-system .tree-results-value {
+    color: #dbe7f5;
+  }
+
+  .app-shell.appearance-system .tree-results-value.is-object {
+    color: #61d6bd;
+  }
+
+  .app-shell.appearance-system .tree-results-value.is-array {
+    color: #d79a65;
+  }
+
+  .app-shell.appearance-system .tree-results-value.is-string {
+    color: #7bd88f;
+  }
+
+  .app-shell.appearance-system .tree-results-value.is-number,
+  .app-shell.appearance-system .tree-results-value.is-boolean {
+    color: #7ab7ff;
+  }
+
+  .app-shell.appearance-system .tree-results-value.is-null,
+  .app-shell.appearance-system .tree-results-type {
+    color: #aebbc7;
   }
 }

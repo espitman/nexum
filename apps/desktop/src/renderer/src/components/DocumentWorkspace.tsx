@@ -4,6 +4,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   type RefObject,
@@ -103,7 +104,7 @@ type DocumentWorkspaceProps = {
   onWorkspaceTabChange: (tab: WorkspaceTabLabel) => void;
 };
 
-type DocumentViewMode = "table" | "json";
+type DocumentViewMode = "table" | "json" | "tree";
 
 type ParsedDocument = {
   ejson: string;
@@ -4464,6 +4465,8 @@ const AggregationPipelineWorkspace = ({
             documents={resultDocuments}
             editorTheme={editorTheme}
           />
+        ) : resultViewMode === "tree" ? (
+          <TreeResults documents={resultDocuments} />
         ) : (
           <DocumentTable
             key={`aggregation:${resultTablePath.join(".")}:${
@@ -5219,6 +5222,8 @@ const ResultsSection = ({
           editorTheme={editorTheme}
           onDocumentOpen={onDocumentOpen}
         />
+      ) : viewMode === "tree" ? (
+        <TreeResults documents={documents} />
       ) : (
         <DocumentTable
           key={`${tablePath.join(".")}:${tableDocuments[0]?.id ?? "empty"}:${tableDocuments.length}`}
@@ -5314,6 +5319,15 @@ const ResultsHeader = ({
           type="button"
         >
           JSON
+        </button>
+        <button
+          aria-selected={viewMode === "tree"}
+          className={viewMode === "tree" ? "is-active" : ""}
+          onClick={() => onViewModeChange("tree")}
+          role="tab"
+          type="button"
+        >
+          Tree
         </button>
       </div>
     </div>
@@ -6172,6 +6186,142 @@ const AggregationJsonResults = ({
             </article>
           );
         })}
+      </div>
+    </div>
+  );
+};
+
+type TreeResultsProps = {
+  documents: ParsedDocument[];
+};
+
+type DocumentTreeRow = {
+  depth: number;
+  keyLabel: string;
+  path: string;
+  typeLabel: string;
+  value: unknown;
+  valueLabel: string;
+};
+
+const TreeResults = ({ documents }: TreeResultsProps) => {
+  const rootSignature = useMemo(
+    () => documents.map((document) => document.id).join("|"),
+    [documents],
+  );
+  const rootPaths = useMemo(
+    () => documents.map((document, index) => getDocumentTreeRootPath(document, index)),
+    [documents],
+  );
+  const [expandedState, setExpandedState] = useState<{
+    paths: Set<string>;
+    signature: string;
+  }>(() => ({
+    paths: new Set(rootPaths),
+    signature: rootSignature,
+  }));
+  const expandedPaths = useMemo(
+    () =>
+      expandedState.signature === rootSignature
+        ? expandedState.paths
+        : new Set(rootPaths),
+    [expandedState, rootPaths, rootSignature],
+  );
+
+  const rows = useMemo(
+    () => buildDocumentTreeRows(documents, expandedPaths),
+    [documents, expandedPaths],
+  );
+  const togglePath = (path: string) => {
+    setExpandedState((currentState) => {
+      const nextPaths =
+        currentState.signature === rootSignature
+          ? new Set(currentState.paths)
+          : new Set(rootPaths);
+
+      if (nextPaths.has(path)) {
+        nextPaths.delete(path);
+      } else {
+        nextPaths.add(path);
+      }
+
+      return {
+        paths: nextPaths,
+        signature: rootSignature,
+      };
+    });
+  };
+
+  if (documents.length === 0) {
+    return (
+      <ResultsState
+        title="No documents"
+        label="This query returned no documents."
+      />
+    );
+  }
+
+  return (
+    <div className="tree-results">
+      <div className="tree-results-grid" role="treegrid" aria-label="Tree view">
+        <div className="tree-results-head" role="row">
+          <span role="columnheader">Key</span>
+          <span role="columnheader">Value</span>
+          <span role="columnheader">Type</span>
+        </div>
+        <div className="tree-results-body">
+          {rows.map((row) => {
+            const isExpandable = isTreeExpandableValue(row.value);
+            const isExpanded = expandedPaths.has(row.path);
+
+            return (
+              <div
+                className={`tree-results-row depth-${Math.min(row.depth, 8)}`}
+                key={row.path}
+                role="row"
+              >
+                <div
+                  className="tree-results-key"
+                  role="gridcell"
+                  style={{ "--tree-depth": row.depth } as CSSProperties}
+                >
+                  {isExpandable ? (
+                    <button
+                      aria-expanded={isExpanded}
+                      aria-label={`${isExpanded ? "Collapse" : "Expand"} ${row.keyLabel}`}
+                      className="tree-results-toggle"
+                      type="button"
+                      onClick={() => togglePath(row.path)}
+                    >
+                      {isExpanded ? "⌄" : "›"}
+                    </button>
+                  ) : (
+                    <span className="tree-results-toggle-placeholder" />
+                  )}
+                  <span
+                    className={`tree-results-kind-icon ${
+                        getTreeKindClass(row.typeLabel)
+                    }`}
+                  />
+                  <span className="tree-results-key-label">
+                    {row.keyLabel}
+                  </span>
+                </div>
+                <div
+                  className={`tree-results-value ${getTreeValueClass(
+                    row.value,
+                  )}`}
+                  role="gridcell"
+                >
+                  {row.valueLabel}
+                </div>
+                <div className="tree-results-type" role="gridcell">
+                  {row.typeLabel}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -8740,6 +8890,167 @@ const getEjsonScalarKey = (value: Record<string, unknown>): string | null => {
   const key = keys[0];
 
   return key && ejsonDisplayKeys.has(key) ? key : null;
+};
+
+const getDocumentTreeRootPath = (
+  document: ParsedDocument,
+  index: number,
+): string => `document:${index}:${document.id}`;
+
+const buildDocumentTreeRows = (
+  documents: ParsedDocument[],
+  expandedPaths: Set<string>,
+): DocumentTreeRow[] =>
+  documents.flatMap((document, index) => {
+    const rootPath = getDocumentTreeRootPath(document, index);
+    const rows: DocumentTreeRow[] = [
+      {
+        depth: 0,
+        keyLabel: `(${index + 1}) {_id : ${document.id}}`,
+        path: rootPath,
+        typeLabel: "Document",
+        value: document.rootValue,
+        valueLabel: getTreeValueLabel(document.rootValue),
+      },
+    ];
+
+    if (expandedPaths.has(rootPath)) {
+      rows.push(
+        ...buildDocumentTreeChildRows(
+          document.rootValue,
+          rootPath,
+          1,
+          expandedPaths,
+        ),
+      );
+    }
+
+    return rows;
+  });
+
+const buildDocumentTreeChildRows = (
+  value: unknown,
+  parentPath: string,
+  depth: number,
+  expandedPaths: Set<string>,
+): DocumentTreeRow[] =>
+  getTreeEntries(value).flatMap(([key, childValue]) => {
+    const path = `${parentPath}/${encodeURIComponent(key)}`;
+    const row: DocumentTreeRow = {
+      depth,
+      keyLabel: key,
+      path,
+      typeLabel: getTreeTypeLabel(childValue),
+      value: childValue,
+      valueLabel: getTreeValueLabel(childValue),
+    };
+
+    if (!expandedPaths.has(path)) {
+      return [row];
+    }
+
+    return [
+      row,
+      ...buildDocumentTreeChildRows(
+        childValue,
+        path,
+        depth + 1,
+        expandedPaths,
+      ),
+    ];
+  });
+
+const getTreeEntries = (value: unknown): [string, unknown][] => {
+  if (getEjsonSchemaType(value)) {
+    return [];
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item, index) => [`[${index}]`, item]);
+  }
+
+  if (isRecord(value)) {
+    return Object.entries(value);
+  }
+
+  return [];
+};
+
+const isTreeExpandableValue = (value: unknown): boolean =>
+  getTreeEntries(value).length > 0;
+
+const getTreeValueLabel = (value: unknown): string => {
+  const displayValue = unwrapEjsonValue(value);
+
+  if (Array.isArray(displayValue)) {
+    return `[ ${displayValue.length} element${
+      displayValue.length === 1 ? "" : "s"
+    } ]`;
+  }
+
+  if (isRecord(displayValue)) {
+    return `{ ${Object.keys(displayValue).length} field${
+      Object.keys(displayValue).length === 1 ? "" : "s"
+    } }`;
+  }
+
+  return formatCellValue(displayValue);
+};
+
+const getTreeTypeLabel = (value: unknown): string => {
+  const ejsonType = getEjsonSchemaType(value);
+
+  if (ejsonType) {
+    return ejsonType;
+  }
+
+  const displayValue = unwrapEjsonValue(value);
+
+  if (Array.isArray(displayValue)) {
+    return "Array";
+  }
+
+  if (isRecord(displayValue)) {
+    return "Object";
+  }
+
+  return getSchemaValueType(displayValue);
+};
+
+const getTreeKindClass = (typeLabel: string): string => {
+  const normalizedTypeLabel = typeLabel.toLowerCase();
+
+  if (normalizedTypeLabel === "document") {
+    return "is-document";
+  }
+
+  if (normalizedTypeLabel === "object") {
+    return "is-object";
+  }
+
+  if (normalizedTypeLabel === "array") {
+    return "is-array";
+  }
+
+  return "is-scalar";
+};
+
+const getTreeValueClass = (value: unknown): string => {
+  const displayValue = unwrapEjsonValue(value);
+
+  if (Array.isArray(displayValue)) {
+    return "is-array";
+  }
+
+  if (isRecord(displayValue)) {
+    return "is-object";
+  }
+
+  if (displayValue === null || displayValue === undefined) {
+    return "is-null";
+  }
+
+  return `is-${typeof displayValue}`;
 };
 
 const formatPreviewJson = (value: unknown): string =>
