@@ -20,6 +20,7 @@ export type NavItemLabel = (typeof navItems)[number][1];
 
 export const workspaceTabs = [
   ["table", "Documents"],
+  ["term", "Query"],
   ["schema", "Schema"],
   ["indexes", "Indexes"],
   ["pipeline", "Aggregation Pipeline"],

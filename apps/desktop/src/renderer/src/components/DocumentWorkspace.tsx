@@ -151,6 +151,7 @@ type CollectionTabState = {
   filterInput: string;
   isQueryBuilderOpen: boolean;
   limitInput: string;
+  manualQueryInput: string;
   pendingInlineDocuments: Map<string, ParsedDocument>;
   projectionInput: string;
   queryBuilderModel: QueryBuilderGroupNode;
@@ -270,6 +271,7 @@ export const DocumentWorkspace = ({
       filterInput: "{}",
       isQueryBuilderOpen: false,
       limitInput: `${settings.query.defaultPageSize}`,
+      manualQueryInput: `find({}).limit(${settings.query.defaultPageSize})`,
       pendingInlineDocuments: new Map(),
       projectionInput: "{}",
       queryBuilderModel: createDefaultQueryBuilderModel(),
@@ -327,9 +329,11 @@ export const DocumentWorkspace = ({
       : "vs";
   const isCollectionWorkspace =
     activeSection === "Explore" && selectedCollectionName !== null;
+  const isDocumentsWorkspace = activeWorkspaceTab === "Documents";
   const isMetadataWorkspace =
     activeWorkspaceTab === "Schema" || activeWorkspaceTab === "Indexes";
   const isAggregationWorkspace = activeWorkspaceTab === "Aggregation Pipeline";
+  const isManualQueryWorkspace = activeWorkspaceTab === "Query";
   const isConnectionManager =
     activeSection === "Connections" && selectedCollectionName === null;
   const activeTabState =
@@ -345,6 +349,7 @@ export const DocumentWorkspace = ({
     filterInput,
     isQueryBuilderOpen,
     limitInput,
+    manualQueryInput,
     pendingInlineDocuments,
     projectionInput,
     queryBuilderModel,
@@ -357,6 +362,7 @@ export const DocumentWorkspace = ({
   } = activeTabState;
   const shouldShowQueryBuilderPanel =
     isCollectionWorkspace &&
+    isDocumentsWorkspace &&
     !isMetadataWorkspace &&
     !isAggregationWorkspace &&
     isQueryBuilderOpen;
@@ -397,6 +403,8 @@ export const DocumentWorkspace = ({
     setCollectionTabField("filterInput", value);
   const setLimitInput = (value: SetStateAction<string>) =>
     setCollectionTabField("limitInput", value);
+  const setManualQueryInput = (value: SetStateAction<string>) =>
+    setCollectionTabField("manualQueryInput", value);
   const setProjectionInput = (value: SetStateAction<string>) =>
     setCollectionTabField("projectionInput", value);
   const setQueryState = (value: SetStateAction<DocumentQueryState>) =>
@@ -433,6 +441,7 @@ export const DocumentWorkspace = ({
     ...createInitialCollectionTabState(),
     filterInput: JSON.stringify(query.filter),
     limitInput: String(query.limit),
+    manualQueryInput: buildManualFindQueryInput(query),
     projectionInput: JSON.stringify(query.projection),
     queryState: {
       filter: query.filter,
@@ -679,6 +688,31 @@ export const DocumentWorkspace = ({
       filter: queryBuilderFilter,
       skip: 0,
     });
+  };
+
+  const runManualQuery = () => {
+    const nextState = parseManualFindQueryInput({
+      defaultLimit: settings.query.defaultPageSize,
+      value: manualQueryInput,
+    });
+
+    if (!nextState.ok) {
+      setQueryInputError(nextState.message);
+      onConnectionError("Manual query is invalid", nextState.message);
+      return;
+    }
+
+    setQueryInputError(null);
+    setSelectedDocument(null);
+    setEditorDocument(null);
+    setFilterInput(JSON.stringify(nextState.value.filter));
+    setProjectionInput(JSON.stringify(nextState.value.projection));
+    setSortInput(JSON.stringify(nextState.value.sort));
+    setLimitInput(String(nextState.value.limit));
+    setSkipInput(String(nextState.value.skip));
+    setManualQueryInput(buildManualFindQueryInput(nextState.value));
+    setQueryState(nextState.value);
+    recordQueryRun(nextState.value);
   };
 
   const buildQuerySnapshot = (
@@ -1832,7 +1866,7 @@ export const DocumentWorkspace = ({
               }}
             />
           ) : null}
-          {!isMetadataWorkspace && !isAggregationWorkspace ? (
+          {isDocumentsWorkspace ? (
             <>
               <QuerySection
                 filterInput={filterInput}
@@ -1904,6 +1938,62 @@ export const DocumentWorkspace = ({
                   preview={queryBuilderPreview}
                 />
               ) : null}
+            </>
+          ) : null}
+          {isManualQueryWorkspace ? (
+            <>
+              <ManualQueryWorkspace
+                isFetching={documentsQuery.isFetching}
+                queryInputError={queryInputError}
+                schemaFields={schemaFields}
+                value={manualQueryInput}
+                onChange={setManualQueryInput}
+                onRunQuery={runManualQuery}
+              />
+              <ResultsSection
+                collectionLabel={selectedCollectionLabel ?? "Collection"}
+                documents={displayedDocuments}
+                error={documentsQuery.error}
+                hasMore={documentsQuery.data?.hasMore ?? false}
+                isFetching={documentsQuery.isFetching}
+                isInitialLoading={documentsQuery.isLoading}
+                isSavingDocument={updateDocumentMutation.isPending}
+                editorTheme={editorTheme}
+                onCellEdit={applyCellEdit}
+                onCellFilter={applyCellFilter}
+                onCellProjection={applyCellProjection}
+                onDocumentBookmark={createDocumentBookmark}
+                onDocumentOpen={setEditorDocument}
+                onDocumentSelect={setSelectedDocument}
+                onRefresh={() => void documentsQuery.refetch()}
+                onTablePathChange={handleTablePathChange}
+                schemaFields={schemaFields}
+                selectedDocumentId={selectedDocument?.id ?? null}
+                tablePath={tablePath}
+                viewMode={documentViewMode}
+                onViewModeChange={setDocumentViewMode}
+              />
+              <WorkspaceFooter
+                canGoNext={documentsQuery.data?.hasMore ?? false}
+                canGoPrevious={queryState.skip > 0}
+                executionTimeMs={documentsQuery.data?.executionTimeMs}
+                hasMore={documentsQuery.data?.hasMore ?? false}
+                healthLabel={healthLabel}
+                limit={queryState.limit}
+                onFirstPage={() => goToPage(1)}
+                onNextPage={() =>
+                  goToPage(Math.floor(queryState.skip / queryState.limit) + 2)
+                }
+                onPageChange={goToPage}
+                onPageSizeChange={updatePageSize}
+                onPreviousPage={() =>
+                  goToPage(
+                    Math.max(Math.floor(queryState.skip / queryState.limit), 1),
+                  )
+                }
+                resultCount={displayedDocuments.length}
+                skip={queryState.skip}
+              />
             </>
           ) : null}
           {editorDocument ? (
@@ -4574,6 +4664,245 @@ const QueryFieldAutocompleteInput = ({
         </div>
       ) : null}
     </span>
+  );
+};
+
+type ManualQueryWorkspaceProps = {
+  isFetching: boolean;
+  queryInputError: string | null;
+  schemaFields: SchemaFieldSummary[];
+  value: string;
+  onChange: (value: string) => void;
+  onRunQuery: () => void;
+};
+
+const ManualQueryWorkspace = ({
+  isFetching,
+  queryInputError,
+  schemaFields,
+  value,
+  onChange,
+  onRunQuery,
+}: ManualQueryWorkspaceProps) => (
+  <section className="manual-query-workspace">
+    <div className="manual-query-editor-shell">
+      <ManualQueryEditor
+        fields={schemaFields}
+        value={value}
+        onChange={onChange}
+        onRunQuery={onRunQuery}
+      />
+      <div className="manual-query-actions">
+        <button
+          className="run-button compact"
+          disabled={isFetching}
+          onClick={onRunQuery}
+          type="button"
+        >
+          <span className="play-icon" />
+          Run query
+        </button>
+      </div>
+    </div>
+    <p className="manual-query-hint">
+      Write read-only MongoDB find syntax, for example{" "}
+      <code>find({`{status:"active"}`}).sort({`{createdAt:-1}`}).limit(50)</code>
+      .
+    </p>
+    {queryInputError ? <p className="query-error">{queryInputError}</p> : null}
+  </section>
+);
+
+type ManualQuerySuggestion = {
+  detail: string;
+  insert: string;
+  kind: "field" | "function";
+  label: string;
+  replaceEnd: number;
+  replaceStart: number;
+  selectionOffset: number;
+};
+
+type ManualFunctionSuggestion = {
+  detail: string;
+  insert: string;
+  label: string;
+  selectionOffset: number;
+};
+
+const manualQueryFunctionSuggestions: ManualFunctionSuggestion[] = [
+  {
+    detail: "function",
+    insert: "find({})",
+    label: "find",
+    selectionOffset: "find({".length,
+  },
+  {
+    detail: "function",
+    insert: ".sort({})",
+    label: "sort",
+    selectionOffset: ".sort({".length,
+  },
+  {
+    detail: "function",
+    insert: ".project({})",
+    label: "project",
+    selectionOffset: ".project({".length,
+  },
+  {
+    detail: "function",
+    insert: ".skip(0)",
+    label: "skip",
+    selectionOffset: ".skip(".length,
+  },
+  {
+    detail: "function",
+    insert: ".limit(50)",
+    label: "limit",
+    selectionOffset: ".limit(".length,
+  },
+];
+
+const ManualQueryEditor = ({
+  fields,
+  value,
+  onChange,
+  onRunQuery,
+}: {
+  fields: SchemaFieldSummary[];
+  value: string;
+  onChange: (value: string) => void;
+  onRunQuery: () => void;
+}) => {
+  const editorRef = useRef<HTMLTextAreaElement | null>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [caretIndex, setCaretIndex] = useState(value.length);
+  const [isFocused, setIsFocused] = useState(false);
+  const suggestions = useMemo(
+    () => getManualQuerySuggestions(fields, value, caretIndex),
+    [caretIndex, fields, value],
+  );
+  const shouldShowSuggestions = isFocused && suggestions.length > 0;
+
+  const syncCaret = () => {
+    const editor = editorRef.current;
+
+    if (!editor) {
+      return;
+    }
+
+    setCaretIndex(editor.selectionStart ?? value.length);
+  };
+
+  const applySuggestion = (suggestion: ManualQuerySuggestion) => {
+    const nextValue = `${value.slice(0, suggestion.replaceStart)}${
+      suggestion.insert
+    }${value.slice(suggestion.replaceEnd)}`;
+    const nextCaret = suggestion.replaceStart + suggestion.selectionOffset;
+
+    onChange(nextValue);
+    setIsFocused(false);
+    window.requestAnimationFrame(() => {
+      const editor = editorRef.current;
+
+      if (!editor) {
+        return;
+      }
+
+      editor.focus();
+      editor.setSelectionRange(nextCaret, nextCaret);
+      setCaretIndex(nextCaret);
+    });
+  };
+
+  return (
+    <div className="manual-query-editor">
+      <textarea
+        aria-label="Manual MongoDB query"
+        autoComplete="off"
+        ref={editorRef}
+        spellCheck={false}
+        value={value}
+        onBlur={() => window.setTimeout(() => setIsFocused(false), 140)}
+        onChange={(event) => {
+          onChange(event.target.value);
+          setIsFocused(true);
+          setActiveIndex(0);
+          setCaretIndex(
+            event.target.selectionStart ?? event.target.value.length,
+          );
+        }}
+        onClick={syncCaret}
+        onFocus={() => {
+          setIsFocused(true);
+          syncCaret();
+        }}
+        onKeyDown={(event) => {
+          if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+            event.preventDefault();
+            onRunQuery();
+            return;
+          }
+
+          if (event.key === "Enter" && !event.shiftKey && !shouldShowSuggestions) {
+            event.preventDefault();
+            onRunQuery();
+            return;
+          }
+
+          if (!shouldShowSuggestions) {
+            return;
+          }
+
+          if (event.key === "ArrowDown") {
+            event.preventDefault();
+            setActiveIndex((currentIndex) =>
+              Math.min(currentIndex + 1, suggestions.length - 1),
+            );
+            return;
+          }
+
+          if (event.key === "ArrowUp") {
+            event.preventDefault();
+            setActiveIndex((currentIndex) => Math.max(currentIndex - 1, 0));
+            return;
+          }
+
+          if (event.key === "Enter" || event.key === "Tab") {
+            event.preventDefault();
+            const activeSuggestion =
+              suggestions[Math.min(activeIndex, suggestions.length - 1)];
+
+            if (activeSuggestion) {
+              applySuggestion(activeSuggestion);
+            }
+          }
+        }}
+        onSelect={syncCaret}
+      />
+      {shouldShowSuggestions ? (
+        <div className="query-autocomplete-menu manual-query-menu" role="listbox">
+          {suggestions.map((suggestion, index) => (
+            <button
+              className={index === activeIndex ? "is-active" : ""}
+              key={`${suggestion.kind}:${suggestion.label}:${suggestion.insert}`}
+              onMouseDown={(event) => {
+                event.preventDefault();
+                applySuggestion(suggestion);
+              }}
+              role="option"
+              type="button"
+            >
+              <span className="field-kind-icon">
+                {suggestion.kind === "function" ? "ƒ" : "f"}
+              </span>
+              <span>{suggestion.label}</span>
+              <small>{suggestion.detail}</small>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 };
 
@@ -8252,6 +8581,278 @@ const parseDocumentQueryInputs = ({
   };
 };
 
+const buildManualFindQueryInput = (state: DocumentQueryState): string => {
+  const parts = [`find(${JSON.stringify(state.filter)}`];
+
+  if (Object.keys(state.projection).length > 0) {
+    parts.push(`, ${JSON.stringify(state.projection)}`);
+  }
+
+  parts.push(")");
+
+  if (Object.keys(state.sort).length > 0) {
+    parts.push(`.sort(${JSON.stringify(state.sort)})`);
+  }
+
+  if (state.skip > 0) {
+    parts.push(`.skip(${state.skip})`);
+  }
+
+  parts.push(`.limit(${state.limit})`);
+
+  return parts.join("");
+};
+
+const parseManualFindQueryInput = ({
+  defaultLimit,
+  value,
+}: {
+  defaultLimit: number;
+  value: string;
+}):
+  | { ok: true; value: DocumentQueryState }
+  | { message: string; ok: false } => {
+  const normalizedValue = value
+    .trim()
+    .replace(/;\s*$/g, "")
+    .replace(/^db\.[A-Za-z_$][\w$.-]*\./, "");
+
+  if (!normalizedValue) {
+    return { message: "Query cannot be empty.", ok: false };
+  }
+
+  if (normalizedValue.startsWith("{")) {
+    const filter = parseJsonObject(normalizedValue, "Filter");
+
+    if (!filter.ok) {
+      return filter;
+    }
+
+    return {
+      ok: true,
+      value: {
+        ...defaultQueryState,
+        filter: filter.value,
+        limit: defaultLimit,
+      },
+    };
+  }
+
+  const findArgs = getManualQueryCallArguments(normalizedValue, "find");
+
+  if (!findArgs) {
+    return {
+      message: "Manual query must start with find(...) or a filter object.",
+      ok: false,
+    };
+  }
+
+  const [filterInput = "{}", projectionInput] = splitTopLevelArguments(findArgs);
+  const filter = parseJsonObject(filterInput || "{}", "Filter");
+
+  if (!filter.ok) {
+    return filter;
+  }
+
+  const projection =
+    projectionInput && projectionInput.trim()
+      ? parseJsonObject(projectionInput, "Projection")
+      : ({ ok: true, value: {} } as const);
+
+  if (!projection.ok) {
+    return projection;
+  }
+
+  const projectArgs =
+    getManualQueryCallArguments(normalizedValue, "project") ??
+    getManualQueryCallArguments(normalizedValue, "projection");
+  const finalProjection = projectArgs
+    ? parseJsonObject(projectArgs, "Projection")
+    : projection;
+
+  if (!finalProjection.ok) {
+    return finalProjection;
+  }
+
+  const sortArgs = getManualQueryCallArguments(normalizedValue, "sort");
+  const sort = sortArgs
+    ? parseSortInput(sortArgs)
+    : ({ ok: true, value: {} } as const);
+
+  if (!sort.ok) {
+    return sort;
+  }
+
+  const skip = parseManualNumericCall(normalizedValue, "skip", 0);
+
+  if (!skip.ok) {
+    return skip;
+  }
+
+  const limit = parseManualNumericCall(
+    normalizedValue,
+    "limit",
+    defaultLimit,
+  );
+
+  if (!limit.ok) {
+    return limit;
+  }
+
+  if (!Number.isInteger(limit.value) || limit.value < 1 || limit.value > 500) {
+    return {
+      message: "Limit must be an integer between 1 and 500.",
+      ok: false,
+    };
+  }
+
+  if (!Number.isInteger(skip.value) || skip.value < 0) {
+    return { message: "Skip must be a non-negative integer.", ok: false };
+  }
+
+  return {
+    ok: true,
+    value: {
+      filter: filter.value,
+      limit: limit.value,
+      projection: finalProjection.value,
+      skip: skip.value,
+      sort: sort.value,
+    },
+  };
+};
+
+const getManualQueryCallArguments = (
+  value: string,
+  callName: string,
+): string | null => {
+  const callPattern = new RegExp(`(?:^|\\.)${callName}\\s*\\(`, "g");
+  const match = callPattern.exec(value);
+
+  if (!match) {
+    return null;
+  }
+
+  const openIndex = callPattern.lastIndex - 1;
+  const closeIndex = findMatchingParen(value, openIndex);
+
+  if (closeIndex === -1) {
+    return null;
+  }
+
+  return value.slice(openIndex + 1, closeIndex);
+};
+
+const findMatchingParen = (value: string, openIndex: number): number => {
+  let depth = 0;
+  let quote: "'" | '"' | "`" | null = null;
+  let isEscaped = false;
+
+  for (let index = openIndex; index < value.length; index += 1) {
+    const char = value[index];
+
+    if (quote) {
+      if (isEscaped) {
+        isEscaped = false;
+      } else if (char === "\\") {
+        isEscaped = true;
+      } else if (char === quote) {
+        quote = null;
+      }
+
+      continue;
+    }
+
+    if (char === '"' || char === "'" || char === "`") {
+      quote = char;
+      continue;
+    }
+
+    if (char === "(") {
+      depth += 1;
+      continue;
+    }
+
+    if (char === ")") {
+      depth -= 1;
+
+      if (depth === 0) {
+        return index;
+      }
+    }
+  }
+
+  return -1;
+};
+
+const splitTopLevelArguments = (value: string): string[] => {
+  const args: string[] = [];
+  let depth = 0;
+  let quote: "'" | '"' | "`" | null = null;
+  let isEscaped = false;
+  let start = 0;
+
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index];
+
+    if (quote) {
+      if (isEscaped) {
+        isEscaped = false;
+      } else if (char === "\\") {
+        isEscaped = true;
+      } else if (char === quote) {
+        quote = null;
+      }
+
+      continue;
+    }
+
+    if (char === '"' || char === "'" || char === "`") {
+      quote = char;
+      continue;
+    }
+
+    if (char === "{" || char === "[" || char === "(") {
+      depth += 1;
+      continue;
+    }
+
+    if (char === "}" || char === "]" || char === ")") {
+      depth = Math.max(depth - 1, 0);
+      continue;
+    }
+
+    if (char === "," && depth === 0) {
+      args.push(value.slice(start, index).trim());
+      start = index + 1;
+    }
+  }
+
+  args.push(value.slice(start).trim());
+
+  return args.filter((arg) => arg.length > 0);
+};
+
+const parseManualNumericCall = (
+  value: string,
+  callName: string,
+  fallbackValue: number,
+): { ok: true; value: number } | { message: string; ok: false } => {
+  const args = getManualQueryCallArguments(value, callName);
+
+  if (!args) {
+    return { ok: true, value: fallbackValue };
+  }
+
+  const numericValue = Number(args.trim());
+
+  if (!Number.isFinite(numericValue)) {
+    return { message: `${callName} must be a number.`, ok: false };
+  }
+
+  return { ok: true, value: numericValue };
+};
+
 const aggregationStageOptions: AggregationPipelineStageType[] = [
   "match",
   "project",
@@ -8429,6 +9030,72 @@ const getQueryFieldSuggestions = (
   return [...suggestions.values()].sort((left, right) =>
     left.label.localeCompare(right.label),
   );
+};
+
+const getManualQuerySuggestions = (
+  fields: SchemaFieldSummary[],
+  value: string,
+  caretIndex: number,
+): ManualQuerySuggestion[] => {
+  const fieldContext = getQueryFieldSuggestionContext(value, caretIndex);
+
+  if (fieldContext) {
+    return getQueryFieldSuggestions(fields, fieldContext.fragment).map(
+      (suggestion) => {
+        const afterSuggestion = value.slice(
+          fieldContext.start + fieldContext.fragment.length,
+        );
+        const insertedKey = getFormattedQueryFieldKey(
+          fieldContext,
+          suggestion.path,
+        );
+        const valueSuffix = getQueryFieldSuggestionValueSuffix(
+          afterSuggestion,
+          "filter",
+          suggestion.type,
+        );
+
+        return {
+          detail: suggestion.type,
+          insert: `${insertedKey}${valueSuffix}`,
+          kind: "field" as const,
+          label: suggestion.label,
+          replaceEnd: fieldContext.start + fieldContext.fragment.length,
+          replaceStart: fieldContext.start,
+          selectionOffset: insertedKey.length + valueSuffix.length,
+        };
+      },
+    );
+  }
+
+  const prefix = value.slice(0, caretIndex);
+  const functionMatch = /(?:^|[.\s])([A-Za-z]*)$/.exec(prefix);
+
+  if (!functionMatch) {
+    return [];
+  }
+
+  const fragment = functionMatch[1] ?? "";
+  const replaceStart = prefix.length - fragment.length;
+  const normalizedFragment = fragment.toLowerCase();
+
+  if (normalizedFragment.length === 0 && !/[.\s]$/.test(prefix)) {
+    return [];
+  }
+
+  return manualQueryFunctionSuggestions
+    .filter((suggestion) =>
+      suggestion.label.toLowerCase().startsWith(normalizedFragment),
+    )
+    .map((suggestion) => ({
+      detail: suggestion.detail,
+      insert: suggestion.insert,
+      kind: "function" as const,
+      label: suggestion.label,
+      replaceEnd: caretIndex,
+      replaceStart,
+      selectionOffset: suggestion.selectionOffset,
+    }));
 };
 
 const insertQueryFieldSuggestion = ({

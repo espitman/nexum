@@ -2746,6 +2746,60 @@ button {
   width: auto;
 }
 
+.manual-query-workspace {
+  border-bottom: 1px solid #dfe5ed;
+  display: grid;
+  gap: 10px;
+  padding: 18px;
+}
+
+.manual-query-editor-shell {
+  border: 1px solid #dce3eb;
+  border-radius: 7px;
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+}
+
+.manual-query-editor {
+  position: relative;
+}
+
+.manual-query-editor textarea {
+  background: #ffffff;
+  border: 0;
+  color: #283241;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 13px;
+  line-height: 1.55;
+  min-height: 92px;
+  outline: 0;
+  resize: none;
+  width: 100%;
+}
+
+.manual-query-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.manual-query-hint {
+  color: #657186;
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.manual-query-hint code {
+  color: #006f7b;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-weight: 700;
+}
+
+.manual-query-menu {
+  max-width: min(560px, calc(100vw - 80px));
+}
+
 .options-button {
   align-items: center;
   color: #3f4856;
@@ -7113,6 +7167,8 @@ input:disabled {
 .app-shell.appearance-dark .query-section,
 .app-shell.appearance-dark .query-controls,
 .app-shell.appearance-dark .query-line,
+.app-shell.appearance-dark .manual-query-workspace,
+.app-shell.appearance-dark .manual-query-editor-shell,
 .app-shell.appearance-dark .results-header {
   background: #101820;
   border-color: #2b3948;
@@ -7128,8 +7184,18 @@ input:disabled {
 
 .app-shell.appearance-dark .query-line code,
 .app-shell.appearance-dark .query-line input,
-.app-shell.appearance-dark .query-controls input {
+.app-shell.appearance-dark .query-controls input,
+.app-shell.appearance-dark .manual-query-editor textarea {
+  background: #101820;
   color: #e8eef6;
+}
+
+.app-shell.appearance-dark .manual-query-hint {
+  color: #9fb0c3;
+}
+
+.app-shell.appearance-dark .manual-query-hint code {
+  color: #55c7d4;
 }
 
 .app-shell.appearance-dark .query-autocomplete-action {
@@ -7253,6 +7319,8 @@ input:disabled {
   .app-shell.appearance-system .query-section,
   .app-shell.appearance-system .query-controls,
   .app-shell.appearance-system .query-line,
+  .app-shell.appearance-system .manual-query-workspace,
+  .app-shell.appearance-system .manual-query-editor-shell,
   .app-shell.appearance-system .results-header {
     background: #101820;
     border-color: #2b3948;
@@ -7268,8 +7336,18 @@ input:disabled {
 
   .app-shell.appearance-system .query-line code,
   .app-shell.appearance-system .query-line input,
-  .app-shell.appearance-system .query-controls input {
+  .app-shell.appearance-system .query-controls input,
+  .app-shell.appearance-system .manual-query-editor textarea {
+    background: #101820;
     color: #e8eef6;
+  }
+
+  .app-shell.appearance-system .manual-query-hint {
+    color: #9fb0c3;
+  }
+
+  .app-shell.appearance-system .manual-query-hint code {
+    color: #55c7d4;
   }
 
   .app-shell.appearance-system .query-autocomplete-action {
