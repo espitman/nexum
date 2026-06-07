@@ -7,6 +7,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   type RefObject,
+  type ReactNode,
 } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import "../monacoEnvironment";
@@ -65,6 +66,7 @@ import {
 } from "../queryBuilderModel";
 import type {
   ConnectionProfile,
+  AppSettings,
   IndexSummary,
   SavedWorkspaceBookmark,
   SavedWorkspaceQuery,
@@ -86,6 +88,7 @@ type DocumentWorkspaceProps = {
   indexesError: string | null;
   isIndexesLoading: boolean;
   isConnectionsLoading: boolean;
+  settings: AppSettings;
   selectedConnectionId: string | null;
   selectedCollectionName: string | null;
   onConnectionError: (title: string, message: string) => void;
@@ -96,6 +99,7 @@ type DocumentWorkspaceProps = {
   onCollectionOpen: () => void;
   onSectionChange: (section: NavItemLabel) => void;
   onSchemaChange: (schemaFields: SchemaFieldSummary[]) => void;
+  onSettingsChange: (settings: AppSettings) => void;
   onWorkspaceTabChange: (tab: WorkspaceTabLabel) => void;
 };
 
@@ -132,6 +136,24 @@ const defaultQueryState: DocumentQueryState = {
   sort: {},
 };
 
+const defaultAppSettings: AppSettings = {
+  appearance: "light",
+  density: "comfortable",
+  localData: {
+    keepAuditLogDays: 30,
+    metadataCache: "persistent",
+  },
+  query: {
+    defaultPageSize: 50,
+    maxSampleSize: 100,
+    timeoutMs: 15_000,
+  },
+  safety: {
+    confirmProductionWrites: true,
+    defaultReadOnly: true,
+  },
+};
+
 const savedQueriesStorageKey = "nexum.savedQueries.v1";
 const queryHistoryStorageKey = "nexum.queryHistory.v1";
 const savedBookmarksStorageKey = "nexum.bookmarks.v1";
@@ -163,6 +185,7 @@ export const DocumentWorkspace = ({
   indexesError,
   isIndexesLoading,
   isConnectionsLoading,
+  settings,
   selectedConnectionId,
   selectedCollectionName,
   onConnectionError,
@@ -173,6 +196,7 @@ export const DocumentWorkspace = ({
   onCollectionOpen,
   onSectionChange,
   onSchemaChange,
+  onSettingsChange,
   onWorkspaceTabChange,
 }: DocumentWorkspaceProps) => {
   const selectedConnection =
@@ -185,10 +209,14 @@ export const DocumentWorkspace = ({
   const [documentViewMode, setDocumentViewMode] =
     useState<DocumentViewMode>("table");
   const [filterInput, setFilterInput] = useState("{}");
-  const [limitInput, setLimitInput] = useState("50");
+  const [limitInput, setLimitInput] = useState(
+    `${settings.query.defaultPageSize}`,
+  );
   const [projectionInput, setProjectionInput] = useState("{}");
-  const [queryState, setQueryState] =
-    useState<DocumentQueryState>(defaultQueryState);
+  const [queryState, setQueryState] = useState<DocumentQueryState>(() => ({
+    ...defaultQueryState,
+    limit: settings.query.defaultPageSize,
+  }));
   const [queryBuilderModel, setQueryBuilderModel] =
     useState<QueryBuilderGroupNode>(() => createDefaultQueryBuilderModel());
   const [savedQueries, setSavedQueries] = useState<SavedWorkspaceQuery[]>(() =>
@@ -243,6 +271,19 @@ export const DocumentWorkspace = ({
     isQueryBuilderOpen;
   const isConnectionManager =
     activeSection === "Connections" && selectedCollectionName === null;
+  const updateSettings = (nextSettings: AppSettings) => {
+    if (queryState.limit === settings.query.defaultPageSize) {
+      setLimitInput(`${nextSettings.query.defaultPageSize}`);
+      setQueryState((currentState) => ({
+        ...currentState,
+        limit: nextSettings.query.defaultPageSize,
+        skip: 0,
+      }));
+      setSkipInput("0");
+    }
+
+    onSettingsChange(nextSettings);
+  };
   const documentsQuery = useQuery({
     enabled:
       isCollectionWorkspace &&
@@ -254,6 +295,7 @@ export const DocumentWorkspace = ({
       selectedCollectionPath?.database,
       selectedCollectionPath?.collection,
       queryState,
+      settings.query.timeoutMs,
     ],
     queryFn: async () => {
       if (!window.nexum) {
@@ -264,16 +306,19 @@ export const DocumentWorkspace = ({
         throw new Error("No collection selected");
       }
 
-      return window.nexum.mongodb.findDocuments({
-        collection: selectedCollectionPath.collection,
-        connectionId: selectedConnectionId,
-        database: selectedCollectionPath.database,
-        filter: queryState.filter,
-        limit: queryState.limit,
-        projection: queryState.projection,
-        skip: queryState.skip,
-        sort: queryState.sort,
-      });
+      return withQueryTimeout(
+        window.nexum.mongodb.findDocuments({
+          collection: selectedCollectionPath.collection,
+          connectionId: selectedConnectionId,
+          database: selectedCollectionPath.database,
+          filter: queryState.filter,
+          limit: queryState.limit,
+          projection: queryState.projection,
+          skip: queryState.skip,
+          sort: queryState.sort,
+        }),
+        settings.query.timeoutMs,
+      );
     },
   });
   const schemaDocumentsQuery = useQuery({
@@ -286,6 +331,8 @@ export const DocumentWorkspace = ({
       selectedConnectionId,
       selectedCollectionPath?.database,
       selectedCollectionPath?.collection,
+      settings.query.maxSampleSize,
+      settings.query.timeoutMs,
     ],
     queryFn: async () => {
       if (!window.nexum) {
@@ -296,16 +343,19 @@ export const DocumentWorkspace = ({
         throw new Error("No collection selected");
       }
 
-      return window.nexum.mongodb.findDocuments({
-        collection: selectedCollectionPath.collection,
-        connectionId: selectedConnectionId,
-        database: selectedCollectionPath.database,
-        filter: {},
-        limit: 100,
-        projection: {},
-        skip: 0,
-        sort: {},
-      });
+      return withQueryTimeout(
+        window.nexum.mongodb.findDocuments({
+          collection: selectedCollectionPath.collection,
+          connectionId: selectedConnectionId,
+          database: selectedCollectionPath.database,
+          filter: {},
+          limit: settings.query.maxSampleSize,
+          projection: {},
+          skip: 0,
+          sort: {},
+        }),
+        settings.query.timeoutMs,
+      );
     },
   });
   const parsedDocuments = useMemo(
@@ -331,8 +381,9 @@ export const DocumentWorkspace = ({
         schemaParsedDocuments.length > 0
           ? schemaParsedDocuments
           : parsedDocuments,
+        settings.query.maxSampleSize,
       ),
-    [parsedDocuments, schemaParsedDocuments],
+    [parsedDocuments, schemaParsedDocuments, settings.query.maxSampleSize],
   );
   const queryBuilderFields = useMemo(
     () =>
@@ -341,8 +392,9 @@ export const DocumentWorkspace = ({
           ? schemaParsedDocuments
           : parsedDocuments
         ).map((document) => document.rootValue),
+        { sampleSize: settings.query.maxSampleSize },
       ),
-    [parsedDocuments, schemaParsedDocuments],
+    [parsedDocuments, schemaParsedDocuments, settings.query.maxSampleSize],
   );
   const queryBuilderFilter = useMemo(
     () => buildMongoFilterFromQueryBuilder(queryBuilderModel),
@@ -674,18 +726,22 @@ export const DocumentWorkspace = ({
           }
 
           if (task.type === "schema-inference") {
-            const result = await window.nexum.mongodb.findDocuments({
-              collection: query.collection,
-              connectionId: query.connectionId,
-              database: query.database,
-              filter: {},
-              limit: 100,
-              projection: {},
-              skip: 0,
-              sort: {},
-            });
+            const result = await withQueryTimeout(
+              window.nexum.mongodb.findDocuments({
+                collection: query.collection,
+                connectionId: query.connectionId,
+                database: query.database,
+                filter: {},
+                limit: settings.query.maxSampleSize,
+                projection: {},
+                skip: 0,
+                sort: {},
+              }),
+              settings.query.timeoutMs,
+            );
             const fields = inferDocumentSchema(
               parseEjsonDocuments(result.documents),
+              settings.query.maxSampleSize,
             );
 
             executionTimeMs = result.executionTimeMs;
@@ -698,23 +754,29 @@ export const DocumentWorkspace = ({
           } else {
             const result =
               query.kind === "aggregation"
-                ? await window.nexum.mongodb.aggregate({
-                    collection: query.collection,
-                    connectionId: query.connectionId,
-                    database: query.database,
-                    limit: query.limit,
-                    pipeline: query.pipeline ?? [],
-                  })
-                : await window.nexum.mongodb.findDocuments({
-                    collection: query.collection,
-                    connectionId: query.connectionId,
-                    database: query.database,
-                    filter: query.filter,
-                    limit: query.limit,
-                    projection: query.projection,
-                    skip: query.skip,
-                    sort: query.sort,
-                  });
+                ? await withQueryTimeout(
+                    window.nexum.mongodb.aggregate({
+                      collection: query.collection,
+                      connectionId: query.connectionId,
+                      database: query.database,
+                      limit: query.limit,
+                      pipeline: query.pipeline ?? [],
+                    }),
+                    settings.query.timeoutMs,
+                  )
+                : await withQueryTimeout(
+                    window.nexum.mongodb.findDocuments({
+                      collection: query.collection,
+                      connectionId: query.connectionId,
+                      database: query.database,
+                      filter: query.filter,
+                      limit: query.limit,
+                      projection: query.projection,
+                      skip: query.skip,
+                      sort: query.sort,
+                    }),
+                    settings.query.timeoutMs,
+                  );
 
             executionTimeMs = result.executionTimeMs;
             resultCount = result.documents.length;
@@ -817,7 +879,7 @@ export const DocumentWorkspace = ({
         cancelRequestedTaskIdsRef.current.delete(task.id);
       }
     },
-    [setTasks, tasks],
+    [setTasks, settings.query.maxSampleSize, settings.query.timeoutMs, tasks],
   );
 
   const createTaskFromQuery = (
@@ -1420,9 +1482,14 @@ export const DocumentWorkspace = ({
         />
       ) : null}
 
+      {activeSection === "Settings" ? (
+        <SettingsWorkspace settings={settings} onSettingsChange={updateSettings} />
+      ) : null}
+
       {activeSection === "Queries" ||
       activeSection === "Bookmarks" ||
-      activeSection === "Tasks" ? null : (
+      activeSection === "Tasks" ||
+      activeSection === "Settings" ? null : (
         <>
       {isConnectionManager ? null : (
         <CollectionTabBar
@@ -1497,14 +1564,16 @@ export const DocumentWorkspace = ({
                     pipeline,
                     status: "running",
                   });
-                  void window.nexum.mongodb
-                    .aggregate({
+                  void withQueryTimeout(
+                    window.nexum.mongodb.aggregate({
                       collection: selectedCollectionPath.collection,
                       connectionId: selectedConnectionId,
                       database: selectedCollectionPath.database,
                       limit: 50,
                       pipeline,
-                    })
+                    }),
+                    settings.query.timeoutMs,
+                  )
                     .then((result) => {
                       recordAggregationRun(pipeline, result);
                       setAggregationRunResult({
@@ -2528,10 +2597,7 @@ const TasksWorkspace = ({
                   <dt>Next run</dt>
                   <dd>
                     {selectedTask.nextRunAt
-                      ? formatTaskNextRun(
-                          selectedTask.nextRunAt,
-                          scheduleCountdownNow,
-                        )
+                      ? formatAbsoluteTime(selectedTask.nextRunAt)
                       : "Not scheduled"}
                   </dd>
                 </div>
@@ -3380,6 +3446,358 @@ const BookmarkDetail = ({
     </>
   );
 };
+
+type SettingsWorkspaceProps = {
+  settings: AppSettings;
+  onSettingsChange: (settings: AppSettings) => void;
+};
+
+const SettingsWorkspace = ({
+  settings,
+  onSettingsChange,
+}: SettingsWorkspaceProps) => {
+  const [activeGroup, setActiveGroup] = useState<
+    "about" | "appearance" | "local" | "query" | "safety"
+  >("appearance");
+  const updateSettings = (updates: Partial<AppSettings>) => {
+    onSettingsChange({
+      ...settings,
+      ...updates,
+    });
+  };
+  const updateQuerySettings = (updates: Partial<AppSettings["query"]>) => {
+    updateSettings({
+      query: {
+        ...settings.query,
+        ...updates,
+      },
+    });
+  };
+  const updateSafetySettings = (updates: Partial<AppSettings["safety"]>) => {
+    updateSettings({
+      safety: {
+        ...settings.safety,
+        ...updates,
+      },
+    });
+  };
+  const updateLocalDataSettings = (
+    updates: Partial<AppSettings["localData"]>,
+  ) => {
+    updateSettings({
+      localData: {
+        ...settings.localData,
+        ...updates,
+      },
+    });
+  };
+  const groupItems = [
+    ["appearance", "Appearance", "Theme and workspace density"],
+    ["query", "Query defaults", "Page size, timeout, and samples"],
+    ["safety", "Safety", "Production and read-only defaults"],
+    ["local", "Local data", "Audit logs and cached metadata"],
+    ["about", "About", "Version and diagnostics"],
+  ] as const;
+
+  return (
+    <section className="settings-workspace">
+      <header className="settings-header">
+        <div>
+          <h1>Settings</h1>
+          <p>Local preferences for this Nexum installation.</p>
+        </div>
+        <button type="button" onClick={() => onSettingsChange(defaultAppSettings)}>
+          Reset defaults
+        </button>
+      </header>
+      <div className="settings-layout">
+        <nav className="settings-nav" aria-label="Settings sections">
+          {groupItems.map(([id, label, description]) => (
+            <button
+              key={id}
+              className={activeGroup === id ? "is-active" : ""}
+              type="button"
+              onClick={() => setActiveGroup(id)}
+            >
+              <strong>{label}</strong>
+              <span>{description}</span>
+            </button>
+          ))}
+        </nav>
+        <div className="settings-panel">
+          {activeGroup === "appearance" ? (
+            <SettingsCard
+              description="Tune the shell for long editing and exploration sessions."
+              title="Appearance"
+            >
+              <SegmentedSetting
+                label="Theme"
+                options={[
+                  ["light", "Light"],
+                  ["dark", "Dark"],
+                  ["system", "System"],
+                ]}
+                value={settings.appearance}
+                onChange={(appearance) => updateSettings({ appearance })}
+              />
+              <SegmentedSetting
+                label="Density"
+                options={[
+                  ["comfortable", "Comfortable"],
+                  ["compact", "Compact"],
+                ]}
+                value={settings.density}
+                onChange={(density) => updateSettings({ density })}
+              />
+            </SettingsCard>
+          ) : null}
+
+          {activeGroup === "query" ? (
+            <SettingsCard
+              description="Defaults used for new document queries, schema inference, and task runs."
+              title="Query defaults"
+            >
+              <NumberSetting
+                description="Used when opening a collection or resetting query defaults."
+                label="Default page size"
+                max={500}
+                min={1}
+                value={settings.query.defaultPageSize}
+                onChange={(defaultPageSize) =>
+                  updateQuerySettings({ defaultPageSize })
+                }
+              />
+              <NumberSetting
+                description="Renderer-side guard for slow find and aggregate calls."
+                label="Query timeout"
+                max={120_000}
+                min={1_000}
+                step={1_000}
+                suffix="ms"
+                value={settings.query.timeoutMs}
+                onChange={(timeoutMs) => updateQuerySettings({ timeoutMs })}
+              />
+              <NumberSetting
+                description="Caps schema and field autosuggest inference samples."
+                label="Max sample size"
+                max={1_000}
+                min={10}
+                value={settings.query.maxSampleSize}
+                onChange={(maxSampleSize) =>
+                  updateQuerySettings({ maxSampleSize })
+                }
+              />
+            </SettingsCard>
+          ) : null}
+
+          {activeGroup === "safety" ? (
+            <SettingsCard
+              description="Defaults that reduce risk before explicit user overrides."
+              title="Safety defaults"
+            >
+              <ToggleSetting
+                checked={settings.safety.defaultReadOnly}
+                description="New local profiles start with write operations blocked."
+                label="Default new profiles to read-only"
+                onChange={(defaultReadOnly) =>
+                  updateSafetySettings({ defaultReadOnly })
+                }
+              />
+              <ToggleSetting
+                checked={settings.safety.confirmProductionWrites}
+                description="Keep a final confirmation gate before writes on production profiles."
+                label="Confirm production writes"
+                onChange={(confirmProductionWrites) =>
+                  updateSafetySettings({ confirmProductionWrites })
+                }
+              />
+            </SettingsCard>
+          ) : null}
+
+          {activeGroup === "local" ? (
+            <SettingsCard
+              description="Controls local-only metadata. Secrets stay in the system credential store."
+              title="Local data"
+            >
+              <NumberSetting
+                description="Task and audit-style records older than this can be cleaned locally."
+                label="Keep audit logs"
+                max={365}
+                min={1}
+                suffix="days"
+                value={settings.localData.keepAuditLogDays}
+                onChange={(keepAuditLogDays) =>
+                  updateLocalDataSettings({ keepAuditLogDays })
+                }
+              />
+              <SegmentedSetting
+                label="Metadata cache"
+                options={[
+                  ["persistent", "Persistent"],
+                  ["session", "Session"],
+                ]}
+                value={settings.localData.metadataCache}
+                onChange={(metadataCache) =>
+                  updateLocalDataSettings({ metadataCache })
+                }
+              />
+            </SettingsCard>
+          ) : null}
+
+          {activeGroup === "about" ? (
+            <SettingsCard
+              description="Diagnostics that are useful when reporting local issues."
+              title="About Nexum"
+            >
+              <div className="settings-diagnostics">
+                <div>
+                  <span>Version</span>
+                  <strong>v0.8.0</strong>
+                </div>
+                <div>
+                  <span>Runtime</span>
+                  <strong>Electron desktop</strong>
+                </div>
+                <div>
+                  <span>Storage</span>
+                  <strong>LocalStorage + OS credential store</strong>
+                </div>
+                <div>
+                  <span>Settings key</span>
+                  <strong>nexum.settings.v1</strong>
+                </div>
+              </div>
+            </SettingsCard>
+          ) : null}
+        </div>
+      </div>
+    </section>
+  );
+};
+
+type SettingsCardProps = {
+  children: ReactNode;
+  description: string;
+  title: string;
+};
+
+const SettingsCard = ({ children, description, title }: SettingsCardProps) => (
+  <section className="settings-card">
+    <header>
+      <h2>{title}</h2>
+      <p>{description}</p>
+    </header>
+    <div className="settings-card-body">{children}</div>
+  </section>
+);
+
+type SegmentedSettingProps<T extends string> = {
+  label: string;
+  options: readonly (readonly [T, string])[];
+  value: T;
+  onChange: (value: T) => void;
+};
+
+const SegmentedSetting = <T extends string>({
+  label,
+  options,
+  value,
+  onChange,
+}: SegmentedSettingProps<T>) => (
+  <div className="settings-row">
+    <div>
+      <strong>{label}</strong>
+    </div>
+    <div className="settings-segmented">
+      {options.map(([optionValue, optionLabel]) => (
+        <button
+          key={optionValue}
+          className={value === optionValue ? "is-active" : ""}
+          type="button"
+          onClick={() => onChange(optionValue)}
+        >
+          {optionLabel}
+        </button>
+      ))}
+    </div>
+  </div>
+);
+
+type ToggleSettingProps = {
+  checked: boolean;
+  description: string;
+  label: string;
+  onChange: (checked: boolean) => void;
+};
+
+const ToggleSetting = ({
+  checked,
+  description,
+  label,
+  onChange,
+}: ToggleSettingProps) => (
+  <label className="settings-row settings-toggle-row">
+    <div>
+      <strong>{label}</strong>
+      <span>{description}</span>
+    </div>
+    <input
+      aria-label={label}
+      checked={checked}
+      type="checkbox"
+      onChange={(event) => onChange(event.target.checked)}
+    />
+  </label>
+);
+
+type NumberSettingProps = {
+  description: string;
+  label: string;
+  max: number;
+  min: number;
+  step?: number;
+  suffix?: string;
+  value: number;
+  onChange: (value: number) => void;
+};
+
+const NumberSetting = ({
+  description,
+  label,
+  max,
+  min,
+  step = 1,
+  suffix,
+  value,
+  onChange,
+}: NumberSettingProps) => (
+  <label className="settings-row settings-number-row">
+    <div>
+      <strong>{label}</strong>
+      <span>{description}</span>
+    </div>
+    <span className="settings-number-control">
+      <input
+        inputMode="numeric"
+        max={max}
+        min={min}
+        step={step}
+        type="number"
+        value={value}
+        onChange={(event) => {
+          const nextValue = Number.parseInt(event.target.value, 10);
+
+          if (!Number.isFinite(nextValue)) {
+            return;
+          }
+
+          onChange(Math.min(Math.max(nextValue, min), max));
+        }}
+      />
+      {suffix ? <span>{suffix}</span> : null}
+    </span>
+  </label>
+);
 
 type QuerySectionProps = {
   filterInput: string;
@@ -5948,6 +6366,26 @@ const getSafeWorkspaceErrorMessage = (error: Error): string => {
   return error.message || "Something went wrong. Try again.";
 };
 
+const withQueryTimeout = async <T,>(
+  promise: Promise<T>,
+  timeoutMs: number,
+): Promise<T> => {
+  let timeoutId: number | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = window.setTimeout(() => {
+      reject(new Error(`Query timed out after ${timeoutMs} ms.`));
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutId !== undefined) {
+      window.clearTimeout(timeoutId);
+    }
+  }
+};
+
 const readStoredQueries = (storageKey: string): SavedWorkspaceQuery[] => {
   try {
     const rawValue = globalThis.localStorage?.getItem(storageKey);
@@ -7625,10 +8063,11 @@ type SchemaAccumulator = {
 
 const inferDocumentSchema = (
   documents: ParsedDocument[],
+  sampleSize = defaultAppSettings.query.maxSampleSize,
 ): SchemaFieldSummary[] => {
   const fields = new Map<string, SchemaAccumulator>();
 
-  documents.forEach((document, index) => {
+  documents.slice(0, sampleSize).forEach((document, index) => {
     const seenPaths = new Set<string>();
     collectSchemaFields(document.rootValue, "", fields, seenPaths);
 

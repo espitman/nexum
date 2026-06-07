@@ -19,6 +19,24 @@ export type CoreUiState = {
   isReadOnly: boolean;
 };
 
+export type AppSettings = {
+  appearance: "system" | "light" | "dark";
+  density: "comfortable" | "compact";
+  localData: {
+    keepAuditLogDays: number;
+    metadataCache: "session" | "persistent";
+  };
+  query: {
+    defaultPageSize: number;
+    maxSampleSize: number;
+    timeoutMs: number;
+  };
+  safety: {
+    confirmProductionWrites: boolean;
+    defaultReadOnly: boolean;
+  };
+};
+
 export type ToastMessage = {
   id: string;
   tone: "error";

@@ -18,10 +18,13 @@ import type {
   CoreUiState,
   EnvironmentName,
   HealthState,
+  AppSettings,
   IndexSummary,
   SchemaFieldSummary,
   ToastMessage,
 } from "./types";
+
+const appSettingsStorageKey = "nexum.settings.v1";
 
 export const App = () => {
   const queryClient = useQueryClient();
@@ -43,6 +46,9 @@ export const App = () => {
   const [selectedConnectionId, setSelectedConnectionId] = useState<
     string | null
   >(null);
+  const [settings, setSettings] = useState<AppSettings>(() =>
+    readStoredAppSettings(),
+  );
   const [columnWidths, setColumnWidths] = useState({
     database: 320,
   });
@@ -167,6 +173,8 @@ export const App = () => {
   const shellClassName = [
     "app-shell",
     shouldShowDatabasePanel ? "" : "is-database-hidden",
+    `density-${settings.density}`,
+    `appearance-${settings.appearance}`,
   ]
     .filter(Boolean)
     .join(" ");
@@ -284,6 +292,7 @@ export const App = () => {
             ? indexesQuery.error.message
             : null
         }
+        settings={settings}
         selectedConnectionId={selectedConnectionId}
         selectedCollectionName={selectedCollectionName}
         isIndexesLoading={indexesQuery.isLoading}
@@ -318,6 +327,10 @@ export const App = () => {
         }}
         onSectionChange={handleSectionChange}
         onSchemaChange={setSchemaFields}
+        onSettingsChange={(nextSettings) => {
+          setSettings(nextSettings);
+          writeStoredAppSettings(nextSettings);
+        }}
         onWorkspaceTabChange={setActiveWorkspaceTab}
       />
 
@@ -389,3 +402,122 @@ const mapConnectionStatus = (
 const mapEnvironment = (
   environment: ConnectionSummary["environment"],
 ): EnvironmentName => (environment === "development" ? "dev" : environment);
+
+const defaultAppSettings: AppSettings = {
+  appearance: "light",
+  density: "comfortable",
+  localData: {
+    keepAuditLogDays: 30,
+    metadataCache: "persistent",
+  },
+  query: {
+    defaultPageSize: 50,
+    maxSampleSize: 100,
+    timeoutMs: 15_000,
+  },
+  safety: {
+    confirmProductionWrites: true,
+    defaultReadOnly: true,
+  },
+};
+
+const readStoredAppSettings = (): AppSettings => {
+  try {
+    const rawValue = window.localStorage.getItem(appSettingsStorageKey);
+
+    if (!rawValue) {
+      return defaultAppSettings;
+    }
+
+    return normalizeAppSettings(JSON.parse(rawValue));
+  } catch {
+    return defaultAppSettings;
+  }
+};
+
+const writeStoredAppSettings = (settings: AppSettings) => {
+  try {
+    window.localStorage.setItem(appSettingsStorageKey, JSON.stringify(settings));
+  } catch {
+    // Local settings are best-effort and should never prevent the app shell.
+  }
+};
+
+const normalizeAppSettings = (value: unknown): AppSettings => {
+  const settings = value as Partial<AppSettings>;
+  const appearance =
+    settings.appearance === "system" ||
+    settings.appearance === "light" ||
+    settings.appearance === "dark"
+      ? settings.appearance
+      : defaultAppSettings.appearance;
+  const density =
+    settings.density === "comfortable" || settings.density === "compact"
+      ? settings.density
+      : defaultAppSettings.density;
+  const query = settings.query ?? ({} as Partial<AppSettings["query"]>);
+  const safety = settings.safety ?? ({} as Partial<AppSettings["safety"]>);
+  const localData =
+    settings.localData ?? ({} as Partial<AppSettings["localData"]>);
+
+  return {
+    appearance,
+    density,
+    localData: {
+      keepAuditLogDays: clampSettingNumber(
+        localData.keepAuditLogDays,
+        1,
+        365,
+        defaultAppSettings.localData.keepAuditLogDays,
+      ),
+      metadataCache:
+        localData.metadataCache === "session" ||
+        localData.metadataCache === "persistent"
+          ? localData.metadataCache
+          : defaultAppSettings.localData.metadataCache,
+    },
+    query: {
+      defaultPageSize: clampSettingNumber(
+        query.defaultPageSize,
+        1,
+        500,
+        defaultAppSettings.query.defaultPageSize,
+      ),
+      maxSampleSize: clampSettingNumber(
+        query.maxSampleSize,
+        10,
+        1_000,
+        defaultAppSettings.query.maxSampleSize,
+      ),
+      timeoutMs: clampSettingNumber(
+        query.timeoutMs,
+        1_000,
+        120_000,
+        defaultAppSettings.query.timeoutMs,
+      ),
+    },
+    safety: {
+      confirmProductionWrites:
+        typeof safety.confirmProductionWrites === "boolean"
+          ? safety.confirmProductionWrites
+          : defaultAppSettings.safety.confirmProductionWrites,
+      defaultReadOnly:
+        typeof safety.defaultReadOnly === "boolean"
+          ? safety.defaultReadOnly
+          : defaultAppSettings.safety.defaultReadOnly,
+    },
+  };
+};
+
+const clampSettingNumber = (
+  value: unknown,
+  min: number,
+  max: number,
+  fallback: number,
+): number => {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return fallback;
+  }
+
+  return clamp(Math.round(value), min, max);
+};

@@ -339,12 +339,12 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
   - [x] Show status, duration, target, and error details
   - [x] Add cancel/retry actions where safe
   - [x] Keep task history local and free of secrets
-- [ ] Build Settings workspace
-  - [ ] Add appearance and density settings
-  - [ ] Add default page size, query timeout, and max sample size settings
-  - [ ] Add safety defaults for production and read-only behavior
-  - [ ] Add local data management for audit logs and cached metadata
-  - [ ] Add about/version and diagnostics information
+- [x] Build Settings workspace
+  - [x] Add appearance and density settings
+  - [x] Add default page size, query timeout, and max sample size settings
+  - [x] Add safety defaults for production and read-only behavior
+  - [x] Add local data management for audit logs and cached metadata
+  - [x] Add about/version and diagnostics information
 - [ ] Verify sidebar workspaces
   - [ ] Each sidebar item opens its workspace
   - [ ] Active sidebar state persists during navigation
