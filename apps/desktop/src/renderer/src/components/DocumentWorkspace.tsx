@@ -141,7 +141,6 @@ const defaultAppSettings: AppSettings = {
   density: "comfortable",
   localData: {
     keepAuditLogDays: 30,
-    metadataCache: "persistent",
   },
   query: {
     defaultPageSize: 50,
@@ -684,7 +683,8 @@ export const DocumentWorkspace = ({
         let message: string;
 
         if (task.type === "audit-cleanup") {
-          const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+          const retentionDays = settings.localData.keepAuditLogDays;
+          const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
           const removedRuns = tasks.reduce(
             (total, currentTask) =>
               total +
@@ -719,7 +719,9 @@ export const DocumentWorkspace = ({
               ? "No local task run records needed cleanup."
               : `Cleaned ${removedRuns} local task run record${
                   removedRuns === 1 ? "" : "s"
-                } older than 30 days.`;
+                } older than ${retentionDays} day${
+                  retentionDays === 1 ? "" : "s"
+                }.`;
         } else {
           if (!window.nexum) {
             throw new Error("Preload API is unavailable");
@@ -879,7 +881,13 @@ export const DocumentWorkspace = ({
         cancelRequestedTaskIdsRef.current.delete(task.id);
       }
     },
-    [setTasks, settings.query.maxSampleSize, settings.query.timeoutMs, tasks],
+    [
+      setTasks,
+      settings.localData.keepAuditLogDays,
+      settings.query.maxSampleSize,
+      settings.query.timeoutMs,
+      tasks,
+    ],
   );
 
   const createTaskFromQuery = (
@@ -1691,6 +1699,9 @@ export const DocumentWorkspace = ({
               isProduction={selectedConnection?.environment === "production"}
               isReadOnly={selectedConnection?.readOnly ?? true}
               isSaving={updateDocumentMutation.isPending}
+              requireProductionConfirmation={
+                settings.safety.confirmProductionWrites
+              }
               onClose={() => setEditorDocument(null)}
               onSave={(editedDocument, confirmedProductionWrite) =>
                 updateDocumentMutation.mutate({
@@ -3495,7 +3506,7 @@ const SettingsWorkspace = ({
     ["appearance", "gear", "Appearance", "Theme and workspace density"],
     ["query", "query", "Query defaults", "Page size, timeout, and samples"],
     ["safety", "check", "Safety", "Production and read-only defaults"],
-    ["local", "database", "Local data", "Audit logs and cached metadata"],
+    ["local", "database", "Local data", "Audit log retention"],
     ["about", "explain", "About", "Version and diagnostics"],
   ] as const;
 
@@ -3619,7 +3630,7 @@ const SettingsWorkspace = ({
 
           {activeGroup === "local" ? (
             <SettingsCard
-              description="Controls local-only metadata. Secrets stay in the system credential store."
+              description="Controls local-only task run cleanup. Secrets stay in the system credential store."
               title="Local data"
             >
               <NumberSetting
@@ -3631,17 +3642,6 @@ const SettingsWorkspace = ({
                 value={settings.localData.keepAuditLogDays}
                 onChange={(keepAuditLogDays) =>
                   updateLocalDataSettings({ keepAuditLogDays })
-                }
-              />
-              <SegmentedSetting
-                label="Metadata cache"
-                options={[
-                  ["persistent", "Persistent"],
-                  ["session", "Session"],
-                ]}
-                value={settings.localData.metadataCache}
-                onChange={(metadataCache) =>
-                  updateLocalDataSettings({ metadataCache })
                 }
               />
             </SettingsCard>
@@ -6165,6 +6165,7 @@ type DocumentEditorPanelProps = {
   isProduction: boolean;
   isReadOnly: boolean;
   isSaving: boolean;
+  requireProductionConfirmation: boolean;
   onClose: () => void;
   onSave: (editedDocument: string, confirmedProductionWrite: boolean) => void;
 };
@@ -6174,6 +6175,7 @@ const DocumentEditorPanel = ({
   isProduction,
   isReadOnly,
   isSaving,
+  requireProductionConfirmation,
   onClose,
   onSave,
 }: DocumentEditorPanelProps) => {
@@ -6189,6 +6191,7 @@ const DocumentEditorPanel = ({
   );
   const isDirty = editorValue !== initialValue;
   const canSave = !isReadOnly && !isSaving && isDirty && validation.ok;
+  const shouldConfirmSave = isProduction && requireProductionConfirmation;
 
   return (
     <aside
@@ -6216,7 +6219,7 @@ const DocumentEditorPanel = ({
             This connection is read-only. Saving is disabled.
           </div>
         ) : null}
-        {isProduction ? (
+        {shouldConfirmSave ? (
           <div className="document-editor-notice is-warning">
             Production write. Saving requires confirmation.
           </div>
@@ -6305,7 +6308,14 @@ const DocumentEditorPanel = ({
             <button
               className="run-button compact"
               disabled={!canSave}
-              onClick={() => setIsConfirmingSave(true)}
+              onClick={() => {
+                if (shouldConfirmSave) {
+                  setIsConfirmingSave(true);
+                  return;
+                }
+
+                onSave(editorValue, isProduction);
+              }}
               type="button"
             >
               <span className="play-icon" />

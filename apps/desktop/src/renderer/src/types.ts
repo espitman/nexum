@@ -24,7 +24,6 @@ export type AppSettings = {
   density: "comfortable" | "compact";
   localData: {
     keepAuditLogDays: number;
-    metadataCache: "session" | "persistent";
   };
   query: {
     defaultPageSize: number;

@@ -408,7 +408,6 @@ const defaultAppSettings: AppSettings = {
   density: "comfortable",
   localData: {
     keepAuditLogDays: 30,
-    metadataCache: "persistent",
   },
   query: {
     defaultPageSize: 50,
@@ -470,11 +469,6 @@ const normalizeAppSettings = (value: unknown): AppSettings => {
         365,
         defaultAppSettings.localData.keepAuditLogDays,
       ),
-      metadataCache:
-        localData.metadataCache === "session" ||
-        localData.metadataCache === "persistent"
-          ? localData.metadataCache
-          : defaultAppSettings.localData.metadataCache,
     },
     query: {
       defaultPageSize: clampSettingNumber(

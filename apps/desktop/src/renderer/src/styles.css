@@ -2024,9 +2024,11 @@ button {
 
 .settings-number-control {
   align-items: center;
-  display: flex;
+  display: grid;
   gap: 8px;
+  grid-template-columns: 120px 32px;
   justify-self: end;
+  justify-items: start;
 }
 
 .settings-number-control input {
