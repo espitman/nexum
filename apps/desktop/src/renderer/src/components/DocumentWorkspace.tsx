@@ -98,7 +98,11 @@ type DocumentWorkspaceProps = {
   onSelectedConnectionChange: (connectionId: string | null) => void;
   onSelectedCollectionChange: (collectionName: string | null) => void;
   onCollectionClose: (collectionName: string) => void;
+  onCollectionCloseAll: () => void;
+  onCollectionCloseOthers: (collectionName: string) => void;
+  onCollectionCloseSide: (collectionName: string, side: "left" | "right") => void;
   onCollectionOpen: () => void;
+  onCollectionSwitch: (collectionName: string, direction: 1 | -1) => void;
   onSectionChange: (section: NavItemLabel) => void;
   onSchemaChange: (schemaFields: SchemaFieldSummary[]) => void;
   onSettingsChange: (settings: AppSettings) => void;
@@ -195,7 +199,11 @@ export const DocumentWorkspace = ({
   onSelectedConnectionChange,
   onSelectedCollectionChange,
   onCollectionClose,
+  onCollectionCloseAll,
+  onCollectionCloseOthers,
+  onCollectionCloseSide,
   onCollectionOpen,
+  onCollectionSwitch,
   onSectionChange,
   onSchemaChange,
   onSettingsChange,
@@ -1530,7 +1538,11 @@ export const DocumentWorkspace = ({
           openCollectionNames={openCollectionNames}
           selectedCollectionName={selectedCollectionName}
           onCollectionClose={onCollectionClose}
+          onCollectionCloseAll={onCollectionCloseAll}
+          onCollectionCloseOthers={onCollectionCloseOthers}
+          onCollectionCloseSide={onCollectionCloseSide}
           onCollectionSelect={onSelectedCollectionChange}
+          onCollectionSwitch={onCollectionSwitch}
         />
       )}
 
@@ -1778,7 +1790,17 @@ type CollectionTabBarProps = {
   openCollectionNames: string[];
   selectedCollectionName: string | null;
   onCollectionClose: (collectionName: string) => void;
+  onCollectionCloseAll: () => void;
+  onCollectionCloseOthers: (collectionName: string) => void;
+  onCollectionCloseSide: (collectionName: string, side: "left" | "right") => void;
   onCollectionSelect: (collectionName: string) => void;
+  onCollectionSwitch: (collectionName: string, direction: 1 | -1) => void;
+};
+
+type CollectionTabContextMenu = {
+  collectionName: string;
+  left: number;
+  top: number;
 };
 
 const CollectionTabBar = ({
@@ -1786,12 +1808,57 @@ const CollectionTabBar = ({
   openCollectionNames,
   selectedCollectionName,
   onCollectionClose,
+  onCollectionCloseAll,
+  onCollectionCloseOthers,
+  onCollectionCloseSide,
   onCollectionSelect,
+  onCollectionSwitch,
 }: CollectionTabBarProps) => {
   const visibleCollectionNames =
     selectedCollectionName && !openCollectionNames.includes(selectedCollectionName)
       ? [...openCollectionNames, selectedCollectionName]
       : openCollectionNames;
+  const [contextMenu, setContextMenu] =
+    useState<CollectionTabContextMenu | null>(null);
+  const closeContextMenu = () => setContextMenu(null);
+  const openContextMenu = (
+    collectionName: string,
+    event: ReactMouseEvent<HTMLElement>,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    onCollectionSelect(collectionName);
+    setContextMenu({
+      collectionName,
+      ...getCollectionTabContextMenuPosition(event.clientX, event.clientY),
+    });
+  };
+
+  useEffect(() => {
+    if (!contextMenu) {
+      return undefined;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeContextMenu();
+      }
+    };
+
+    window.addEventListener("click", closeContextMenu);
+    window.addEventListener("contextmenu", closeContextMenu);
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("resize", closeContextMenu);
+    window.addEventListener("scroll", closeContextMenu, true);
+
+    return () => {
+      window.removeEventListener("click", closeContextMenu);
+      window.removeEventListener("contextmenu", closeContextMenu);
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("resize", closeContextMenu);
+      window.removeEventListener("scroll", closeContextMenu, true);
+    };
+  }, [contextMenu]);
 
   return (
     <div className="collection-tabbar">
@@ -1804,6 +1871,7 @@ const CollectionTabBar = ({
               <div
                 className={`collection-tab ${isActive ? "is-active" : ""}`}
                 key={collectionName}
+                onContextMenu={(event) => openContextMenu(collectionName, event)}
               >
                 <button
                   className="collection-tab-target"
@@ -1825,9 +1893,130 @@ const CollectionTabBar = ({
             );
           })
         : null}
+      {contextMenu ? (
+        <div
+          className="collection-tab-context-menu"
+          onClick={(event) => event.stopPropagation()}
+          onContextMenu={(event) => event.preventDefault()}
+          style={{
+            left: `${contextMenu.left}px`,
+            top: `${contextMenu.top}px`,
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              onCollectionClose(contextMenu.collectionName);
+              closeContextMenu();
+            }}
+          >
+            Close Tab
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              onCollectionCloseAll();
+              closeContextMenu();
+            }}
+          >
+            Close All Tabs
+          </button>
+          <button
+            type="button"
+            disabled={visibleCollectionNames.length < 2}
+            onClick={() => {
+              onCollectionCloseOthers(contextMenu.collectionName);
+              closeContextMenu();
+            }}
+          >
+            Close Other Tabs
+          </button>
+          <span className="collection-tab-context-separator" />
+          <button
+            type="button"
+            disabled={visibleCollectionNames[0] === contextMenu.collectionName}
+            onClick={() => {
+              onCollectionCloseSide(contextMenu.collectionName, "left");
+              closeContextMenu();
+            }}
+          >
+            Close Tabs to the Left
+          </button>
+          <button
+            type="button"
+            disabled={
+              visibleCollectionNames.at(-1) === contextMenu.collectionName
+            }
+            onClick={() => {
+              onCollectionCloseSide(contextMenu.collectionName, "right");
+              closeContextMenu();
+            }}
+          >
+            Close Tabs to the Right
+          </button>
+          <span className="collection-tab-context-separator" />
+          <button
+            type="button"
+            disabled={visibleCollectionNames.length < 2}
+            onClick={() => {
+              onCollectionSwitch(contextMenu.collectionName, 1);
+              closeContextMenu();
+            }}
+          >
+            Switch to Next Tab
+          </button>
+          <button
+            type="button"
+            disabled={visibleCollectionNames.length < 2}
+            onClick={() => {
+              onCollectionSwitch(contextMenu.collectionName, -1);
+              closeContextMenu();
+            }}
+          >
+            Switch to Previous Tab
+          </button>
+          <span className="collection-tab-context-separator" />
+          {visibleCollectionNames.map((collectionName) => (
+            <button
+              className="collection-tab-context-target"
+              key={collectionName}
+              type="button"
+              onClick={() => {
+                onCollectionSelect(collectionName);
+                closeContextMenu();
+              }}
+            >
+              <span>
+                {collectionName === selectedCollectionName ? "✓" : ""}
+              </span>
+              {collectionName}
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 };
+
+const collectionTabContextMenuWidth = 310;
+const collectionTabContextMenuEstimatedHeight = 360;
+
+const getCollectionTabContextMenuPosition = (
+  clientX: number,
+  clientY: number,
+): { left: number; top: number } => ({
+  left: Math.max(
+    10,
+    Math.min(clientX, window.innerWidth - collectionTabContextMenuWidth - 10),
+  ),
+  top: Math.max(
+    10,
+    Math.min(
+      clientY,
+      window.innerHeight - collectionTabContextMenuEstimatedHeight - 10,
+    ),
+  ),
+});
 
 type WorkspaceTabsProps = {
   activeWorkspaceTab: WorkspaceTabLabel;

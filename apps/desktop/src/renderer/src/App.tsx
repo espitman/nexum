@@ -235,6 +235,57 @@ export const App = () => {
       return nextNames;
     });
   };
+  const closeAllCollectionTabs = () => {
+    setOpenCollectionNames([]);
+    setSelectedCollectionName(null);
+    setSchemaFields([]);
+  };
+  const closeOtherCollectionTabs = (collectionName: string) => {
+    setOpenCollectionNames([collectionName]);
+    setSelectedCollectionName(collectionName);
+    setSchemaFields([]);
+  };
+  const closeCollectionTabsToSide = (
+    collectionName: string,
+    side: "left" | "right",
+  ) => {
+    setOpenCollectionNames((currentNames) => {
+      const targetIndex = currentNames.indexOf(collectionName);
+
+      if (targetIndex === -1) {
+        return currentNames;
+      }
+
+      const nextNames =
+        side === "left"
+          ? currentNames.slice(targetIndex)
+          : currentNames.slice(0, targetIndex + 1);
+
+      if (
+        selectedCollectionName &&
+        !nextNames.includes(selectedCollectionName)
+      ) {
+        setSelectedCollectionName(collectionName);
+        setSchemaFields([]);
+      }
+
+      return nextNames;
+    });
+  };
+  const switchCollectionTab = (collectionName: string, direction: 1 | -1) => {
+    const targetIndex = openCollectionNames.indexOf(collectionName);
+
+    if (targetIndex === -1 || openCollectionNames.length === 0) {
+      return;
+    }
+
+    const nextIndex =
+      (targetIndex + direction + openCollectionNames.length) %
+      openCollectionNames.length;
+
+    setSelectedCollectionName(openCollectionNames[nextIndex] ?? null);
+    setSchemaFields([]);
+  };
   const startColumnResize = (
     column: "database",
     event: PointerEvent<HTMLButtonElement>,
@@ -346,13 +397,17 @@ export const App = () => {
           }
           setSchemaFields([]);
         }}
+        onCollectionCloseAll={closeAllCollectionTabs}
         onCollectionClose={closeCollectionTab}
+        onCollectionCloseOthers={closeOtherCollectionTabs}
+        onCollectionCloseSide={closeCollectionTabsToSide}
         onCollectionOpen={() => {
           if (shouldShowDatabasePanel) {
             setSelectedCollectionName("users");
             setSchemaFields([]);
           }
         }}
+        onCollectionSwitch={switchCollectionTab}
         onSectionChange={handleSectionChange}
         onSchemaChange={setSchemaFields}
         onSettingsChange={(nextSettings) => {

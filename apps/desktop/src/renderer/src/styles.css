@@ -719,6 +719,53 @@ button {
   white-space: nowrap;
 }
 
+.collection-tab-context-menu {
+  background: #121416;
+  border: 1px solid #3a3f46;
+  border-radius: 10px;
+  box-shadow: 0 18px 44px rgb(15 23 42 / 28%);
+  display: grid;
+  min-width: 260px;
+  padding: 6px;
+  position: fixed;
+  z-index: 240;
+}
+
+.collection-tab-context-menu button {
+  align-items: center;
+  border-radius: 6px;
+  color: #e5e7eb;
+  display: flex;
+  font-size: 13px;
+  font-weight: 700;
+  gap: 8px;
+  justify-content: flex-start;
+  min-width: 0;
+  padding: 9px 12px;
+  text-align: left;
+}
+
+.collection-tab-context-menu button:hover:not(:disabled) {
+  background: #0b70d7;
+  color: #ffffff;
+}
+
+.collection-tab-context-menu button:disabled {
+  color: #6b7280;
+  cursor: default;
+}
+
+.collection-tab-context-separator {
+  background: #2f343b;
+  height: 1px;
+  margin: 6px 0;
+}
+
+.collection-tab-context-target span {
+  color: #e5e7eb;
+  flex: 0 0 16px;
+}
+
 .collection-tab.is-active::after {
   background: #00717d;
   bottom: -1px;
