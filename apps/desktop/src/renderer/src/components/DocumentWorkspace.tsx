@@ -9,6 +9,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type RefObject,
   type ReactNode,
+  type SetStateAction,
 } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import "../monacoEnvironment";
@@ -80,29 +81,37 @@ import { IndexList, SchemaTree } from "./InspectorPanel";
 
 loader.config({ monaco });
 
+type OpenCollectionTab = {
+  collectionName: string;
+  id: string;
+};
+
 type DocumentWorkspaceProps = {
   activeSection: NavItemLabel;
   activeWorkspaceTab: WorkspaceTabLabel;
+  activeCollectionTabId: string | null;
   connections: ConnectionProfile[];
   healthLabel: string;
   indexRows: IndexSummary[];
   indexesError: string | null;
   isIndexesLoading: boolean;
   isConnectionsLoading: boolean;
-  openCollectionNames: string[];
+  openCollectionTabs: OpenCollectionTab[];
   settings: AppSettings;
   selectedConnectionId: string | null;
   selectedCollectionName: string | null;
   onConnectionError: (title: string, message: string) => void;
   onConnectionsChanged: () => Promise<void>;
   onSelectedConnectionChange: (connectionId: string | null) => void;
-  onSelectedCollectionChange: (collectionName: string | null) => void;
-  onCollectionClose: (collectionName: string) => void;
+  onSelectedCollectionChange: (collectionName: string | null) => string | null;
+  onCollectionClone: (tabId: string) => string | null;
+  onCollectionClose: (tabId: string) => void;
   onCollectionCloseAll: () => void;
-  onCollectionCloseOthers: (collectionName: string) => void;
-  onCollectionCloseSide: (collectionName: string, side: "left" | "right") => void;
+  onCollectionCloseOthers: (tabId: string) => void;
+  onCollectionCloseSide: (tabId: string, side: "left" | "right") => void;
   onCollectionOpen: () => void;
-  onCollectionSwitch: (collectionName: string, direction: 1 | -1) => void;
+  onCollectionSelectTab: (tabId: string) => void;
+  onCollectionSwitch: (tabId: string, direction: 1 | -1) => void;
   onSectionChange: (section: NavItemLabel) => void;
   onSchemaChange: (schemaFields: SchemaFieldSummary[]) => void;
   onSettingsChange: (settings: AppSettings) => void;
@@ -134,12 +143,42 @@ type AggregationRunResult = {
   status: "error" | "ready" | "running";
 };
 
+type CollectionTabState = {
+  aggregationPipelineModel: AggregationPipelineModel;
+  aggregationRunResult: AggregationRunResult | null;
+  documentViewMode: DocumentViewMode;
+  editorDocument: ParsedDocument | null;
+  filterInput: string;
+  isQueryBuilderOpen: boolean;
+  limitInput: string;
+  pendingInlineDocuments: Map<string, ParsedDocument>;
+  projectionInput: string;
+  queryBuilderModel: QueryBuilderGroupNode;
+  queryInputError: string | null;
+  queryState: DocumentQueryState;
+  selectedDocument: ParsedDocument | null;
+  skipInput: string;
+  sortInput: string;
+  tableDrillState: {
+    collectionName: string | null;
+    path: string[];
+  };
+};
+
 const defaultQueryState: DocumentQueryState = {
   filter: {},
   limit: 50,
   projection: {},
   skip: 0,
   sort: {},
+};
+
+const cloneStructuredValue = <Value,>(value: Value): Value => {
+  if (typeof globalThis.structuredClone === "function") {
+    return globalThis.structuredClone(value);
+  }
+
+  return JSON.parse(JSON.stringify(value)) as Value;
 };
 
 const defaultAppSettings: AppSettings = {
@@ -184,18 +223,20 @@ type AddBookmarkEventDetail = {
 export const DocumentWorkspace = ({
   activeSection,
   activeWorkspaceTab,
+  activeCollectionTabId,
   connections,
   healthLabel,
   indexRows,
   indexesError,
   isIndexesLoading,
   isConnectionsLoading,
-  openCollectionNames,
+  openCollectionTabs,
   settings,
   selectedConnectionId,
   selectedCollectionName,
   onConnectionError,
   onConnectionsChanged,
+  onCollectionClone,
   onSelectedConnectionChange,
   onSelectedCollectionChange,
   onCollectionClose,
@@ -203,6 +244,7 @@ export const DocumentWorkspace = ({
   onCollectionCloseOthers,
   onCollectionCloseSide,
   onCollectionOpen,
+  onCollectionSelectTab,
   onCollectionSwitch,
   onSectionChange,
   onSchemaChange,
@@ -216,19 +258,36 @@ export const DocumentWorkspace = ({
     () => parseCollectionPath(selectedCollectionName),
     [selectedCollectionName],
   );
-  const [documentViewMode, setDocumentViewMode] =
-    useState<DocumentViewMode>("table");
-  const [filterInput, setFilterInput] = useState("{}");
-  const [limitInput, setLimitInput] = useState(
-    `${settings.query.defaultPageSize}`,
+  const createInitialCollectionTabState = useCallback(
+    (): CollectionTabState => ({
+      aggregationPipelineModel: addAggregationPipelineStage(
+        createDefaultAggregationPipelineModel(),
+        createAggregationPipelineStage("match", { id: "match_stage" }),
+      ),
+      aggregationRunResult: null,
+      documentViewMode: "table",
+      editorDocument: null,
+      filterInput: "{}",
+      isQueryBuilderOpen: false,
+      limitInput: `${settings.query.defaultPageSize}`,
+      pendingInlineDocuments: new Map(),
+      projectionInput: "{}",
+      queryBuilderModel: createDefaultQueryBuilderModel(),
+      queryInputError: null,
+      queryState: {
+        ...defaultQueryState,
+        limit: settings.query.defaultPageSize,
+      },
+      selectedDocument: null,
+      skipInput: "0",
+      sortInput: "{}",
+      tableDrillState: { collectionName: null, path: [] },
+    }),
+    [settings.query.defaultPageSize],
   );
-  const [projectionInput, setProjectionInput] = useState("{}");
-  const [queryState, setQueryState] = useState<DocumentQueryState>(() => ({
-    ...defaultQueryState,
-    limit: settings.query.defaultPageSize,
-  }));
-  const [queryBuilderModel, setQueryBuilderModel] =
-    useState<QueryBuilderGroupNode>(() => createDefaultQueryBuilderModel());
+  const [collectionTabStates, setCollectionTabStates] = useState<
+    Record<string, CollectionTabState>
+  >({});
   const [savedQueries, setSavedQueries] = useState<SavedWorkspaceQuery[]>(() =>
     readStoredQueries(savedQueriesStorageKey),
   );
@@ -241,34 +300,9 @@ export const DocumentWorkspace = ({
   const [tasks, setTasks] = useState<SavedWorkspaceTask[]>(() =>
     readStoredTasks(savedTasksStorageKey),
   );
-  const [aggregationPipelineModel, setAggregationPipelineModel] =
-    useState<AggregationPipelineModel>(() =>
-      addAggregationPipelineStage(
-        createDefaultAggregationPipelineModel(),
-        createAggregationPipelineStage("match", { id: "match_stage" }),
-      ),
-    );
-  const [aggregationRunResult, setAggregationRunResult] =
-    useState<AggregationRunResult | null>(null);
-  const [skipInput, setSkipInput] = useState("0");
-  const [sortInput, setSortInput] = useState("{}");
-  const [queryInputError, setQueryInputError] = useState<string | null>(null);
-  const [isQueryBuilderOpen, setIsQueryBuilderOpen] = useState(false);
-  const [selectedDocument, setSelectedDocument] =
-    useState<ParsedDocument | null>(null);
   const lastRecordedHistoryIdRef = useRef<string | null>(null);
-  const [editorDocument, setEditorDocument] = useState<ParsedDocument | null>(
-    null,
-  );
   const runningTaskIdsRef = useRef<Set<string>>(new Set());
   const cancelRequestedTaskIdsRef = useRef<Set<string>>(new Set());
-  const [pendingInlineDocuments, setPendingInlineDocuments] = useState<
-    Map<string, ParsedDocument>
-  >(() => new Map());
-  const [tableDrillState, setTableDrillState] = useState<{
-    collectionName: string | null;
-    path: string[];
-  }>({ collectionName: null, path: [] });
   const [isSystemDark, setIsSystemDark] = useState(() =>
     globalThis.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false,
   );
@@ -296,13 +330,155 @@ export const DocumentWorkspace = ({
   const isMetadataWorkspace =
     activeWorkspaceTab === "Schema" || activeWorkspaceTab === "Indexes";
   const isAggregationWorkspace = activeWorkspaceTab === "Aggregation Pipeline";
+  const isConnectionManager =
+    activeSection === "Connections" && selectedCollectionName === null;
+  const activeTabState =
+    activeCollectionTabId !== null
+      ? (collectionTabStates[activeCollectionTabId] ??
+        createInitialCollectionTabState())
+      : createInitialCollectionTabState();
+  const {
+    aggregationPipelineModel,
+    aggregationRunResult,
+    documentViewMode,
+    editorDocument,
+    filterInput,
+    isQueryBuilderOpen,
+    limitInput,
+    pendingInlineDocuments,
+    projectionInput,
+    queryBuilderModel,
+    queryInputError,
+    queryState,
+    selectedDocument,
+    skipInput,
+    sortInput,
+    tableDrillState,
+  } = activeTabState;
   const shouldShowQueryBuilderPanel =
     isCollectionWorkspace &&
     !isMetadataWorkspace &&
     !isAggregationWorkspace &&
     isQueryBuilderOpen;
-  const isConnectionManager =
-    activeSection === "Connections" && selectedCollectionName === null;
+  const updateActiveCollectionTabState = (
+    updater: (currentState: CollectionTabState) => CollectionTabState,
+  ) => {
+    if (!activeCollectionTabId) {
+      return;
+    }
+
+    setCollectionTabStates((currentStates) => {
+      const currentState =
+        currentStates[activeCollectionTabId] ?? createInitialCollectionTabState();
+
+      return {
+        ...currentStates,
+        [activeCollectionTabId]: updater(currentState),
+      };
+    });
+  };
+  const setCollectionTabField = <Key extends keyof CollectionTabState>(
+    key: Key,
+    value: SetStateAction<CollectionTabState[Key]>,
+  ) => {
+    updateActiveCollectionTabState((currentState) => ({
+      ...currentState,
+      [key]:
+        typeof value === "function"
+          ? (value as (currentValue: CollectionTabState[Key]) => CollectionTabState[Key])(
+              currentState[key],
+            )
+          : value,
+    }));
+  };
+  const setDocumentViewMode = (value: SetStateAction<DocumentViewMode>) =>
+    setCollectionTabField("documentViewMode", value);
+  const setFilterInput = (value: SetStateAction<string>) =>
+    setCollectionTabField("filterInput", value);
+  const setLimitInput = (value: SetStateAction<string>) =>
+    setCollectionTabField("limitInput", value);
+  const setProjectionInput = (value: SetStateAction<string>) =>
+    setCollectionTabField("projectionInput", value);
+  const setQueryState = (value: SetStateAction<DocumentQueryState>) =>
+    setCollectionTabField("queryState", value);
+  const setQueryBuilderModel = (value: SetStateAction<QueryBuilderGroupNode>) =>
+    setCollectionTabField("queryBuilderModel", value);
+  const setAggregationPipelineModel = (
+    value: SetStateAction<AggregationPipelineModel>,
+  ) => setCollectionTabField("aggregationPipelineModel", value);
+  const setAggregationRunResult = (
+    value: SetStateAction<AggregationRunResult | null>,
+  ) => setCollectionTabField("aggregationRunResult", value);
+  const setSkipInput = (value: SetStateAction<string>) =>
+    setCollectionTabField("skipInput", value);
+  const setSortInput = (value: SetStateAction<string>) =>
+    setCollectionTabField("sortInput", value);
+  const setQueryInputError = (value: SetStateAction<string | null>) =>
+    setCollectionTabField("queryInputError", value);
+  const setIsQueryBuilderOpen = (value: SetStateAction<boolean>) =>
+    setCollectionTabField("isQueryBuilderOpen", value);
+  const setSelectedDocument = (value: SetStateAction<ParsedDocument | null>) =>
+    setCollectionTabField("selectedDocument", value);
+  const setEditorDocument = (value: SetStateAction<ParsedDocument | null>) =>
+    setCollectionTabField("editorDocument", value);
+  const setPendingInlineDocuments = (
+    value: SetStateAction<Map<string, ParsedDocument>>,
+  ) => setCollectionTabField("pendingInlineDocuments", value);
+  const setTableDrillState = (
+    value: SetStateAction<CollectionTabState["tableDrillState"]>,
+  ) => setCollectionTabField("tableDrillState", value);
+  const createCollectionTabStateFromQuery = (
+    query: SavedWorkspaceQuery,
+  ): CollectionTabState => ({
+    ...createInitialCollectionTabState(),
+    filterInput: JSON.stringify(query.filter),
+    limitInput: String(query.limit),
+    projectionInput: JSON.stringify(query.projection),
+    queryState: {
+      filter: query.filter,
+      limit: query.limit,
+      projection: query.projection,
+      skip: query.skip,
+      sort: query.sort,
+    },
+    skipInput: String(query.skip),
+    sortInput: JSON.stringify(query.sort),
+  });
+  const cloneCollectionTabState = (
+    state: CollectionTabState,
+  ): CollectionTabState => ({
+    ...state,
+    aggregationPipelineModel: cloneStructuredValue(
+      state.aggregationPipelineModel,
+    ),
+    aggregationRunResult: state.aggregationRunResult
+      ? cloneStructuredValue(state.aggregationRunResult)
+      : null,
+    pendingInlineDocuments: new Map(state.pendingInlineDocuments),
+    queryBuilderModel: cloneStructuredValue(state.queryBuilderModel),
+    queryState: cloneStructuredValue(state.queryState),
+    tableDrillState: {
+      collectionName: state.tableDrillState.collectionName,
+      path: [...state.tableDrillState.path],
+    },
+  });
+  const cloneCollectionTab = (tabId: string) => {
+    const nextTabId = onCollectionClone(tabId);
+
+    if (!nextTabId) {
+      return;
+    }
+
+    setCollectionTabStates((currentStates) => {
+      const sourceState =
+        currentStates[tabId] ?? createInitialCollectionTabState();
+
+      return {
+        ...currentStates,
+        [nextTabId]: cloneCollectionTabState(sourceState),
+      };
+    });
+  };
   const updateSettings = (nextSettings: AppSettings) => {
     if (queryState.limit === settings.query.defaultPageSize) {
       setLimitInput(`${nextSettings.query.defaultPageSize}`);
@@ -669,22 +845,17 @@ export const DocumentWorkspace = ({
 
   const openSavedQuery = (query: SavedWorkspaceQuery) => {
     onSelectedConnectionChange(query.connectionId);
-    onSelectedCollectionChange(`${query.database}.${query.collection}`);
-    setSelectedDocument(null);
-    setEditorDocument(null);
-    setTableDrillState({ collectionName: null, path: [] });
-    setFilterInput(JSON.stringify(query.filter));
-    setProjectionInput(JSON.stringify(query.projection));
-    setSortInput(JSON.stringify(query.sort));
-    setLimitInput(String(query.limit));
-    setSkipInput(String(query.skip));
-    setQueryState({
-      filter: query.filter,
-      limit: query.limit,
-      projection: query.projection,
-      skip: query.skip,
-      sort: query.sort,
-    });
+    const tabId = onSelectedCollectionChange(
+      `${query.database}.${query.collection}`,
+    );
+
+    if (tabId) {
+      setCollectionTabStates((currentStates) => ({
+        ...currentStates,
+        [tabId]: createCollectionTabStateFromQuery(query),
+      }));
+    }
+
     onWorkspaceTabChange("Documents");
     onSectionChange("Explore");
   };
@@ -1534,14 +1705,16 @@ export const DocumentWorkspace = ({
         <>
       {isConnectionManager ? null : (
         <CollectionTabBar
+          activeCollectionTabId={activeCollectionTabId}
           isCollectionWorkspace={isCollectionWorkspace}
-          openCollectionNames={openCollectionNames}
+          openCollectionTabs={openCollectionTabs}
           selectedCollectionName={selectedCollectionName}
           onCollectionClose={onCollectionClose}
           onCollectionCloseAll={onCollectionCloseAll}
           onCollectionCloseOthers={onCollectionCloseOthers}
           onCollectionCloseSide={onCollectionCloseSide}
-          onCollectionSelect={onSelectedCollectionChange}
+          onCollectionClone={cloneCollectionTab}
+          onCollectionSelect={onCollectionSelectTab}
           onCollectionSwitch={onCollectionSwitch}
         />
       )}
@@ -1786,51 +1959,62 @@ export const DocumentWorkspace = ({
 };
 
 type CollectionTabBarProps = {
+  activeCollectionTabId: string | null;
   isCollectionWorkspace: boolean;
-  openCollectionNames: string[];
+  openCollectionTabs: OpenCollectionTab[];
   selectedCollectionName: string | null;
-  onCollectionClose: (collectionName: string) => void;
+  onCollectionClone: (tabId: string) => void;
+  onCollectionClose: (tabId: string) => void;
   onCollectionCloseAll: () => void;
-  onCollectionCloseOthers: (collectionName: string) => void;
-  onCollectionCloseSide: (collectionName: string, side: "left" | "right") => void;
-  onCollectionSelect: (collectionName: string) => void;
-  onCollectionSwitch: (collectionName: string, direction: 1 | -1) => void;
+  onCollectionCloseOthers: (tabId: string) => void;
+  onCollectionCloseSide: (tabId: string, side: "left" | "right") => void;
+  onCollectionSelect: (tabId: string) => void;
+  onCollectionSwitch: (tabId: string, direction: 1 | -1) => void;
 };
 
 type CollectionTabContextMenu = {
-  collectionName: string;
   left: number;
+  tabId: string;
   top: number;
 };
 
 const CollectionTabBar = ({
+  activeCollectionTabId,
   isCollectionWorkspace,
-  openCollectionNames,
+  openCollectionTabs,
   selectedCollectionName,
   onCollectionClose,
   onCollectionCloseAll,
   onCollectionCloseOthers,
   onCollectionCloseSide,
+  onCollectionClone,
   onCollectionSelect,
   onCollectionSwitch,
 }: CollectionTabBarProps) => {
-  const visibleCollectionNames =
-    selectedCollectionName && !openCollectionNames.includes(selectedCollectionName)
-      ? [...openCollectionNames, selectedCollectionName]
-      : openCollectionNames;
+  const visibleCollectionTabs =
+    selectedCollectionName &&
+    !openCollectionTabs.some((tab) => tab.id === activeCollectionTabId)
+      ? [
+          ...openCollectionTabs,
+          {
+            collectionName: selectedCollectionName,
+            id: activeCollectionTabId ?? "selected-collection-tab",
+          },
+        ]
+      : openCollectionTabs;
   const [contextMenu, setContextMenu] =
     useState<CollectionTabContextMenu | null>(null);
   const closeContextMenu = () => setContextMenu(null);
   const openContextMenu = (
-    collectionName: string,
+    tabId: string,
     event: ReactMouseEvent<HTMLElement>,
   ) => {
     event.preventDefault();
     event.stopPropagation();
-    onCollectionSelect(collectionName);
+    onCollectionSelect(tabId);
     setContextMenu({
-      collectionName,
       ...getCollectionTabContextMenuPosition(event.clientX, event.clientY),
+      tabId,
     });
   };
 
@@ -1863,28 +2047,28 @@ const CollectionTabBar = ({
   return (
     <div className="collection-tabbar">
       {isCollectionWorkspace
-        ? visibleCollectionNames.map((collectionName) => {
-            const collectionLabel = collectionName.split(".").at(-1);
-            const isActive = collectionName === selectedCollectionName;
+        ? visibleCollectionTabs.map((tab) => {
+            const collectionLabel = tab.collectionName.split(".").at(-1);
+            const isActive = tab.id === activeCollectionTabId;
 
             return (
               <div
                 className={`collection-tab ${isActive ? "is-active" : ""}`}
-                key={collectionName}
-                onContextMenu={(event) => openContextMenu(collectionName, event)}
+                key={tab.id}
+                onClick={() => onCollectionSelect(tab.id)}
+                onContextMenu={(event) => openContextMenu(tab.id, event)}
               >
-                <button
-                  className="collection-tab-target"
-                  onClick={() => onCollectionSelect(collectionName)}
-                  type="button"
-                >
+                <span className="collection-tab-target">
                   <Icon name="table" />
                   <span>{collectionLabel}</span>
-                </button>
+                </span>
                 <button
                   aria-label={`Close ${collectionLabel} tab`}
                   className="close-mark"
-                  onClick={() => onCollectionClose(collectionName)}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onCollectionClose(tab.id);
+                  }}
                   type="button"
                 >
                   ×
@@ -1906,11 +2090,20 @@ const CollectionTabBar = ({
           <button
             type="button"
             onClick={() => {
-              onCollectionClose(contextMenu.collectionName);
+              onCollectionClose(contextMenu.tabId);
               closeContextMenu();
             }}
           >
             Close Tab
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              onCollectionClone(contextMenu.tabId);
+              closeContextMenu();
+            }}
+          >
+            Clone Tab
           </button>
           <button
             type="button"
@@ -1923,9 +2116,9 @@ const CollectionTabBar = ({
           </button>
           <button
             type="button"
-            disabled={visibleCollectionNames.length < 2}
+            disabled={visibleCollectionTabs.length < 2}
             onClick={() => {
-              onCollectionCloseOthers(contextMenu.collectionName);
+              onCollectionCloseOthers(contextMenu.tabId);
               closeContextMenu();
             }}
           >
@@ -1934,9 +2127,9 @@ const CollectionTabBar = ({
           <span className="collection-tab-context-separator" />
           <button
             type="button"
-            disabled={visibleCollectionNames[0] === contextMenu.collectionName}
+            disabled={visibleCollectionTabs[0]?.id === contextMenu.tabId}
             onClick={() => {
-              onCollectionCloseSide(contextMenu.collectionName, "left");
+              onCollectionCloseSide(contextMenu.tabId, "left");
               closeContextMenu();
             }}
           >
@@ -1945,10 +2138,10 @@ const CollectionTabBar = ({
           <button
             type="button"
             disabled={
-              visibleCollectionNames.at(-1) === contextMenu.collectionName
+              visibleCollectionTabs.at(-1)?.id === contextMenu.tabId
             }
             onClick={() => {
-              onCollectionCloseSide(contextMenu.collectionName, "right");
+              onCollectionCloseSide(contextMenu.tabId, "right");
               closeContextMenu();
             }}
           >
@@ -1957,9 +2150,9 @@ const CollectionTabBar = ({
           <span className="collection-tab-context-separator" />
           <button
             type="button"
-            disabled={visibleCollectionNames.length < 2}
+            disabled={visibleCollectionTabs.length < 2}
             onClick={() => {
-              onCollectionSwitch(contextMenu.collectionName, 1);
+              onCollectionSwitch(contextMenu.tabId, 1);
               closeContextMenu();
             }}
           >
@@ -1967,29 +2160,29 @@ const CollectionTabBar = ({
           </button>
           <button
             type="button"
-            disabled={visibleCollectionNames.length < 2}
+            disabled={visibleCollectionTabs.length < 2}
             onClick={() => {
-              onCollectionSwitch(contextMenu.collectionName, -1);
+              onCollectionSwitch(contextMenu.tabId, -1);
               closeContextMenu();
             }}
           >
             Switch to Previous Tab
           </button>
           <span className="collection-tab-context-separator" />
-          {visibleCollectionNames.map((collectionName) => (
+          {visibleCollectionTabs.map((tab) => (
             <button
               className="collection-tab-context-target"
-              key={collectionName}
+              key={tab.id}
               type="button"
               onClick={() => {
-                onCollectionSelect(collectionName);
+                onCollectionSelect(tab.id);
                 closeContextMenu();
               }}
             >
               <span>
-                {collectionName === selectedCollectionName ? "✓" : ""}
+                {tab.id === activeCollectionTabId ? "✓" : ""}
               </span>
-              {collectionName}
+              {tab.collectionName}
             </button>
           ))}
         </div>

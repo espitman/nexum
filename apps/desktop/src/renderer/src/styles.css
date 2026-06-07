@@ -800,7 +800,7 @@ button {
   align-items: end;
   border-bottom: 1px solid #dfe5ed;
   display: flex;
-  gap: 24px;
+  gap: 0;
   overflow-x: auto;
   overflow-y: hidden;
   padding: 0 18px;
@@ -815,6 +815,7 @@ button {
   color: #5c6676;
   flex: 0 0 auto;
   height: 52px;
+  padding: 0 16px;
   position: relative;
   white-space: nowrap;
 }

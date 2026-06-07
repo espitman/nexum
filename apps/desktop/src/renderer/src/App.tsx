@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   useEffect,
+  useRef,
   useState,
   type CSSProperties,
   type PointerEvent,
@@ -26,6 +27,11 @@ import type {
 
 const appSettingsStorageKey = "nexum.settings.v1";
 
+type OpenCollectionTab = {
+  collectionName: string;
+  id: string;
+};
+
 export const App = () => {
   const queryClient = useQueryClient();
   const [health, setHealth] = useState<HealthState>({ status: "loading" });
@@ -40,7 +46,13 @@ export const App = () => {
   const [selectedCollectionName, setSelectedCollectionName] = useState<
     string | null
   >(null);
-  const [openCollectionNames, setOpenCollectionNames] = useState<string[]>([]);
+  const [openCollectionTabs, setOpenCollectionTabs] = useState<
+    OpenCollectionTab[]
+  >([]);
+  const [activeCollectionTabId, setActiveCollectionTabId] = useState<
+    string | null
+  >(null);
+  const nextCollectionTabIdRef = useRef(0);
   const [activeWorkspaceTab, setActiveWorkspaceTab] =
     useState<WorkspaceTabLabel>("Documents");
   const [, setSchemaFields] = useState<SchemaFieldSummary[]>([]);
@@ -209,81 +221,149 @@ export const App = () => {
         currentConnectionId ?? connections[0]?.id ?? null,
     );
   };
+  const createCollectionTab = (collectionName: string): OpenCollectionTab => {
+    nextCollectionTabIdRef.current += 1;
+
+    return {
+      collectionName,
+      id: `collection-tab-${nextCollectionTabIdRef.current}`,
+    };
+  };
   const activateCollection = (collectionName: string) => {
-    setOpenCollectionNames((currentNames) =>
-      currentNames.includes(collectionName)
-        ? currentNames
-        : [...currentNames, collectionName],
-    );
+    const nextTab = createCollectionTab(collectionName);
+    setOpenCollectionTabs((currentTabs) => [...currentTabs, nextTab]);
+    setActiveCollectionTabId(nextTab.id);
     setSelectedCollectionName(collectionName);
     setActiveWorkspaceTab("Documents");
     setSchemaFields([]);
+
+    return nextTab.id;
   };
-  const closeCollectionTab = (collectionName: string) => {
-    setOpenCollectionNames((currentNames) => {
-      const nextNames = currentNames.filter((name) => name !== collectionName);
+  const selectCollectionTab = (tabId: string) => {
+    const tab = openCollectionTabs.find(
+      (collectionTab) => collectionTab.id === tabId,
+    );
 
-      if (selectedCollectionName === collectionName) {
-        const closedIndex = currentNames.indexOf(collectionName);
-        const nextSelectedName =
-          nextNames[Math.min(closedIndex, nextNames.length - 1)] ?? null;
+    if (!tab) {
+      return;
+    }
 
-        setSelectedCollectionName(nextSelectedName);
+    setActiveCollectionTabId(tab.id);
+    setSelectedCollectionName(tab.collectionName);
+    setSchemaFields([]);
+  };
+  const closeCollectionTab = (tabId: string) => {
+    setOpenCollectionTabs((currentTabs) => {
+      const closedIndex = currentTabs.findIndex((tab) => tab.id === tabId);
+
+      if (closedIndex === -1) {
+        return currentTabs;
+      }
+
+      const nextTabs = currentTabs.filter((tab) => tab.id !== tabId);
+
+      if (activeCollectionTabId === tabId) {
+        const nextSelectedTab =
+          nextTabs[Math.min(closedIndex, nextTabs.length - 1)] ?? null;
+
+        setActiveCollectionTabId(nextSelectedTab?.id ?? null);
+        setSelectedCollectionName(nextSelectedTab?.collectionName ?? null);
         setSchemaFields([]);
       }
 
-      return nextNames;
+      return nextTabs;
     });
   };
+  const cloneCollectionTab = (tabId: string) => {
+    const sourceTab = openCollectionTabs.find((tab) => tab.id === tabId);
+
+    if (!sourceTab) {
+      return null;
+    }
+
+    const nextTab = createCollectionTab(sourceTab.collectionName);
+
+    setOpenCollectionTabs((currentTabs) => {
+      const sourceIndex = currentTabs.findIndex((tab) => tab.id === tabId);
+
+      if (sourceIndex === -1) {
+        return [...currentTabs, nextTab];
+      }
+
+      const nextTabs = [...currentTabs];
+      nextTabs.splice(sourceIndex + 1, 0, nextTab);
+      return nextTabs;
+    });
+    setActiveCollectionTabId(nextTab.id);
+    setSelectedCollectionName(nextTab.collectionName);
+    setActiveWorkspaceTab("Documents");
+    setSchemaFields([]);
+
+    return nextTab.id;
+  };
   const closeAllCollectionTabs = () => {
-    setOpenCollectionNames([]);
+    setOpenCollectionTabs([]);
+    setActiveCollectionTabId(null);
     setSelectedCollectionName(null);
     setSchemaFields([]);
   };
-  const closeOtherCollectionTabs = (collectionName: string) => {
-    setOpenCollectionNames([collectionName]);
-    setSelectedCollectionName(collectionName);
+  const closeOtherCollectionTabs = (tabId: string) => {
+    setOpenCollectionTabs((currentTabs) => {
+      const tab = currentTabs.find((collectionTab) => collectionTab.id === tabId);
+
+      if (!tab) {
+        return currentTabs;
+      }
+
+      setActiveCollectionTabId(tab.id);
+      setSelectedCollectionName(tab.collectionName);
+      return [tab];
+    });
     setSchemaFields([]);
   };
   const closeCollectionTabsToSide = (
-    collectionName: string,
+    tabId: string,
     side: "left" | "right",
   ) => {
-    setOpenCollectionNames((currentNames) => {
-      const targetIndex = currentNames.indexOf(collectionName);
+    setOpenCollectionTabs((currentTabs) => {
+      const targetIndex = currentTabs.findIndex((tab) => tab.id === tabId);
 
       if (targetIndex === -1) {
-        return currentNames;
+        return currentTabs;
       }
 
-      const nextNames =
+      const nextTabs =
         side === "left"
-          ? currentNames.slice(targetIndex)
-          : currentNames.slice(0, targetIndex + 1);
+          ? currentTabs.slice(targetIndex)
+          : currentTabs.slice(0, targetIndex + 1);
 
       if (
-        selectedCollectionName &&
-        !nextNames.includes(selectedCollectionName)
+        activeCollectionTabId &&
+        !nextTabs.some((tab) => tab.id === activeCollectionTabId)
       ) {
-        setSelectedCollectionName(collectionName);
+        const targetTab = currentTabs[targetIndex];
+        setActiveCollectionTabId(targetTab?.id ?? null);
+        setSelectedCollectionName(targetTab?.collectionName ?? null);
         setSchemaFields([]);
       }
 
-      return nextNames;
+      return nextTabs;
     });
   };
-  const switchCollectionTab = (collectionName: string, direction: 1 | -1) => {
-    const targetIndex = openCollectionNames.indexOf(collectionName);
+  const switchCollectionTab = (tabId: string, direction: 1 | -1) => {
+    const targetIndex = openCollectionTabs.findIndex((tab) => tab.id === tabId);
 
-    if (targetIndex === -1 || openCollectionNames.length === 0) {
+    if (targetIndex === -1 || openCollectionTabs.length === 0) {
       return;
     }
 
     const nextIndex =
-      (targetIndex + direction + openCollectionNames.length) %
-      openCollectionNames.length;
+      (targetIndex + direction + openCollectionTabs.length) %
+      openCollectionTabs.length;
+    const nextTab = openCollectionTabs[nextIndex] ?? null;
 
-    setSelectedCollectionName(openCollectionNames[nextIndex] ?? null);
+    setActiveCollectionTabId(nextTab?.id ?? null);
+    setSelectedCollectionName(nextTab?.collectionName ?? null);
     setSchemaFields([]);
   };
   const startColumnResize = (
@@ -368,7 +448,10 @@ export const App = () => {
             : null
         }
         settings={settings}
-        openCollectionNames={shouldShowDatabasePanel ? openCollectionNames : []}
+        activeCollectionTabId={
+          shouldShowDatabasePanel ? activeCollectionTabId : null
+        }
+        openCollectionTabs={shouldShowDatabasePanel ? openCollectionTabs : []}
         selectedConnectionId={selectedConnectionId}
         selectedCollectionName={selectedCollectionName}
         isIndexesLoading={indexesQuery.isLoading}
@@ -385,17 +468,22 @@ export const App = () => {
         }
         onSelectedConnectionChange={(connectionId) => {
           setSelectedConnectionId(connectionId);
-          setOpenCollectionNames([]);
+          setOpenCollectionTabs([]);
+          setActiveCollectionTabId(null);
           setSelectedCollectionName(null);
           setSchemaFields([]);
         }}
         onSelectedCollectionChange={(collectionName) => {
           if (collectionName) {
-            activateCollection(collectionName);
+            const tabId = activateCollection(collectionName);
+            return tabId;
           } else {
+            setActiveCollectionTabId(null);
             setSelectedCollectionName(null);
           }
           setSchemaFields([]);
+
+          return null;
         }}
         onCollectionCloseAll={closeAllCollectionTabs}
         onCollectionClose={closeCollectionTab}
@@ -403,10 +491,10 @@ export const App = () => {
         onCollectionCloseSide={closeCollectionTabsToSide}
         onCollectionOpen={() => {
           if (shouldShowDatabasePanel) {
-            setSelectedCollectionName("users");
-            setSchemaFields([]);
+            activateCollection("users");
           }
         }}
+        onCollectionSelectTab={selectCollectionTab}
         onCollectionSwitch={switchCollectionTab}
         onSectionChange={handleSectionChange}
         onSchemaChange={setSchemaFields}
@@ -415,6 +503,7 @@ export const App = () => {
           writeStoredAppSettings(nextSettings);
         }}
         onWorkspaceTabChange={setActiveWorkspaceTab}
+        onCollectionClone={cloneCollectionTab}
       />
 
       <ErrorToastSurface
