@@ -5815,6 +5815,17 @@ input:disabled {
   color: #d8e1ec;
 }
 
+.app-shell.appearance-dark .tasks-toolbar .is-primary {
+  background: #123b45;
+  border-color: #2f9cab;
+  color: #dff9fc;
+}
+
+.app-shell.appearance-dark .tasks-toolbar .is-primary:hover:not(:disabled) {
+  background: #154852;
+  border-color: #55c7d4;
+}
+
 .app-shell.appearance-dark .secondary-button:hover,
 .app-shell.appearance-dark .compact-button:hover,
 .app-shell.appearance-dark .query-detail-actions button:hover,
@@ -6125,6 +6136,17 @@ input:disabled {
   .app-shell.appearance-system .workspace-tool-button {
     border-color: #334456;
     color: #d8e1ec;
+  }
+
+  .app-shell.appearance-system .tasks-toolbar .is-primary {
+    background: #123b45;
+    border-color: #2f9cab;
+    color: #dff9fc;
+  }
+
+  .app-shell.appearance-system .tasks-toolbar .is-primary:hover:not(:disabled) {
+    background: #154852;
+    border-color: #55c7d4;
   }
 
   .app-shell.appearance-system .secondary-button:hover,

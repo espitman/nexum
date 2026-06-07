@@ -1,9 +1,33 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, Menu } from "electron";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { registerIpcHandlers } from "./ipc/router";
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
+
+app.setName("Nexum");
+
+const blockedElectronShortcuts = new Set([
+  "f5",
+  "ctrl+r",
+  "meta+r",
+  "ctrl+shift+r",
+  "meta+shift+r",
+  "ctrl+alt+i",
+  "meta+alt+i",
+  "f12",
+]);
+
+const getShortcutKey = (input: Electron.Input): string => {
+  const modifiers = [
+    input.control ? "ctrl" : "",
+    input.meta ? "meta" : "",
+    input.shift ? "shift" : "",
+    input.alt ? "alt" : "",
+  ].filter(Boolean);
+
+  return [...modifiers, input.key.toLowerCase()].join("+");
+};
 
 const createMainWindow = () => {
   const mainWindow = new BrowserWindow({
@@ -44,6 +68,11 @@ const createMainWindow = () => {
   });
 
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  mainWindow.webContents.on("before-input-event", (event, input) => {
+    if (blockedElectronShortcuts.has(getShortcutKey(input))) {
+      event.preventDefault();
+    }
+  });
   mainWindow.webContents.on("will-navigate", (event) => {
     if (!process.env.ELECTRON_RENDERER_URL) {
       event.preventDefault();
@@ -58,6 +87,7 @@ const createMainWindow = () => {
 };
 
 app.whenReady().then(() => {
+  Menu.setApplicationMenu(null);
   registerIpcHandlers();
   createMainWindow();
 
