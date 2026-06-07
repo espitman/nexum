@@ -89,6 +89,7 @@ type DocumentWorkspaceProps = {
   indexesError: string | null;
   isIndexesLoading: boolean;
   isConnectionsLoading: boolean;
+  openCollectionNames: string[];
   settings: AppSettings;
   selectedConnectionId: string | null;
   selectedCollectionName: string | null;
@@ -96,7 +97,7 @@ type DocumentWorkspaceProps = {
   onConnectionsChanged: () => Promise<void>;
   onSelectedConnectionChange: (connectionId: string | null) => void;
   onSelectedCollectionChange: (collectionName: string | null) => void;
-  onCollectionClose: () => void;
+  onCollectionClose: (collectionName: string) => void;
   onCollectionOpen: () => void;
   onSectionChange: (section: NavItemLabel) => void;
   onSchemaChange: (schemaFields: SchemaFieldSummary[]) => void;
@@ -185,6 +186,7 @@ export const DocumentWorkspace = ({
   indexesError,
   isIndexesLoading,
   isConnectionsLoading,
+  openCollectionNames,
   settings,
   selectedConnectionId,
   selectedCollectionName,
@@ -1525,8 +1527,10 @@ export const DocumentWorkspace = ({
       {isConnectionManager ? null : (
         <CollectionTabBar
           isCollectionWorkspace={isCollectionWorkspace}
+          openCollectionNames={openCollectionNames}
           selectedCollectionName={selectedCollectionName}
           onCollectionClose={onCollectionClose}
+          onCollectionSelect={onSelectedCollectionChange}
         />
       )}
 
@@ -1771,36 +1775,56 @@ export const DocumentWorkspace = ({
 
 type CollectionTabBarProps = {
   isCollectionWorkspace: boolean;
+  openCollectionNames: string[];
   selectedCollectionName: string | null;
-  onCollectionClose: () => void;
+  onCollectionClose: (collectionName: string) => void;
+  onCollectionSelect: (collectionName: string) => void;
 };
 
 const CollectionTabBar = ({
   isCollectionWorkspace,
+  openCollectionNames,
   selectedCollectionName,
   onCollectionClose,
+  onCollectionSelect,
 }: CollectionTabBarProps) => {
-  const collectionLabel = selectedCollectionName?.split(".").at(-1);
+  const visibleCollectionNames =
+    selectedCollectionName && !openCollectionNames.includes(selectedCollectionName)
+      ? [...openCollectionNames, selectedCollectionName]
+      : openCollectionNames;
 
   return (
     <div className="collection-tabbar">
-      {isCollectionWorkspace ? (
-        <div className="collection-tab is-active">
-          <Icon name="table" />
-          <span>{collectionLabel}</span>
-          <button
-            aria-label={`Close ${collectionLabel} tab`}
-            className="close-mark"
-            onClick={onCollectionClose}
-            type="button"
-          >
-            ×
-          </button>
-        </div>
-      ) : null}
-      <button className="tab-plus" type="button" aria-label="New tab">
-        +
-      </button>
+      {isCollectionWorkspace
+        ? visibleCollectionNames.map((collectionName) => {
+            const collectionLabel = collectionName.split(".").at(-1);
+            const isActive = collectionName === selectedCollectionName;
+
+            return (
+              <div
+                className={`collection-tab ${isActive ? "is-active" : ""}`}
+                key={collectionName}
+              >
+                <button
+                  className="collection-tab-target"
+                  onClick={() => onCollectionSelect(collectionName)}
+                  type="button"
+                >
+                  <Icon name="table" />
+                  <span>{collectionLabel}</span>
+                </button>
+                <button
+                  aria-label={`Close ${collectionLabel} tab`}
+                  className="close-mark"
+                  onClick={() => onCollectionClose(collectionName)}
+                  type="button"
+                >
+                  ×
+                </button>
+              </div>
+            );
+          })
+        : null}
     </div>
   );
 };

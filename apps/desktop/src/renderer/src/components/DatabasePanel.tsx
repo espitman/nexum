@@ -15,6 +15,7 @@ type DatabasePanelProps = {
   connectionId: string;
   connectionName: string;
   selectedCollectionName: string | null;
+  onCollectionOpenInNewTab: (collectionName: string) => void;
   onCollectionSelect: (collectionName: string) => void;
 };
 
@@ -28,6 +29,7 @@ type ExplorerTreeNodeProps = {
     node: ExplorerNodeDto,
     event: ReactMouseEvent<HTMLButtonElement>,
   ) => void;
+  onCollectionHighlight: (collectionName: string) => void;
   onCollectionSelect: (collectionName: string) => void;
   onToggleNode: (nodeId: string) => void;
   selectedCollectionName: string | null;
@@ -90,13 +92,14 @@ const getExplorerContextMenuPosition = (
   clientY: number,
 ): { left: number; top: number } => ({
   left: Math.max(10, Math.min(clientX, window.innerWidth - 230)),
-  top: Math.max(10, Math.min(clientY, window.innerHeight - 72)),
+  top: Math.max(10, Math.min(clientY, window.innerHeight - 112)),
 });
 
 export const DatabasePanel = ({
   connectionId,
   connectionName,
   selectedCollectionName,
+  onCollectionOpenInNewTab,
   onCollectionSelect,
 }: DatabasePanelProps) => {
   const queryClient = useQueryClient();
@@ -105,6 +108,17 @@ export const DatabasePanel = ({
   const [expandedNodeIds, setExpandedNodeIds] = useState<Set<string>>(
     () => new Set([connectionId]),
   );
+  const [highlightedCollectionState, setHighlightedCollectionState] = useState<{
+    baseCollectionName: string | null;
+    highlightedCollectionName: string | null;
+  }>(() => ({
+    baseCollectionName: selectedCollectionName,
+    highlightedCollectionName: selectedCollectionName,
+  }));
+  const highlightedCollectionName =
+    highlightedCollectionState.baseCollectionName === selectedCollectionName
+      ? highlightedCollectionState.highlightedCollectionName
+      : selectedCollectionName;
   const selectedPathExpandedNodeIds = useMemo(() => {
     const next = new Set(expandedNodeIds);
 
@@ -163,13 +177,19 @@ export const DatabasePanel = ({
 
       event.preventDefault();
       event.stopPropagation();
+      if (node.type === "collection" || node.type === "view") {
+        setHighlightedCollectionState({
+          baseCollectionName: selectedCollectionName,
+          highlightedCollectionName: getNodeSelectionKey(node),
+        });
+      }
       const position = getExplorerContextMenuPosition(
         event.clientX,
         event.clientY,
       );
       setBookmarkMenu({ ...position, node });
     },
-    [],
+    [selectedCollectionName],
   );
 
   const addExplorerBookmark = () => {
@@ -204,6 +224,25 @@ export const DatabasePanel = ({
         detail,
       }),
     );
+    setBookmarkMenu(null);
+  };
+
+  const openExplorerCollectionInNewTab = () => {
+    if (!bookmarkMenu) {
+      return;
+    }
+
+    const [database, collection] = bookmarkMenu.node.path;
+
+    if (
+      !database ||
+      !collection ||
+      (bookmarkMenu.node.type !== "collection" && bookmarkMenu.node.type !== "view")
+    ) {
+      return;
+    }
+
+    onCollectionOpenInNewTab(`${database}.${collection}`);
     setBookmarkMenu(null);
   };
 
@@ -281,9 +320,15 @@ export const DatabasePanel = ({
                 key={node.id}
                 node={node}
                 onBookmarkMenuOpen={openBookmarkMenu}
+                onCollectionHighlight={(collectionName) =>
+                  setHighlightedCollectionState({
+                    baseCollectionName: selectedCollectionName,
+                    highlightedCollectionName: collectionName,
+                  })
+                }
                 onCollectionSelect={onCollectionSelect}
                 onToggleNode={toggleNode}
-                selectedCollectionName={selectedCollectionName}
+                selectedCollectionName={highlightedCollectionName}
               />
             ))
           )
@@ -299,6 +344,12 @@ export const DatabasePanel = ({
             top: `${bookmarkMenu.top}px`,
           }}
         >
+          {bookmarkMenu.node.type === "collection" ||
+          bookmarkMenu.node.type === "view" ? (
+            <button type="button" onClick={openExplorerCollectionInNewTab}>
+              Open in new tab
+            </button>
+          ) : null}
           <button type="button" onClick={addExplorerBookmark}>
             Add to bookmarks
           </button>
@@ -315,6 +366,7 @@ const ExplorerTreeNode = ({
   expandedNodeIds,
   node,
   onBookmarkMenuOpen,
+  onCollectionHighlight,
   onCollectionSelect,
   onToggleNode,
   selectedCollectionName,
@@ -360,12 +412,17 @@ const ExplorerTreeNode = ({
         }`}
         onClick={() => {
           if (isSelectable) {
-            onCollectionSelect(selectionKey);
+            onCollectionHighlight(selectionKey);
             return;
           }
 
           if (node.hasChildren) {
             onToggleNode(node.id);
+          }
+        }}
+        onDoubleClick={() => {
+          if (isSelectable) {
+            onCollectionSelect(selectionKey);
           }
         }}
         onContextMenu={(event) => onBookmarkMenuOpen(node, event)}
@@ -401,6 +458,7 @@ const ExplorerTreeNode = ({
               key={childNode.id}
               node={childNode}
               onBookmarkMenuOpen={onBookmarkMenuOpen}
+              onCollectionHighlight={onCollectionHighlight}
               onCollectionSelect={onCollectionSelect}
               onToggleNode={onToggleNode}
               selectedCollectionName={selectedCollectionName}

@@ -40,6 +40,7 @@ export const App = () => {
   const [selectedCollectionName, setSelectedCollectionName] = useState<
     string | null
   >(null);
+  const [openCollectionNames, setOpenCollectionNames] = useState<string[]>([]);
   const [activeWorkspaceTab, setActiveWorkspaceTab] =
     useState<WorkspaceTabLabel>("Documents");
   const [, setSchemaFields] = useState<SchemaFieldSummary[]>([]);
@@ -197,11 +198,7 @@ export const App = () => {
   const handleSectionChange = (section: NavItemLabel) => {
     setActiveSection(section);
 
-    if (
-      section !== "Explore" &&
-      section !== "Queries" &&
-      section !== "Bookmarks"
-    ) {
+    if (section === "Connections") {
       setSelectedCollectionName(null);
       setSchemaFields([]);
       return;
@@ -211,6 +208,32 @@ export const App = () => {
       (currentConnectionId) =>
         currentConnectionId ?? connections[0]?.id ?? null,
     );
+  };
+  const activateCollection = (collectionName: string) => {
+    setOpenCollectionNames((currentNames) =>
+      currentNames.includes(collectionName)
+        ? currentNames
+        : [...currentNames, collectionName],
+    );
+    setSelectedCollectionName(collectionName);
+    setActiveWorkspaceTab("Documents");
+    setSchemaFields([]);
+  };
+  const closeCollectionTab = (collectionName: string) => {
+    setOpenCollectionNames((currentNames) => {
+      const nextNames = currentNames.filter((name) => name !== collectionName);
+
+      if (selectedCollectionName === collectionName) {
+        const closedIndex = currentNames.indexOf(collectionName);
+        const nextSelectedName =
+          nextNames[Math.min(closedIndex, nextNames.length - 1)] ?? null;
+
+        setSelectedCollectionName(nextSelectedName);
+        setSchemaFields([]);
+      }
+
+      return nextNames;
+    });
   };
   const startColumnResize = (
     column: "database",
@@ -264,10 +287,11 @@ export const App = () => {
           connectionId={selectedConnection.id}
           connectionName={selectedConnection.name}
           selectedCollectionName={visibleSelectedCollectionName}
+          onCollectionOpenInNewTab={(collectionName) => {
+            activateCollection(collectionName);
+          }}
           onCollectionSelect={(collectionName) => {
-            setSelectedCollectionName(collectionName);
-            setActiveWorkspaceTab("Documents");
-            setSchemaFields([]);
+            activateCollection(collectionName);
           }}
         />
       ) : null}
@@ -293,6 +317,7 @@ export const App = () => {
             : null
         }
         settings={settings}
+        openCollectionNames={shouldShowDatabasePanel ? openCollectionNames : []}
         selectedConnectionId={selectedConnectionId}
         selectedCollectionName={selectedCollectionName}
         isIndexesLoading={indexesQuery.isLoading}
@@ -309,16 +334,19 @@ export const App = () => {
         }
         onSelectedConnectionChange={(connectionId) => {
           setSelectedConnectionId(connectionId);
-          setSchemaFields([]);
-        }}
-        onSelectedCollectionChange={(collectionName) => {
-          setSelectedCollectionName(collectionName);
-          setSchemaFields([]);
-        }}
-        onCollectionClose={() => {
+          setOpenCollectionNames([]);
           setSelectedCollectionName(null);
           setSchemaFields([]);
         }}
+        onSelectedCollectionChange={(collectionName) => {
+          if (collectionName) {
+            activateCollection(collectionName);
+          } else {
+            setSelectedCollectionName(null);
+          }
+          setSchemaFields([]);
+        }}
+        onCollectionClose={closeCollectionTab}
         onCollectionOpen={() => {
           if (shouldShowDatabasePanel) {
             setSelectedCollectionName("users");

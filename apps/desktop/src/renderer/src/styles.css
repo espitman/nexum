@@ -679,19 +679,44 @@ button {
   border-bottom: 1px solid #dfe5ed;
   display: flex;
   gap: 8px;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
   padding: 0 16px;
+  scrollbar-width: none;
+}
+
+.collection-tabbar::-webkit-scrollbar {
+  display: none;
 }
 
 .collection-tab {
   align-items: center;
   color: #263142;
   display: inline-flex;
+  flex: 0 0 auto;
   font-size: 15px;
   font-weight: 600;
   gap: 8px;
   height: 100%;
-  padding: 0 10px;
+  max-width: 320px;
+  min-width: 0;
   position: relative;
+}
+
+.collection-tab-target {
+  align-items: center;
+  color: inherit;
+  display: inline-flex;
+  gap: 8px;
+  min-width: 0;
+  padding: 0 0 0 10px;
+}
+
+.collection-tab-target span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .collection-tab.is-active::after {
