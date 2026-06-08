@@ -418,14 +418,50 @@ export const DocumentWorkspace = ({
   };
   const setDocumentViewMode = (value: SetStateAction<DocumentViewMode>) =>
     setCollectionTabField("documentViewMode", value);
+  const setQueryInputField = (
+    key:
+      | "filterInput"
+      | "limitInput"
+      | "projectionInput"
+      | "skipInput"
+      | "sortInput",
+    value: SetStateAction<string>,
+  ) => {
+    updateActiveCollectionTabState((currentState) => {
+      const nextValue =
+        typeof value === "function"
+          ? (value as (currentValue: string) => string)(currentState[key])
+          : value;
+      const nextState = {
+        ...currentState,
+        [key]: nextValue,
+      };
+      const parsedQuery = parseDocumentQueryInputs({
+        filterInput: nextState.filterInput,
+        limitInput: nextState.limitInput,
+        projectionInput: nextState.projectionInput,
+        skipInput: nextState.skipInput,
+        sortInput: nextState.sortInput,
+      });
+
+      if (!parsedQuery.ok) {
+        return nextState;
+      }
+
+      return {
+        ...nextState,
+        manualQueryInput: buildManualFindQueryInput(parsedQuery.value),
+      };
+    });
+  };
   const setFilterInput = (value: SetStateAction<string>) =>
-    setCollectionTabField("filterInput", value);
+    setQueryInputField("filterInput", value);
   const setLimitInput = (value: SetStateAction<string>) =>
-    setCollectionTabField("limitInput", value);
+    setQueryInputField("limitInput", value);
   const setManualQueryInput = (value: SetStateAction<string>) =>
     setCollectionTabField("manualQueryInput", value);
   const setProjectionInput = (value: SetStateAction<string>) =>
-    setCollectionTabField("projectionInput", value);
+    setQueryInputField("projectionInput", value);
   const setQueryState = (value: SetStateAction<DocumentQueryState>) =>
     setCollectionTabField("queryState", value);
   const setQueryBuilderModel = (value: SetStateAction<QueryBuilderGroupNode>) =>
@@ -441,9 +477,9 @@ export const DocumentWorkspace = ({
   const setExplainSource = (value: SetStateAction<ExplainSource>) =>
     setCollectionTabField("explainSource", value);
   const setSkipInput = (value: SetStateAction<string>) =>
-    setCollectionTabField("skipInput", value);
+    setQueryInputField("skipInput", value);
   const setSortInput = (value: SetStateAction<string>) =>
-    setCollectionTabField("sortInput", value);
+    setQueryInputField("sortInput", value);
   const setQueryInputError = (value: SetStateAction<string | null>) =>
     setCollectionTabField("queryInputError", value);
   const setIsQueryBuilderOpen = (value: SetStateAction<boolean>) =>
