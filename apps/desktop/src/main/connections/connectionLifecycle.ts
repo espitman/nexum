@@ -59,6 +59,15 @@ export type MongoAggregateResult = {
   executionTimeMs: number;
 };
 
+export type MongoExplainFindInput = MongoFindDocumentsInput;
+
+export type MongoExplainAggregateInput = MongoAggregateInput;
+
+export type MongoExplainResult = {
+  executionTimeMs: number;
+  plan: string;
+};
+
 export type MongoUpdateDocumentInput = {
   collection: string;
   confirmedProductionWrite: boolean;
@@ -86,6 +95,10 @@ export type MongoIndexMetadata = {
 export interface ActiveMongoConnection {
   aggregate(input: MongoAggregateInput): Promise<MongoAggregateResult>;
   close(): Promise<void>;
+  explainAggregate(
+    input: MongoExplainAggregateInput,
+  ): Promise<MongoExplainResult>;
+  explainFind(input: MongoExplainFindInput): Promise<MongoExplainResult>;
   findDocuments(
     input: MongoFindDocumentsInput,
   ): Promise<MongoFindDocumentsResult>;
@@ -301,6 +314,42 @@ export class MongoDriverConnectionClient implements MongoConnectionDriver {
         };
       },
       close: () => client.close(true),
+      async explainAggregate(input) {
+        const startedAt = performance.now();
+        const plan = await client
+          .db(input.database)
+          .collection(input.collection)
+          .aggregate(input.pipeline as Document[], {
+            allowDiskUse: false,
+            maxTimeMS: mongoFindMaxTimeMs,
+          })
+          .limit(input.limit)
+          .explain("executionStats");
+
+        return {
+          executionTimeMs: Math.round(performance.now() - startedAt),
+          plan: BSON.EJSON.stringify(plan, { relaxed: false }),
+        };
+      },
+      async explainFind(input) {
+        const startedAt = performance.now();
+        const plan = await client
+          .db(input.database)
+          .collection(input.collection)
+          .find(input.filter as Filter<Document>, {
+            maxTimeMS: mongoFindMaxTimeMs,
+            projection: input.projection,
+          })
+          .sort(input.sort as Sort)
+          .skip(input.skip)
+          .limit(input.limit)
+          .explain("executionStats");
+
+        return {
+          executionTimeMs: Math.round(performance.now() - startedAt),
+          plan: BSON.EJSON.stringify(plan, { relaxed: false }),
+        };
+      },
       async findDocuments(input) {
         const startedAt = performance.now();
         const documents = await client
@@ -599,6 +648,63 @@ export class ConnectionLifecycleService {
     );
   }
 
+  explainFind(
+    connectionId: string,
+    input: MongoExplainFindInput,
+  ): Result<Promise<MongoExplainResult>, AppError> {
+    const metadata = this.#storage.getMetadata(connectionId);
+
+    if (!metadata.ok) {
+      return metadata;
+    }
+
+    const target = `${input.database}.${input.collection}`;
+    const session = this.#sessions.get(connectionId);
+
+    if (!session) {
+      this.#recordQueryEvent(metadata.value, "query.failed", {
+        target,
+        metadata: { reason: "connection_not_active" },
+      });
+      return err(
+        new AppError("CONNECTION_NOT_ACTIVE", "Connection is not active", {
+          details: { connectionId },
+        }),
+      );
+    }
+
+    return ok(
+      session
+        .explainFind(input)
+        .then((result) => {
+          this.#recordQueryEvent(metadata.value, "query.explained", {
+            target,
+            metadata: {
+              executionTimeMs: result.executionTimeMs,
+              filterFields: Object.keys(input.filter),
+              limit: input.limit,
+              projectionFields: Object.keys(input.projection),
+              skip: input.skip,
+              sortFields: Object.keys(input.sort),
+            },
+          });
+
+          return result;
+        })
+        .catch((error: unknown) => {
+          this.#recordQueryEvent(metadata.value, "query.failed", {
+            target,
+            metadata: {
+              error: sanitizeError(error),
+              reason: "driver_error",
+            },
+          });
+
+          throw error;
+        }),
+    );
+  }
+
   aggregate(
     connectionId: string,
     input: MongoAggregateInput,
@@ -634,6 +740,61 @@ export class ConnectionLifecycleService {
               executionTimeMs: result.executionTimeMs,
               limit: input.limit,
               resultCount: result.documents.length,
+              stageCount: input.pipeline.length,
+              stages: input.pipeline.map((stage) => Object.keys(stage)[0]),
+            },
+          });
+
+          return result;
+        })
+        .catch((error: unknown) => {
+          this.#recordAggregationEvent(metadata.value, "aggregation.failed", {
+            target,
+            metadata: {
+              error: sanitizeError(error),
+              reason: "driver_error",
+            },
+          });
+
+          throw error;
+        }),
+    );
+  }
+
+  explainAggregate(
+    connectionId: string,
+    input: MongoExplainAggregateInput,
+  ): Result<Promise<MongoExplainResult>, AppError> {
+    const metadata = this.#storage.getMetadata(connectionId);
+
+    if (!metadata.ok) {
+      return metadata;
+    }
+
+    const target = `${input.database}.${input.collection}`;
+    const session = this.#sessions.get(connectionId);
+
+    if (!session) {
+      this.#recordAggregationEvent(metadata.value, "aggregation.failed", {
+        target,
+        metadata: { reason: "connection_not_active" },
+      });
+      return err(
+        new AppError("CONNECTION_NOT_ACTIVE", "Connection is not active", {
+          details: { connectionId },
+        }),
+      );
+    }
+
+    return ok(
+      session
+        .explainAggregate(input)
+        .then((result) => {
+          this.#recordAggregationEvent(metadata.value, "aggregation.explained", {
+            target,
+            metadata: {
+              executionTimeMs: result.executionTimeMs,
+              limit: input.limit,
               stageCount: input.pipeline.length,
               stages: input.pipeline.map((stage) => Object.keys(stage)[0]),
             },

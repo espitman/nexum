@@ -8,6 +8,7 @@ import {
   type DocumentUpdateResult,
   type ExplorerNodeDto,
   type MongoAggregateResult,
+  type MongoExplainResult,
 } from "../../ipc/contracts";
 import type { StoredConnectionTestResult } from "../connections";
 import { createValidatedIpcHandler, registerIpcHandlers } from "./router";
@@ -118,6 +119,32 @@ describe("registerIpcHandlers connection lifecycle", () => {
                 '{"_id":{"$oid":"6649f8c3e7b1d2a4f8c9a1b2"},"status":"active"}',
               ],
               executionTimeMs: 9,
+            }),
+          );
+        },
+        explainAggregate(
+          _connectionId: string,
+          payload: unknown,
+        ): Result<Promise<MongoExplainResult>, AppError> {
+          findPayloads.push(payload);
+
+          return ok(
+            Promise.resolve({
+              executionTimeMs: 7,
+              plan: '{"stages":[]}',
+            }),
+          );
+        },
+        explainFind(
+          _connectionId: string,
+          payload: unknown,
+        ): Result<Promise<MongoExplainResult>, AppError> {
+          findPayloads.push(payload);
+
+          return ok(
+            Promise.resolve({
+              executionTimeMs: 5,
+              plan: '{"queryPlanner":{"winningPlan":{"stage":"IXSCAN"}}}',
             }),
           );
         },
@@ -286,6 +313,55 @@ describe("registerIpcHandlers connection lifecycle", () => {
         { $match: { status: "active" } },
         { $project: { status: 1 } },
       ],
+    });
+    await expect(
+      handlers.get(ipcChannels.mongodbExplainAggregate)?.(undefined, {
+        collection: "users",
+        connectionId: "conn_test",
+        database: "app",
+        limit: 25,
+        pipeline: [{ $match: { status: "active" } }],
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: {
+        executionTimeMs: 7,
+        plan: '{"stages":[]}',
+      },
+    });
+    expect(findPayloads.at(-1)).toEqual({
+      collection: "users",
+      connectionId: "conn_test",
+      database: "app",
+      limit: 25,
+      pipeline: [{ $match: { status: "active" } }],
+    });
+    await expect(
+      handlers.get(ipcChannels.mongodbExplainFind)?.(undefined, {
+        collection: "users",
+        connectionId: "conn_test",
+        database: "app",
+        filter: { status: "active" },
+        limit: 50,
+        projection: { email: 1 },
+        skip: 0,
+        sort: { createdAt: -1 },
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: {
+        executionTimeMs: 5,
+      },
+    });
+    expect(findPayloads.at(-1)).toEqual({
+      collection: "users",
+      connectionId: "conn_test",
+      database: "app",
+      filter: { status: "active" },
+      limit: 50,
+      projection: { email: 1 },
+      skip: 0,
+      sort: { createdAt: -1 },
     });
     await expect(
       handlers.get(ipcChannels.mongodbAggregate)?.(undefined, {

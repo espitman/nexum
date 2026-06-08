@@ -1465,6 +1465,7 @@ Keep code modular, typed, and production-friendly.
 [ ] Production confirmation exists
 [ ] Visual query builder generates correct filters
 [ ] Field inference works on sample documents
+[x] Explain tab runs real find and aggregation explain plans
 [ ] Aggregation builder supports MVP stages
 [ ] Dangerous aggregation stages are blocked
 [ ] Query timeout exists

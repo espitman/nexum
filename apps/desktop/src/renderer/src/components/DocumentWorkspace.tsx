@@ -143,11 +143,24 @@ type AggregationRunResult = {
   status: "error" | "ready" | "running";
 };
 
+type ExplainSource = "find" | "aggregation";
+
+type ExplainRunResult = {
+  executionTimeMs?: number;
+  message: string;
+  plan: Record<string, unknown> | null;
+  rawPlan: string;
+  source: ExplainSource;
+  status: "error" | "ready" | "running";
+};
+
 type CollectionTabState = {
   aggregationPipelineModel: AggregationPipelineModel;
   aggregationRunResult: AggregationRunResult | null;
   documentViewMode: DocumentViewMode;
   editorDocument: ParsedDocument | null;
+  explainRunResult: ExplainRunResult | null;
+  explainSource: ExplainSource;
   filterInput: string;
   isQueryBuilderOpen: boolean;
   limitInput: string;
@@ -268,6 +281,8 @@ export const DocumentWorkspace = ({
       aggregationRunResult: null,
       documentViewMode: "table",
       editorDocument: null,
+      explainRunResult: null,
+      explainSource: "find",
       filterInput: "{}",
       isQueryBuilderOpen: false,
       limitInput: `${settings.query.defaultPageSize}`,
@@ -333,6 +348,7 @@ export const DocumentWorkspace = ({
   const isMetadataWorkspace =
     activeWorkspaceTab === "Schema" || activeWorkspaceTab === "Indexes";
   const isAggregationWorkspace = activeWorkspaceTab === "Aggregation Pipeline";
+  const isExplainWorkspace = activeWorkspaceTab === "Explain";
   const isManualQueryWorkspace = activeWorkspaceTab === "Query";
   const isConnectionManager =
     activeSection === "Connections" && selectedCollectionName === null;
@@ -346,6 +362,8 @@ export const DocumentWorkspace = ({
     aggregationRunResult,
     documentViewMode,
     editorDocument,
+    explainRunResult,
+    explainSource,
     filterInput,
     isQueryBuilderOpen,
     limitInput,
@@ -365,6 +383,7 @@ export const DocumentWorkspace = ({
     isDocumentsWorkspace &&
     !isMetadataWorkspace &&
     !isAggregationWorkspace &&
+    !isExplainWorkspace &&
     isQueryBuilderOpen;
   const updateActiveCollectionTabState = (
     updater: (currentState: CollectionTabState) => CollectionTabState,
@@ -417,6 +436,10 @@ export const DocumentWorkspace = ({
   const setAggregationRunResult = (
     value: SetStateAction<AggregationRunResult | null>,
   ) => setCollectionTabField("aggregationRunResult", value);
+  const setExplainRunResult = (value: SetStateAction<ExplainRunResult | null>) =>
+    setCollectionTabField("explainRunResult", value);
+  const setExplainSource = (value: SetStateAction<ExplainSource>) =>
+    setCollectionTabField("explainSource", value);
   const setSkipInput = (value: SetStateAction<string>) =>
     setCollectionTabField("skipInput", value);
   const setSortInput = (value: SetStateAction<string>) =>
@@ -462,6 +485,9 @@ export const DocumentWorkspace = ({
     ),
     aggregationRunResult: state.aggregationRunResult
       ? cloneStructuredValue(state.aggregationRunResult)
+      : null,
+    explainRunResult: state.explainRunResult
+      ? cloneStructuredValue(state.explainRunResult)
       : null,
     pendingInlineDocuments: new Map(state.pendingInlineDocuments),
     queryBuilderModel: cloneStructuredValue(state.queryBuilderModel),
@@ -713,6 +739,101 @@ export const DocumentWorkspace = ({
     setManualQueryInput(buildManualFindQueryInput(nextState.value));
     setQueryState(nextState.value);
     recordQueryRun(nextState.value);
+  };
+
+  const runExplain = (source: ExplainSource) => {
+    try {
+      if (!window.nexum) {
+        throw new Error("Preload API is unavailable");
+      }
+
+      if (!selectedConnectionId || !selectedCollectionPath) {
+        throw new Error("No collection selected");
+      }
+
+      const label =
+        source === "aggregation" ? "Aggregation pipeline" : "Find query";
+      setExplainRunResult({
+        message: `Explaining ${label.toLowerCase()}.`,
+        plan: null,
+        rawPlan: "",
+        source,
+        status: "running",
+      });
+
+      const request =
+        source === "aggregation"
+          ? (() => {
+              if (typeof window.nexum.mongodb.explainAggregate !== "function") {
+                throw new Error(
+                  "Explain API is unavailable. Restart Nexum so the latest preload API can load.",
+                );
+              }
+
+              return window.nexum.mongodb.explainAggregate({
+                collection: selectedCollectionPath.collection,
+                connectionId: selectedConnectionId,
+                database: selectedCollectionPath.database,
+                limit: queryState.limit,
+                pipeline: buildRawPipelineFromAggregationModel(
+                  aggregationPipelineModel,
+                ),
+              });
+            })()
+          : (() => {
+              if (typeof window.nexum.mongodb.explainFind !== "function") {
+                throw new Error(
+                  "Explain API is unavailable. Restart Nexum so the latest preload API can load.",
+                );
+              }
+
+              return window.nexum.mongodb.explainFind({
+              collection: selectedCollectionPath.collection,
+              connectionId: selectedConnectionId,
+              database: selectedCollectionPath.database,
+              filter: queryState.filter,
+              limit: queryState.limit,
+              projection: queryState.projection,
+              skip: queryState.skip,
+              sort: queryState.sort,
+              });
+            })();
+
+      void withQueryTimeout(request, settings.query.timeoutMs)
+        .then((result) => {
+          const plan = parseExplainPlan(result.plan);
+          setExplainRunResult({
+            executionTimeMs: result.executionTimeMs,
+            message: `${label} explained in ${result.executionTimeMs} ms.`,
+            plan,
+            rawPlan: JSON.stringify(plan, null, 2),
+            source,
+            status: "ready",
+          });
+        })
+        .catch((error: unknown) => {
+          const message =
+            error instanceof Error
+              ? getSafeWorkspaceErrorMessage(error)
+              : "Explain failed.";
+          setExplainRunResult({
+            message,
+            plan: null,
+            rawPlan: "",
+            source,
+            status: "error",
+          });
+          onConnectionError("Explain failed", message);
+        });
+    } catch (error) {
+      setExplainRunResult({
+        message: error instanceof Error ? error.message : "Explain is invalid.",
+        plan: null,
+        rawPlan: "",
+        source,
+        status: "error",
+      });
+    }
   };
 
   const buildQuerySnapshot = (
@@ -1995,6 +2116,19 @@ export const DocumentWorkspace = ({
                 skip={queryState.skip}
               />
             </>
+          ) : null}
+          {isExplainWorkspace ? (
+            <ExplainWorkspace
+              editorTheme={editorTheme}
+              queryState={queryState}
+              result={explainRunResult}
+              source={explainSource}
+              onRunExplain={runExplain}
+              onSourceChange={(nextSource) => {
+                setExplainSource(nextSource);
+                setExplainRunResult(null);
+              }}
+            />
           ) : null}
           {editorDocument ? (
             <DocumentEditorPanel
@@ -4936,6 +5070,137 @@ const MetadataWorkspace = ({
   </section>
 );
 
+type ExplainWorkspaceProps = {
+  editorTheme: "vs" | "vs-dark";
+  queryState: DocumentQueryState;
+  result: ExplainRunResult | null;
+  source: ExplainSource;
+  onRunExplain: (source: ExplainSource) => void;
+  onSourceChange: (source: ExplainSource) => void;
+};
+
+const ExplainWorkspace = ({
+  editorTheme,
+  queryState,
+  result,
+  source,
+  onRunExplain,
+  onSourceChange,
+}: ExplainWorkspaceProps) => {
+  const summary = useMemo(
+    () => (result?.plan ? summarizeExplainPlan(result.plan) : null),
+    [result],
+  );
+  const rawPlan =
+    result?.rawPlan ||
+    JSON.stringify(
+      {
+        filter: queryState.filter,
+        limit: queryState.limit,
+        projection: queryState.projection,
+        skip: queryState.skip,
+        sort: queryState.sort,
+      },
+      null,
+      2,
+    );
+
+  return (
+    <section className="explain-workspace">
+      <div className="explain-toolbar">
+        <div className="query-builder-tabs explain-source-tabs">
+          <button
+            className={source === "find" ? "is-active" : ""}
+            type="button"
+            onClick={() => onSourceChange("find")}
+          >
+            Find query
+          </button>
+          <button
+            className={source === "aggregation" ? "is-active" : ""}
+            type="button"
+            onClick={() => onSourceChange("aggregation")}
+          >
+            Pipeline
+          </button>
+        </div>
+        <button
+          className="run-button compact explain-run-button"
+          disabled={result?.status === "running"}
+          type="button"
+          onClick={() => onRunExplain(source)}
+        >
+          <span className="play-icon" />
+          {result?.status === "running" ? "Running" : "Run explain"}
+        </button>
+      </div>
+
+      {result?.status === "running" ? (
+        <ResultsLoadingState />
+      ) : result?.status === "error" ? (
+        <ResultsState
+          title="Unable to explain query"
+          label={result.message}
+          actionLabel="Run again"
+          onAction={() => onRunExplain(source)}
+        />
+      ) : (
+        <div className="explain-content">
+          <section className="explain-summary-card">
+            <header>
+              <strong>Summary</strong>
+              <span>
+                {result
+                  ? result.message
+                  : "Run explain to inspect how MongoDB plans this operation."}
+              </span>
+            </header>
+            <div className="explain-metrics">
+              {[
+                ["Execution time", formatExplainMetric(summary?.executionTimeMs, "ms")],
+                ["Returned", formatExplainMetric(summary?.nReturned)],
+                ["Docs examined", formatExplainMetric(summary?.totalDocsExamined)],
+                ["Keys examined", formatExplainMetric(summary?.totalKeysExamined)],
+                ["Index", summary?.indexName ?? "Unknown"],
+                ["Collection scan", summary?.hasCollectionScan ? "Yes" : "No"],
+              ].map(([label, value]) => (
+                <div className="explain-metric" key={label}>
+                  <span>{label}</span>
+                  <strong>{value}</strong>
+                </div>
+              ))}
+            </div>
+            {summary?.stages.length ? (
+              <div className="explain-stage-list">
+                {summary.stages.map((stage, index) => (
+                  <span key={`${stage}:${index}`}>{stage}</span>
+                ))}
+              </div>
+            ) : (
+              <p className="explain-empty-plan">
+                Plan stages will appear here after MongoDB returns execution
+                stats.
+              </p>
+            )}
+          </section>
+
+          <section className="explain-raw-card">
+            <header>
+              <strong>Raw JSON</strong>
+              <span>{result ? "Execution plan" : "Current find query"}</span>
+            </header>
+            <RawJsonViewer
+              editorTheme={editorTheme}
+              path="explain-plan.json"
+              value={rawPlan}
+            />
+          </section>
+        </div>
+      )}
+    </section>
+  );
+};
+
 type AggregationPipelineWorkspaceProps = {
   editorTheme: "vs" | "vs-dark";
   model: AggregationPipelineModel;
@@ -5232,12 +5497,26 @@ type RawPipelineEditorProps = {
 };
 
 const RawPipelineEditor = ({ editorTheme, value }: RawPipelineEditorProps) => (
+  <RawJsonViewer
+    editorTheme={editorTheme}
+    path="aggregation-raw-pipeline.json"
+    value={value}
+  />
+);
+
+type RawJsonViewerProps = {
+  editorTheme: "vs" | "vs-dark";
+  path: string;
+  value: string;
+};
+
+const RawJsonViewer = ({ editorTheme, path, value }: RawJsonViewerProps) => (
   <div className="document-editor-monaco aggregation-raw-editor">
     <Editor
       defaultLanguage="json"
       height="100%"
       loading={<div className="document-editor-loading">Loading editor</div>}
-      path="aggregation-raw-pipeline.json"
+      path={path}
       value={value}
       options={{
         automaticLayout: true,
@@ -9889,6 +10168,185 @@ const formatCellValue = (value: unknown): string => {
   }
 
   return String(displayValue);
+};
+
+type ExplainPlanSummary = {
+  executionTimeMs?: number;
+  hasCollectionScan: boolean;
+  indexName?: string;
+  nReturned?: number;
+  stages: string[];
+  totalDocsExamined?: number;
+  totalKeysExamined?: number;
+};
+
+const parseExplainPlan = (value: string): Record<string, unknown> => {
+  const parsed = JSON.parse(value) as unknown;
+
+  return isRecord(parsed) ? parsed : { value: parsed };
+};
+
+const summarizeExplainPlan = (
+  plan: Record<string, unknown>,
+): ExplainPlanSummary => {
+  const stages = collectExplainStages(plan);
+  const executionTimeMs =
+    findFirstExplainNumber(plan, "executionTimeMillis") ??
+    findFirstExplainNumber(plan, "executionTimeMillisEstimate");
+  const indexName = findFirstExplainString(plan, "indexName");
+  const nReturned = findFirstExplainNumber(plan, "nReturned");
+  const totalDocsExamined = findFirstExplainNumber(plan, "totalDocsExamined");
+  const totalKeysExamined = findFirstExplainNumber(plan, "totalKeysExamined");
+
+  const summary: ExplainPlanSummary = {
+    hasCollectionScan: stages.includes("COLLSCAN"),
+    stages: stages.length > 0 ? stages : ["Unknown"],
+  };
+
+  if (executionTimeMs !== undefined) {
+    summary.executionTimeMs = executionTimeMs;
+  }
+
+  if (indexName !== undefined) {
+    summary.indexName = indexName;
+  }
+
+  if (nReturned !== undefined) {
+    summary.nReturned = nReturned;
+  }
+
+  if (totalDocsExamined !== undefined) {
+    summary.totalDocsExamined = totalDocsExamined;
+  }
+
+  if (totalKeysExamined !== undefined) {
+    summary.totalKeysExamined = totalKeysExamined;
+  }
+
+  return summary;
+};
+
+const collectExplainStages = (
+  value: unknown,
+  stages: string[] = [],
+): string[] => {
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectExplainStages(item, stages));
+    return [...new Set(stages)];
+  }
+
+  if (!isRecord(value)) {
+    return [...new Set(stages)];
+  }
+
+  if (typeof value.stage === "string") {
+    stages.push(value.stage);
+  }
+
+  for (const [key, nestedValue] of Object.entries(value)) {
+    if (key.startsWith("$")) {
+      stages.push(key);
+    }
+
+    collectExplainStages(nestedValue, stages);
+  }
+
+  return [...new Set(stages)];
+};
+
+const findFirstExplainNumber = (
+  value: unknown,
+  key: string,
+): number | undefined => {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const result = findFirstExplainNumber(item, key);
+
+      if (result !== undefined) {
+        return result;
+      }
+    }
+
+    return undefined;
+  }
+
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const currentValue = value[key];
+
+  if (typeof currentValue === "number") {
+    return currentValue;
+  }
+
+  if (isRecord(currentValue)) {
+    const ejsonNumber = currentValue.$numberInt ?? currentValue.$numberLong;
+
+    if (typeof ejsonNumber === "string") {
+      const numericValue = Number(ejsonNumber);
+
+      return Number.isFinite(numericValue) ? numericValue : undefined;
+    }
+  }
+
+  for (const nestedValue of Object.values(value)) {
+    const result = findFirstExplainNumber(nestedValue, key);
+
+    if (result !== undefined) {
+      return result;
+    }
+  }
+
+  return undefined;
+};
+
+const findFirstExplainString = (
+  value: unknown,
+  key: string,
+): string | undefined => {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const result = findFirstExplainString(item, key);
+
+      if (result !== undefined) {
+        return result;
+      }
+    }
+
+    return undefined;
+  }
+
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const currentValue = value[key];
+
+  if (typeof currentValue === "string" && currentValue.trim()) {
+    return currentValue;
+  }
+
+  for (const nestedValue of Object.values(value)) {
+    const result = findFirstExplainString(nestedValue, key);
+
+    if (result !== undefined) {
+      return result;
+    }
+  }
+
+  return undefined;
+};
+
+const formatExplainMetric = (
+  value: number | string | undefined,
+  suffix = "",
+): string => {
+  if (value === undefined || value === "") {
+    return "Unknown";
+  }
+
+  return `${value}${suffix ? ` ${suffix}` : ""}`;
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>

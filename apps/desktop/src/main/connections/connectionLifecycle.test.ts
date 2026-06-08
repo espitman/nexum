@@ -115,6 +115,28 @@ class FakeActiveConnection implements ActiveMongoConnection {
     };
   }
 
+  async explainAggregate(
+    input: Parameters<ActiveMongoConnection["explainAggregate"]>[0],
+  ) {
+    this.aggregateInputs.push(input);
+
+    return {
+      executionTimeMs: 2,
+      plan: '{"stages":[]}',
+    };
+  }
+
+  async explainFind(
+    input: Parameters<ActiveMongoConnection["explainFind"]>[0],
+  ) {
+    this.findInputs.push(input);
+
+    return {
+      executionTimeMs: 2,
+      plan: '{"queryPlanner":{"winningPlan":{"stage":"COLLSCAN"}}}',
+    };
+  }
+
   async findDocuments(
     input: Parameters<ActiveMongoConnection["findDocuments"]>[0],
   ) {

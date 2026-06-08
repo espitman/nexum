@@ -2855,6 +2855,143 @@ button {
   padding: 18px 22px 96px;
 }
 
+.explain-workspace {
+  display: grid;
+  grid-row: 3 / 6;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.explain-toolbar {
+  align-items: stretch;
+  border-bottom: 1px solid #dfe5ed;
+  display: flex;
+  justify-content: space-between;
+  min-height: 74px;
+  padding: 0 18px;
+}
+
+.explain-source-tabs {
+  align-self: stretch;
+  max-width: 360px;
+  width: 360px;
+}
+
+.explain-source-tabs button {
+  height: auto;
+}
+
+.explain-run-button {
+  align-self: center;
+  min-width: 136px;
+}
+
+.explain-content {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
+  min-height: 0;
+  overflow: hidden;
+  padding: 18px;
+}
+
+.explain-summary-card,
+.explain-raw-card {
+  background: #ffffff;
+  border: 1px solid #dfe6ee;
+  border-radius: 8px;
+  display: grid;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.explain-summary-card {
+  align-content: start;
+  gap: 16px;
+  padding: 16px;
+}
+
+.explain-summary-card header,
+.explain-raw-card header {
+  display: grid;
+  gap: 4px;
+}
+
+.explain-summary-card header strong,
+.explain-raw-card header strong {
+  color: #263142;
+  font-size: 15px;
+}
+
+.explain-summary-card header span,
+.explain-raw-card header span,
+.explain-empty-plan {
+  color: #667085;
+  font-size: 13px;
+}
+
+.explain-metrics {
+  border: 1px solid #e3e9f1;
+  border-radius: 7px;
+  display: grid;
+  overflow: hidden;
+}
+
+.explain-metric {
+  align-items: center;
+  border-bottom: 1px solid #e8edf3;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) minmax(96px, auto);
+  min-height: 42px;
+  padding: 0 12px;
+}
+
+.explain-metric:last-child {
+  border-bottom: 0;
+}
+
+.explain-metric span {
+  color: #667085;
+}
+
+.explain-metric strong {
+  color: #263142;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 13px;
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.explain-stage-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.explain-stage-list span {
+  background: #eef6f8;
+  border: 1px solid #b8dfe5;
+  border-radius: 999px;
+  color: #00717d;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 5px 9px;
+}
+
+.explain-raw-card {
+  grid-template-rows: 54px minmax(0, 1fr);
+}
+
+.explain-raw-card header {
+  border-bottom: 1px solid #e5ebf2;
+  padding: 10px 14px;
+}
+
 .aggregation-workspace {
   display: grid;
   gap: 0;
@@ -5657,7 +5794,8 @@ input:disabled {
 .app-shell.appearance-dark .settings-nav,
 .app-shell.appearance-dark .aggregation-stage-list,
 .app-shell.appearance-dark .aggregation-preview,
-.app-shell.appearance-dark .query-builder-section {
+.app-shell.appearance-dark .query-builder-section,
+.app-shell.appearance-dark .explain-toolbar {
   border-color: #2b3948;
 }
 
@@ -5689,6 +5827,9 @@ input:disabled {
 .app-shell.appearance-dark .task-result,
 .app-shell.appearance-dark .aggregation-preview-panel,
 .app-shell.appearance-dark .aggregation-stage-card,
+.app-shell.appearance-dark .explain-summary-card,
+.app-shell.appearance-dark .explain-raw-card,
+.app-shell.appearance-dark .explain-metrics,
 .app-shell.appearance-dark .query-builder-shell,
 .app-shell.appearance-dark .query-builder-group,
 .app-shell.appearance-dark .query-builder-condition,
@@ -5737,6 +5878,8 @@ input:disabled {
 .app-shell.appearance-dark .aggregation-toolbar,
 .app-shell.appearance-dark .aggregation-editor-header,
 .app-shell.appearance-dark .aggregation-preview-panel header,
+.app-shell.appearance-dark .explain-raw-card header,
+.app-shell.appearance-dark .explain-metric,
 .app-shell.appearance-dark .document-editor-header,
 .app-shell.appearance-dark .document-editor-footer,
 .app-shell.appearance-dark .connection-manager-header,
@@ -5765,6 +5908,9 @@ input:disabled {
 .app-shell.appearance-dark .task-run-modal h2,
 .app-shell.appearance-dark .task-run-modal-summary strong,
 .app-shell.appearance-dark .aggregation-preview-panel header strong,
+.app-shell.appearance-dark .explain-summary-card header strong,
+.app-shell.appearance-dark .explain-raw-card header strong,
+.app-shell.appearance-dark .explain-metric strong,
 .app-shell.appearance-dark .aggregation-editor-header strong,
 .app-shell.appearance-dark .aggregation-stage-card strong,
 .app-shell.appearance-dark .connection-manager-header strong,
@@ -5797,6 +5943,10 @@ input:disabled {
 .app-shell.appearance-dark .task-run-modal-message span,
 .app-shell.appearance-dark .aggregation-editor-header span,
 .app-shell.appearance-dark .aggregation-preview-panel header span,
+.app-shell.appearance-dark .explain-summary-card header span,
+.app-shell.appearance-dark .explain-raw-card header span,
+.app-shell.appearance-dark .explain-metric span,
+.app-shell.appearance-dark .explain-empty-plan,
 .app-shell.appearance-dark .connection-manager-header span,
 .app-shell.appearance-dark .connection-profile-card small,
 .app-shell.appearance-dark .schema-tree-card span,
@@ -5909,6 +6059,7 @@ input:disabled {
 .app-shell.appearance-dark .query-code-block pre,
 .app-shell.appearance-dark .query-builder-preview pre,
 .app-shell.appearance-dark .aggregation-raw-editor,
+.app-shell.appearance-dark .explain-stage-list span,
 .app-shell.appearance-dark .schema-tree-card code,
 .app-shell.appearance-dark .index-list-row code,
 .app-shell.appearance-dark .aggregation-result-documents article {
@@ -5960,6 +6111,12 @@ input:disabled {
   color: #aebbc7;
 }
 
+.app-shell.appearance-dark .explain-stage-list span {
+  background: #14303a;
+  border-color: #1f7481;
+  color: #55c7d4;
+}
+
 @media (prefers-color-scheme: dark) {
   .app-shell.appearance-system {
     background: #101820;
@@ -5980,7 +6137,8 @@ input:disabled {
   .app-shell.appearance-system .settings-nav,
   .app-shell.appearance-system .aggregation-stage-list,
   .app-shell.appearance-system .aggregation-preview,
-  .app-shell.appearance-system .query-builder-section {
+  .app-shell.appearance-system .query-builder-section,
+  .app-shell.appearance-system .explain-toolbar {
     border-color: #2b3948;
   }
 
@@ -6012,6 +6170,9 @@ input:disabled {
   .app-shell.appearance-system .task-result,
   .app-shell.appearance-system .aggregation-preview-panel,
   .app-shell.appearance-system .aggregation-stage-card,
+  .app-shell.appearance-system .explain-summary-card,
+  .app-shell.appearance-system .explain-raw-card,
+  .app-shell.appearance-system .explain-metrics,
   .app-shell.appearance-system .query-builder-shell,
   .app-shell.appearance-system .query-builder-group,
   .app-shell.appearance-system .query-builder-condition,
@@ -6060,6 +6221,8 @@ input:disabled {
   .app-shell.appearance-system .aggregation-toolbar,
   .app-shell.appearance-system .aggregation-editor-header,
   .app-shell.appearance-system .aggregation-preview-panel header,
+  .app-shell.appearance-system .explain-raw-card header,
+  .app-shell.appearance-system .explain-metric,
   .app-shell.appearance-system .document-editor-header,
   .app-shell.appearance-system .document-editor-footer,
   .app-shell.appearance-system .connection-manager-header,
@@ -6088,6 +6251,9 @@ input:disabled {
   .app-shell.appearance-system .task-run-modal h2,
   .app-shell.appearance-system .task-run-modal-summary strong,
   .app-shell.appearance-system .aggregation-preview-panel header strong,
+  .app-shell.appearance-system .explain-summary-card header strong,
+  .app-shell.appearance-system .explain-raw-card header strong,
+  .app-shell.appearance-system .explain-metric strong,
   .app-shell.appearance-system .aggregation-editor-header strong,
   .app-shell.appearance-system .aggregation-stage-card strong,
   .app-shell.appearance-system .connection-manager-header strong,
@@ -6120,6 +6286,10 @@ input:disabled {
   .app-shell.appearance-system .task-run-modal-message span,
   .app-shell.appearance-system .aggregation-editor-header span,
   .app-shell.appearance-system .aggregation-preview-panel header span,
+  .app-shell.appearance-system .explain-summary-card header span,
+  .app-shell.appearance-system .explain-raw-card header span,
+  .app-shell.appearance-system .explain-metric span,
+  .app-shell.appearance-system .explain-empty-plan,
   .app-shell.appearance-system .connection-manager-header span,
   .app-shell.appearance-system .connection-profile-card small,
   .app-shell.appearance-system .schema-tree-card span,
@@ -6232,6 +6402,7 @@ input:disabled {
   .app-shell.appearance-system .query-code-block pre,
   .app-shell.appearance-system .query-builder-preview pre,
   .app-shell.appearance-system .aggregation-raw-editor,
+  .app-shell.appearance-system .explain-stage-list span,
   .app-shell.appearance-system .schema-tree-card code,
   .app-shell.appearance-system .index-list-row code,
   .app-shell.appearance-system .aggregation-result-documents article {
@@ -6281,6 +6452,12 @@ input:disabled {
   .app-shell.appearance-system .run-button:disabled {
     background: #35515a;
     color: #aebbc7;
+  }
+
+  .app-shell.appearance-system .explain-stage-list span {
+    background: #14303a;
+    border-color: #1f7481;
+    color: #55c7d4;
   }
 }
 

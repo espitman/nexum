@@ -93,6 +93,11 @@ export const mongodbFindDocumentsPayloadSchema = z.object({
     .default({}),
 });
 
+export const mongodbExplainFindPayloadSchema =
+  mongodbFindDocumentsPayloadSchema.omit({ limit: true }).extend({
+    limit: z.number().int().min(1).max(500).default(50),
+  });
+
 export const mongodbCollectionPayloadSchema = z.object({
   collection: z.string().min(1),
   connectionId: z.string().min(1),
@@ -159,6 +164,9 @@ export const mongodbAggregatePayloadSchema = z.object({
   });
 });
 
+export const mongodbExplainAggregatePayloadSchema =
+  mongodbAggregatePayloadSchema;
+
 export const mongodbUpdateDocumentPayloadSchema = z.object({
   collection: z.string().min(1),
   confirmedProductionWrite: z.boolean().default(false),
@@ -187,11 +195,17 @@ export type ExplorerChildrenPayload = z.infer<
 export type MongodbFindDocumentsPayload = z.infer<
   typeof mongodbFindDocumentsPayloadSchema
 >;
+export type MongodbExplainFindPayload = z.infer<
+  typeof mongodbExplainFindPayloadSchema
+>;
 export type MongodbCollectionPayload = z.infer<
   typeof mongodbCollectionPayloadSchema
 >;
 export type MongodbAggregatePayload = z.infer<
   typeof mongodbAggregatePayloadSchema
+>;
+export type MongodbExplainAggregatePayload = z.infer<
+  typeof mongodbExplainAggregatePayloadSchema
 >;
 export type MongodbUpdateDocumentPayload = z.infer<
   typeof mongodbUpdateDocumentPayloadSchema
