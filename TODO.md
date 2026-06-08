@@ -351,3 +351,34 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
   - [ ] Empty, loading, and error states are consistent
   - [ ] Workspaces do not expose secrets
   - [ ] Run lint, typecheck, and tests
+
+## Phase 13 — Multi-step Task Workflows
+
+- [ ] Define task workflow model
+  - [ ] Support ordered task steps with stable ids and names
+  - [ ] Support find, aggregate, insert, update, delete, export, and schema-analysis step types
+  - [ ] Store task-level variables and per-step outputs in a run context
+  - [ ] Persist workflow definitions separately from run history
+- [ ] Implement step result references
+  - [ ] Allow later steps to reference previous step outputs
+  - [ ] Support first value, id lists, counts, and named result sets
+  - [ ] Validate references before running a workflow
+  - [ ] Prevent references from exposing connection secrets
+- [ ] Build workflow executor
+  - [ ] Run steps sequentially
+  - [ ] Stop safely on failed or blocked steps
+  - [ ] Persist per-step status, duration, result summary, and errors
+  - [ ] Reuse existing read-only and production write protections for write steps
+  - [ ] Add unit tests for execution order, failure handling, and reference resolution
+- [ ] Build workflow UI
+  - [ ] Add step list and selected-step editor
+  - [ ] Show available outputs from previous steps
+  - [ ] Add manual run and scheduled run support
+  - [ ] Show per-step run results in the task run modal
+  - [ ] Support clone, rename, delete, and reorder workflow steps
+- [ ] Verify multi-step tasks
+  - [ ] Run find-to-update workflow
+  - [ ] Run aggregate-to-export workflow
+  - [ ] Run result-to-insert workflow
+  - [ ] Confirm blocked writes are audited
+  - [ ] Run lint, typecheck, and tests
