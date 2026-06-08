@@ -19,6 +19,7 @@ export const ipcChannels = {
   mongodbExplainFind: "nexum:mongodb:explain-find",
   mongodbFindDocuments: "nexum:mongodb:find-documents",
   mongodbListIndexes: "nexum:mongodb:list-indexes",
+  mongodbManualWrite: "nexum:mongodb:manual-write",
   mongodbUpdateDocument: "nexum:mongodb:update-document",
 } as const;
 
@@ -69,6 +70,22 @@ export type DocumentQueryResult = {
 export type DocumentUpdateResult = {
   matchedCount: number;
   modifiedCount: number;
+};
+
+export type MongoManualWriteResult = {
+  acknowledged: boolean;
+  deletedCount?: number;
+  insertedCount?: number;
+  matchedCount?: number;
+  modifiedCount?: number;
+  operation:
+    | "deleteMany"
+    | "deleteOne"
+    | "insertMany"
+    | "insertOne"
+    | "updateMany"
+    | "updateOne";
+  upsertedCount?: number;
 };
 
 export type MongoAggregateResult = {

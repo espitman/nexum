@@ -165,6 +165,7 @@ type CollectionTabState = {
   isQueryBuilderOpen: boolean;
   limitInput: string;
   manualQueryInput: string;
+  manualQueryResult: ManualQueryRunResult | null;
   pendingInlineDocuments: Map<string, ParsedDocument>;
   projectionInput: string;
   queryBuilderModel: QueryBuilderGroupNode;
@@ -177,6 +178,11 @@ type CollectionTabState = {
     collectionName: string | null;
     path: string[];
   };
+};
+
+type ManualQueryRunResult = {
+  message: string;
+  status: "error" | "running" | "success";
 };
 
 const defaultQueryState: DocumentQueryState = {
@@ -287,6 +293,7 @@ export const DocumentWorkspace = ({
       isQueryBuilderOpen: false,
       limitInput: `${settings.query.defaultPageSize}`,
       manualQueryInput: `find({}).limit(${settings.query.defaultPageSize})`,
+      manualQueryResult: null,
       pendingInlineDocuments: new Map(),
       projectionInput: "{}",
       queryBuilderModel: createDefaultQueryBuilderModel(),
@@ -320,8 +327,9 @@ export const DocumentWorkspace = ({
   const lastRecordedHistoryIdRef = useRef<string | null>(null);
   const runningTaskIdsRef = useRef<Set<string>>(new Set());
   const cancelRequestedTaskIdsRef = useRef<Set<string>>(new Set());
-  const [isSystemDark, setIsSystemDark] = useState(() =>
-    globalThis.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false,
+  const [isSystemDark, setIsSystemDark] = useState(
+    () =>
+      globalThis.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false,
   );
   useEffect(() => {
     const mediaQuery = globalThis.matchMedia?.("(prefers-color-scheme: dark)");
@@ -368,6 +376,7 @@ export const DocumentWorkspace = ({
     isQueryBuilderOpen,
     limitInput,
     manualQueryInput,
+    manualQueryResult,
     pendingInlineDocuments,
     projectionInput,
     queryBuilderModel,
@@ -394,7 +403,8 @@ export const DocumentWorkspace = ({
 
     setCollectionTabStates((currentStates) => {
       const currentState =
-        currentStates[activeCollectionTabId] ?? createInitialCollectionTabState();
+        currentStates[activeCollectionTabId] ??
+        createInitialCollectionTabState();
 
       return {
         ...currentStates,
@@ -410,9 +420,11 @@ export const DocumentWorkspace = ({
       ...currentState,
       [key]:
         typeof value === "function"
-          ? (value as (currentValue: CollectionTabState[Key]) => CollectionTabState[Key])(
-              currentState[key],
-            )
+          ? (
+              value as (
+                currentValue: CollectionTabState[Key],
+              ) => CollectionTabState[Key]
+            )(currentState[key])
           : value,
     }));
   };
@@ -460,6 +472,9 @@ export const DocumentWorkspace = ({
     setQueryInputField("limitInput", value);
   const setManualQueryInput = (value: SetStateAction<string>) =>
     setCollectionTabField("manualQueryInput", value);
+  const setManualQueryResult = (
+    value: SetStateAction<ManualQueryRunResult | null>,
+  ) => setCollectionTabField("manualQueryResult", value);
   const setProjectionInput = (value: SetStateAction<string>) =>
     setQueryInputField("projectionInput", value);
   const setQueryState = (value: SetStateAction<DocumentQueryState>) =>
@@ -472,8 +487,9 @@ export const DocumentWorkspace = ({
   const setAggregationRunResult = (
     value: SetStateAction<AggregationRunResult | null>,
   ) => setCollectionTabField("aggregationRunResult", value);
-  const setExplainRunResult = (value: SetStateAction<ExplainRunResult | null>) =>
-    setCollectionTabField("explainRunResult", value);
+  const setExplainRunResult = (
+    value: SetStateAction<ExplainRunResult | null>,
+  ) => setCollectionTabField("explainRunResult", value);
   const setExplainSource = (value: SetStateAction<ExplainSource>) =>
     setCollectionTabField("explainSource", value);
   const setSkipInput = (value: SetStateAction<string>) =>
@@ -753,28 +769,101 @@ export const DocumentWorkspace = ({
   };
 
   const runManualQuery = () => {
-    const nextState = parseManualFindQueryInput({
+    const nextState = parseManualMongoQueryInput({
       defaultLimit: settings.query.defaultPageSize,
       value: manualQueryInput,
     });
 
     if (!nextState.ok) {
+      setManualQueryResult({ message: nextState.message, status: "error" });
       setQueryInputError(nextState.message);
       onConnectionError("Manual query is invalid", nextState.message);
       return;
     }
 
+    if (nextState.value.kind === "write") {
+      if (!window.nexum) {
+        const message = "Preload API is unavailable";
+        setManualQueryResult({ message, status: "error" });
+        setQueryInputError(message);
+        onConnectionError("Manual write failed", message);
+        return;
+      }
+
+      if (!selectedConnectionId || !selectedCollectionPath) {
+        const message = "No collection selected";
+        setManualQueryResult({ message, status: "error" });
+        setQueryInputError(message);
+        onConnectionError("Manual write failed", message);
+        return;
+      }
+
+      const confirmedProductionWrite =
+        selectedConnection?.environment === "production" &&
+        settings.safety.confirmProductionWrites
+          ? window.confirm(
+              `Run ${nextState.value.operation} on production collection ${selectedCollectionPath.database}.${selectedCollectionPath.collection}?`,
+            )
+          : false;
+
+      if (
+        selectedConnection?.environment === "production" &&
+        settings.safety.confirmProductionWrites &&
+        !confirmedProductionWrite
+      ) {
+        return;
+      }
+
+      setQueryInputError(null);
+      setManualQueryResult({
+        message: `Running ${nextState.value.operation}...`,
+        status: "running",
+      });
+
+      void window.nexum.mongodb
+        .manualWrite({
+          collection: selectedCollectionPath.collection,
+          confirmedProductionWrite,
+          connectionId: selectedConnectionId,
+          database: selectedCollectionPath.database,
+          documents: nextState.value.documents,
+          filter: nextState.value.filter,
+          operation: nextState.value.operation,
+          update: nextState.value.update,
+        })
+        .then(async (result) => {
+          setManualQueryResult({
+            message: formatManualWriteResult(result),
+            status: "success",
+          });
+          await documentsQuery.refetch();
+        })
+        .catch((error: unknown) => {
+          const message =
+            error instanceof Error
+              ? getSafeWorkspaceErrorMessage(error)
+              : "Unable to run manual write.";
+          setManualQueryResult({ message, status: "error" });
+          setQueryInputError(message);
+          onConnectionError("Manual write failed", message);
+        });
+
+      return;
+    }
+
+    setManualQueryResult(null);
+
     setQueryInputError(null);
     setSelectedDocument(null);
     setEditorDocument(null);
-    setFilterInput(JSON.stringify(nextState.value.filter));
-    setProjectionInput(JSON.stringify(nextState.value.projection));
-    setSortInput(JSON.stringify(nextState.value.sort));
-    setLimitInput(String(nextState.value.limit));
-    setSkipInput(String(nextState.value.skip));
-    setManualQueryInput(buildManualFindQueryInput(nextState.value));
-    setQueryState(nextState.value);
-    recordQueryRun(nextState.value);
+    setFilterInput(JSON.stringify(nextState.value.query.filter));
+    setProjectionInput(JSON.stringify(nextState.value.query.projection));
+    setSortInput(JSON.stringify(nextState.value.query.sort));
+    setLimitInput(String(nextState.value.query.limit));
+    setSkipInput(String(nextState.value.query.skip));
+    setManualQueryInput(buildManualFindQueryInput(nextState.value.query));
+    setQueryState(nextState.value.query);
+    recordQueryRun(nextState.value.query);
   };
 
   const runExplain = (source: ExplainSource) => {
@@ -824,14 +913,14 @@ export const DocumentWorkspace = ({
               }
 
               return window.nexum.mongodb.explainFind({
-              collection: selectedCollectionPath.collection,
-              connectionId: selectedConnectionId,
-              database: selectedCollectionPath.database,
-              filter: queryState.filter,
-              limit: queryState.limit,
-              projection: queryState.projection,
-              skip: queryState.skip,
-              sort: queryState.sort,
+                collection: selectedCollectionPath.collection,
+                connectionId: selectedConnectionId,
+                database: selectedCollectionPath.database,
+                filter: queryState.filter,
+                limit: queryState.limit,
+                projection: queryState.projection,
+                skip: queryState.skip,
+                sort: queryState.sort,
               });
             })();
 
@@ -1412,12 +1501,12 @@ export const DocumentWorkspace = ({
         const { scheduleTime: _scheduleTime, ...nextTask } = task;
 
         return {
-              ...nextTask,
-              lastModifiedAt: now,
-              nextRunAt: getNextTaskRunAt(schedule, scheduleTime),
-              schedule,
-              ...(scheduleTime ? { scheduleTime } : {}),
-            };
+          ...nextTask,
+          lastModifiedAt: now,
+          nextRunAt: getNextTaskRunAt(schedule, scheduleTime),
+          schedule,
+          ...(scheduleTime ? { scheduleTime } : {}),
+        };
       }),
     );
   };
@@ -1506,11 +1595,7 @@ export const DocumentWorkspace = ({
       );
       const nextIndex = index + direction;
 
-      if (
-        index < 0 ||
-        nextIndex < 0 ||
-        nextIndex >= currentBookmarks.length
-      ) {
+      if (index < 0 || nextIndex < 0 || nextIndex >= currentBookmarks.length) {
         return currentBookmarks;
       }
 
@@ -1886,7 +1971,10 @@ export const DocumentWorkspace = ({
       ) : null}
 
       {activeSection === "Settings" ? (
-        <SettingsWorkspace settings={settings} onSettingsChange={updateSettings} />
+        <SettingsWorkspace
+          settings={settings}
+          onSettingsChange={updateSettings}
+        />
       ) : null}
 
       {activeSection === "Queries" ||
@@ -1894,324 +1982,342 @@ export const DocumentWorkspace = ({
       activeSection === "Tasks" ||
       activeSection === "Settings" ? null : (
         <>
-      {isConnectionManager ? null : (
-        <CollectionTabBar
-          activeCollectionTabId={activeCollectionTabId}
-          isCollectionWorkspace={isCollectionWorkspace}
-          openCollectionTabs={openCollectionTabs}
-          selectedCollectionName={selectedCollectionName}
-          onCollectionClose={onCollectionClose}
-          onCollectionCloseAll={onCollectionCloseAll}
-          onCollectionCloseOthers={onCollectionCloseOthers}
-          onCollectionCloseSide={onCollectionCloseSide}
-          onCollectionClone={cloneCollectionTab}
-          onCollectionSelect={onCollectionSelectTab}
-          onCollectionSwitch={onCollectionSwitch}
-        />
-      )}
-
-      {isConnectionManager ? null : isCollectionWorkspace ? (
-        <WorkspaceTabs
-          activeWorkspaceTab={activeWorkspaceTab}
-          isQueryBuilderOpen={isQueryBuilderOpen}
-          onQueryBuilderToggle={() =>
-            setIsQueryBuilderOpen((currentValue) => !currentValue)
-          }
-          onWorkspaceTabChange={onWorkspaceTabChange}
-        />
-      ) : (
-        <div className="workspace-tabs workspace-tabs-empty" />
-      )}
-
-      {isCollectionWorkspace ? (
-        <>
-          {isMetadataWorkspace ? (
-            <MetadataWorkspace
-              activeWorkspaceTab={activeWorkspaceTab}
-              indexRows={indexRows}
-              indexesError={indexesError}
-              isIndexesLoading={isIndexesLoading}
-              schemaFields={schemaFields}
+          {isConnectionManager ? null : (
+            <CollectionTabBar
+              activeCollectionTabId={activeCollectionTabId}
+              isCollectionWorkspace={isCollectionWorkspace}
+              openCollectionTabs={openCollectionTabs}
+              selectedCollectionName={selectedCollectionName}
+              onCollectionClose={onCollectionClose}
+              onCollectionCloseAll={onCollectionCloseAll}
+              onCollectionCloseOthers={onCollectionCloseOthers}
+              onCollectionCloseSide={onCollectionCloseSide}
+              onCollectionClone={cloneCollectionTab}
+              onCollectionSelect={onCollectionSelectTab}
+              onCollectionSwitch={onCollectionSwitch}
             />
-          ) : null}
-          {isAggregationWorkspace ? (
-            <AggregationPipelineWorkspace
-              editorTheme={editorTheme}
-              model={aggregationPipelineModel}
-              result={aggregationRunResult}
-              schemaFields={schemaFields}
-              onModelChange={(nextModel) => {
-                setAggregationPipelineModel(nextModel);
-                setAggregationRunResult(null);
-              }}
-              onRunPipeline={() => {
-                try {
-                  const pipeline = buildRawPipelineFromAggregationModel(
-                    aggregationPipelineModel,
-                  );
+          )}
 
-                  if (!window.nexum) {
-                    throw new Error("Preload API is unavailable");
-                  }
+          {isConnectionManager ? null : isCollectionWorkspace ? (
+            <WorkspaceTabs
+              activeWorkspaceTab={activeWorkspaceTab}
+              isQueryBuilderOpen={isQueryBuilderOpen}
+              onQueryBuilderToggle={() =>
+                setIsQueryBuilderOpen((currentValue) => !currentValue)
+              }
+              onWorkspaceTabChange={onWorkspaceTabChange}
+            />
+          ) : (
+            <div className="workspace-tabs workspace-tabs-empty" />
+          )}
 
-                  if (!selectedConnectionId || !selectedCollectionPath) {
-                    throw new Error("No collection selected");
-                  }
+          {isCollectionWorkspace ? (
+            <>
+              {isMetadataWorkspace ? (
+                <MetadataWorkspace
+                  activeWorkspaceTab={activeWorkspaceTab}
+                  indexRows={indexRows}
+                  indexesError={indexesError}
+                  isIndexesLoading={isIndexesLoading}
+                  schemaFields={schemaFields}
+                />
+              ) : null}
+              {isAggregationWorkspace ? (
+                <AggregationPipelineWorkspace
+                  editorTheme={editorTheme}
+                  model={aggregationPipelineModel}
+                  result={aggregationRunResult}
+                  schemaFields={schemaFields}
+                  onModelChange={(nextModel) => {
+                    setAggregationPipelineModel(nextModel);
+                    setAggregationRunResult(null);
+                  }}
+                  onRunPipeline={() => {
+                    try {
+                      const pipeline = buildRawPipelineFromAggregationModel(
+                        aggregationPipelineModel,
+                      );
 
-                  if (pipeline.length === 0) {
-                    setAggregationRunResult({
-                      documents: [],
-                      message:
-                        "Pipeline is empty. Add an enabled complete stage to run.",
-                      pipeline,
-                      status: "error",
-                    });
-                    return;
-                  }
+                      if (!window.nexum) {
+                        throw new Error("Preload API is unavailable");
+                      }
 
-                  setAggregationRunResult({
-                    documents: [],
-                    message:
-                      "Running aggregation pipeline against the selected collection.",
-                    pipeline,
-                    status: "running",
-                  });
-                  void withQueryTimeout(
-                    window.nexum.mongodb.aggregate({
-                      collection: selectedCollectionPath.collection,
-                      connectionId: selectedConnectionId,
-                      database: selectedCollectionPath.database,
-                      limit: 50,
-                      pipeline,
-                    }),
-                    settings.query.timeoutMs,
-                  )
-                    .then((result) => {
-                      recordAggregationRun(pipeline, result);
-                      setAggregationRunResult({
-                        documents: result.documents,
-                        executionTimeMs: result.executionTimeMs,
-                        message: `${result.documents.length} document${result.documents.length === 1 ? "" : "s"} returned.`,
-                        pipeline,
-                        status: "ready",
-                      });
-                    })
-                    .catch((error: unknown) => {
-                      const message =
-                        error instanceof Error
-                          ? getSafeWorkspaceErrorMessage(error)
-                          : "Aggregation failed.";
+                      if (!selectedConnectionId || !selectedCollectionPath) {
+                        throw new Error("No collection selected");
+                      }
+
+                      if (pipeline.length === 0) {
+                        setAggregationRunResult({
+                          documents: [],
+                          message:
+                            "Pipeline is empty. Add an enabled complete stage to run.",
+                          pipeline,
+                          status: "error",
+                        });
+                        return;
+                      }
+
                       setAggregationRunResult({
                         documents: [],
-                        message,
+                        message:
+                          "Running aggregation pipeline against the selected collection.",
                         pipeline,
+                        status: "running",
+                      });
+                      void withQueryTimeout(
+                        window.nexum.mongodb.aggregate({
+                          collection: selectedCollectionPath.collection,
+                          connectionId: selectedConnectionId,
+                          database: selectedCollectionPath.database,
+                          limit: 50,
+                          pipeline,
+                        }),
+                        settings.query.timeoutMs,
+                      )
+                        .then((result) => {
+                          recordAggregationRun(pipeline, result);
+                          setAggregationRunResult({
+                            documents: result.documents,
+                            executionTimeMs: result.executionTimeMs,
+                            message: `${result.documents.length} document${result.documents.length === 1 ? "" : "s"} returned.`,
+                            pipeline,
+                            status: "ready",
+                          });
+                        })
+                        .catch((error: unknown) => {
+                          const message =
+                            error instanceof Error
+                              ? getSafeWorkspaceErrorMessage(error)
+                              : "Aggregation failed.";
+                          setAggregationRunResult({
+                            documents: [],
+                            message,
+                            pipeline,
+                            status: "error",
+                          });
+                          onConnectionError("Aggregation failed", message);
+                        });
+                    } catch (error) {
+                      setAggregationRunResult({
+                        documents: [],
+                        message:
+                          error instanceof Error
+                            ? error.message
+                            : "Pipeline is invalid.",
+                        pipeline: [],
                         status: "error",
                       });
-                      onConnectionError("Aggregation failed", message);
-                    });
-                } catch (error) {
-                  setAggregationRunResult({
-                    documents: [],
-                    message:
-                      error instanceof Error
-                        ? error.message
-                        : "Pipeline is invalid.",
-                    pipeline: [],
-                    status: "error",
-                  });
-                }
-              }}
-            />
-          ) : null}
-          {isDocumentsWorkspace ? (
-            <>
-              <QuerySection
-                filterInput={filterInput}
-                isFetching={documentsQuery.isFetching}
-                limitInput={limitInput}
-                onFilterInputChange={setFilterInput}
-                onLimitInputChange={setLimitInput}
-                onProjectionInputChange={setProjectionInput}
-                onRunQuery={runQuery}
-                onSkipInputChange={setSkipInput}
-                onSortInputChange={setSortInput}
-                projectionInput={projectionInput}
-                queryInputError={queryInputError}
-                schemaFields={schemaFields}
-                skipInput={skipInput}
-                sortInput={sortInput}
-              />
-              <ResultsSection
-                collectionLabel={selectedCollectionLabel ?? "Collection"}
-                documents={displayedDocuments}
-                error={documentsQuery.error}
-                hasMore={documentsQuery.data?.hasMore ?? false}
-                isFetching={documentsQuery.isFetching}
-                isInitialLoading={documentsQuery.isLoading}
-                isSavingDocument={updateDocumentMutation.isPending}
-                editorTheme={editorTheme}
-                onCellEdit={applyCellEdit}
-                onCellFilter={applyCellFilter}
-                onCellProjection={applyCellProjection}
-                onDocumentBookmark={createDocumentBookmark}
-                onDocumentOpen={setEditorDocument}
-                onDocumentSelect={setSelectedDocument}
-                onRefresh={() => void documentsQuery.refetch()}
-                onTablePathChange={handleTablePathChange}
-                schemaFields={schemaFields}
-                selectedDocumentId={selectedDocument?.id ?? null}
-                tablePath={tablePath}
-                viewMode={documentViewMode}
-                onViewModeChange={setDocumentViewMode}
-              />
-              <WorkspaceFooter
-                canGoNext={documentsQuery.data?.hasMore ?? false}
-                canGoPrevious={queryState.skip > 0}
-                executionTimeMs={documentsQuery.data?.executionTimeMs}
-                hasMore={documentsQuery.data?.hasMore ?? false}
-                healthLabel={healthLabel}
-                limit={queryState.limit}
-                onFirstPage={() => goToPage(1)}
-                onNextPage={() =>
-                  goToPage(Math.floor(queryState.skip / queryState.limit) + 2)
-                }
-                onPageChange={goToPage}
-                onPageSizeChange={updatePageSize}
-                onPreviousPage={() =>
-                  goToPage(
-                    Math.max(Math.floor(queryState.skip / queryState.limit), 1),
-                  )
-                }
-                resultCount={displayedDocuments.length}
-                skip={queryState.skip}
-              />
-              {shouldShowQueryBuilderPanel ? (
-                <QueryBuilderSection
-                  fields={queryBuilderFields}
-                  isFetching={documentsQuery.isFetching}
-                  model={queryBuilderModel}
-                  onModelChange={setQueryBuilderModel}
-                  onRunQuery={runQueryBuilder}
-                  preview={queryBuilderPreview}
+                    }
+                  }}
+                />
+              ) : null}
+              {isDocumentsWorkspace ? (
+                <>
+                  <QuerySection
+                    filterInput={filterInput}
+                    isFetching={documentsQuery.isFetching}
+                    limitInput={limitInput}
+                    onFilterInputChange={setFilterInput}
+                    onLimitInputChange={setLimitInput}
+                    onProjectionInputChange={setProjectionInput}
+                    onRunQuery={runQuery}
+                    onSkipInputChange={setSkipInput}
+                    onSortInputChange={setSortInput}
+                    projectionInput={projectionInput}
+                    queryInputError={queryInputError}
+                    schemaFields={schemaFields}
+                    skipInput={skipInput}
+                    sortInput={sortInput}
+                  />
+                  <ResultsSection
+                    collectionLabel={selectedCollectionLabel ?? "Collection"}
+                    documents={displayedDocuments}
+                    error={documentsQuery.error}
+                    hasMore={documentsQuery.data?.hasMore ?? false}
+                    isFetching={documentsQuery.isFetching}
+                    isInitialLoading={documentsQuery.isLoading}
+                    isSavingDocument={updateDocumentMutation.isPending}
+                    editorTheme={editorTheme}
+                    onCellEdit={applyCellEdit}
+                    onCellFilter={applyCellFilter}
+                    onCellProjection={applyCellProjection}
+                    onDocumentBookmark={createDocumentBookmark}
+                    onDocumentOpen={setEditorDocument}
+                    onDocumentSelect={setSelectedDocument}
+                    onRefresh={() => void documentsQuery.refetch()}
+                    onTablePathChange={handleTablePathChange}
+                    schemaFields={schemaFields}
+                    selectedDocumentId={selectedDocument?.id ?? null}
+                    tablePath={tablePath}
+                    viewMode={documentViewMode}
+                    onViewModeChange={setDocumentViewMode}
+                  />
+                  <WorkspaceFooter
+                    canGoNext={documentsQuery.data?.hasMore ?? false}
+                    canGoPrevious={queryState.skip > 0}
+                    executionTimeMs={documentsQuery.data?.executionTimeMs}
+                    hasMore={documentsQuery.data?.hasMore ?? false}
+                    healthLabel={healthLabel}
+                    limit={queryState.limit}
+                    onFirstPage={() => goToPage(1)}
+                    onNextPage={() =>
+                      goToPage(
+                        Math.floor(queryState.skip / queryState.limit) + 2,
+                      )
+                    }
+                    onPageChange={goToPage}
+                    onPageSizeChange={updatePageSize}
+                    onPreviousPage={() =>
+                      goToPage(
+                        Math.max(
+                          Math.floor(queryState.skip / queryState.limit),
+                          1,
+                        ),
+                      )
+                    }
+                    resultCount={displayedDocuments.length}
+                    skip={queryState.skip}
+                  />
+                  {shouldShowQueryBuilderPanel ? (
+                    <QueryBuilderSection
+                      fields={queryBuilderFields}
+                      isFetching={documentsQuery.isFetching}
+                      model={queryBuilderModel}
+                      onModelChange={setQueryBuilderModel}
+                      onRunQuery={runQueryBuilder}
+                      preview={queryBuilderPreview}
+                    />
+                  ) : null}
+                </>
+              ) : null}
+              {isManualQueryWorkspace ? (
+                <>
+                  <ManualQueryWorkspace
+                    isFetching={
+                      documentsQuery.isFetching ||
+                      manualQueryResult?.status === "running"
+                    }
+                    queryResult={manualQueryResult}
+                    queryInputError={queryInputError}
+                    schemaFields={schemaFields}
+                    value={manualQueryInput}
+                    onChange={setManualQueryInput}
+                    onRunQuery={runManualQuery}
+                  />
+                  <ResultsSection
+                    collectionLabel={selectedCollectionLabel ?? "Collection"}
+                    documents={displayedDocuments}
+                    error={documentsQuery.error}
+                    hasMore={documentsQuery.data?.hasMore ?? false}
+                    isFetching={documentsQuery.isFetching}
+                    isInitialLoading={documentsQuery.isLoading}
+                    isSavingDocument={updateDocumentMutation.isPending}
+                    editorTheme={editorTheme}
+                    onCellEdit={applyCellEdit}
+                    onCellFilter={applyCellFilter}
+                    onCellProjection={applyCellProjection}
+                    onDocumentBookmark={createDocumentBookmark}
+                    onDocumentOpen={setEditorDocument}
+                    onDocumentSelect={setSelectedDocument}
+                    onRefresh={() => void documentsQuery.refetch()}
+                    onTablePathChange={handleTablePathChange}
+                    schemaFields={schemaFields}
+                    selectedDocumentId={selectedDocument?.id ?? null}
+                    tablePath={tablePath}
+                    viewMode={documentViewMode}
+                    onViewModeChange={setDocumentViewMode}
+                  />
+                  <WorkspaceFooter
+                    canGoNext={documentsQuery.data?.hasMore ?? false}
+                    canGoPrevious={queryState.skip > 0}
+                    executionTimeMs={documentsQuery.data?.executionTimeMs}
+                    hasMore={documentsQuery.data?.hasMore ?? false}
+                    healthLabel={healthLabel}
+                    limit={queryState.limit}
+                    onFirstPage={() => goToPage(1)}
+                    onNextPage={() =>
+                      goToPage(
+                        Math.floor(queryState.skip / queryState.limit) + 2,
+                      )
+                    }
+                    onPageChange={goToPage}
+                    onPageSizeChange={updatePageSize}
+                    onPreviousPage={() =>
+                      goToPage(
+                        Math.max(
+                          Math.floor(queryState.skip / queryState.limit),
+                          1,
+                        ),
+                      )
+                    }
+                    resultCount={displayedDocuments.length}
+                    skip={queryState.skip}
+                  />
+                </>
+              ) : null}
+              {isExplainWorkspace ? (
+                <ExplainWorkspace
+                  editorTheme={editorTheme}
+                  queryState={queryState}
+                  result={explainRunResult}
+                  source={explainSource}
+                  onRunExplain={runExplain}
+                  onSourceChange={(nextSource) => {
+                    setExplainSource(nextSource);
+                    setExplainRunResult(null);
+                  }}
+                />
+              ) : null}
+              {editorDocument ? (
+                <DocumentEditorPanel
+                  key={`${selectedCollectionName ?? "collection"}:${editorDocument.id}:${editorDocument.ejson}`}
+                  document={editorDocument}
+                  editorTheme={editorTheme}
+                  isProduction={
+                    selectedConnection?.environment === "production"
+                  }
+                  isReadOnly={selectedConnection?.readOnly ?? true}
+                  isSaving={updateDocumentMutation.isPending}
+                  requireProductionConfirmation={
+                    settings.safety.confirmProductionWrites
+                  }
+                  onClose={() => setEditorDocument(null)}
+                  onSave={(editedDocument, confirmedProductionWrite) =>
+                    updateDocumentMutation.mutate({
+                      confirmedProductionWrite,
+                      documentId: editorDocument.id,
+                      editedDocument,
+                      originalDocument: editorDocument.ejson,
+                    })
+                  }
                 />
               ) : null}
             </>
-          ) : null}
-          {isManualQueryWorkspace ? (
-            <>
-              <ManualQueryWorkspace
-                isFetching={documentsQuery.isFetching}
-                queryInputError={queryInputError}
-                schemaFields={schemaFields}
-                value={manualQueryInput}
-                onChange={setManualQueryInput}
-                onRunQuery={runManualQuery}
-              />
-              <ResultsSection
-                collectionLabel={selectedCollectionLabel ?? "Collection"}
-                documents={displayedDocuments}
-                error={documentsQuery.error}
-                hasMore={documentsQuery.data?.hasMore ?? false}
-                isFetching={documentsQuery.isFetching}
-                isInitialLoading={documentsQuery.isLoading}
-                isSavingDocument={updateDocumentMutation.isPending}
-                editorTheme={editorTheme}
-                onCellEdit={applyCellEdit}
-                onCellFilter={applyCellFilter}
-                onCellProjection={applyCellProjection}
-                onDocumentBookmark={createDocumentBookmark}
-                onDocumentOpen={setEditorDocument}
-                onDocumentSelect={setSelectedDocument}
-                onRefresh={() => void documentsQuery.refetch()}
-                onTablePathChange={handleTablePathChange}
-                schemaFields={schemaFields}
-                selectedDocumentId={selectedDocument?.id ?? null}
-                tablePath={tablePath}
-                viewMode={documentViewMode}
-                onViewModeChange={setDocumentViewMode}
-              />
-              <WorkspaceFooter
-                canGoNext={documentsQuery.data?.hasMore ?? false}
-                canGoPrevious={queryState.skip > 0}
-                executionTimeMs={documentsQuery.data?.executionTimeMs}
-                hasMore={documentsQuery.data?.hasMore ?? false}
-                healthLabel={healthLabel}
-                limit={queryState.limit}
-                onFirstPage={() => goToPage(1)}
-                onNextPage={() =>
-                  goToPage(Math.floor(queryState.skip / queryState.limit) + 2)
-                }
-                onPageChange={goToPage}
-                onPageSizeChange={updatePageSize}
-                onPreviousPage={() =>
-                  goToPage(
-                    Math.max(Math.floor(queryState.skip / queryState.limit), 1),
-                  )
-                }
-                resultCount={displayedDocuments.length}
-                skip={queryState.skip}
-              />
-            </>
-          ) : null}
-          {isExplainWorkspace ? (
-            <ExplainWorkspace
-              editorTheme={editorTheme}
-              queryState={queryState}
-              result={explainRunResult}
-              source={explainSource}
-              onRunExplain={runExplain}
-              onSourceChange={(nextSource) => {
-                setExplainSource(nextSource);
-                setExplainRunResult(null);
-              }}
+          ) : isConnectionManager ? (
+            <ConnectionManager
+              connections={connections}
+              isLoading={isConnectionsLoading}
+              selectedConnectionId={selectedConnectionId}
+              onConnectionsChanged={onConnectionsChanged}
+              onError={onConnectionError}
+              onSelectedConnectionChange={onSelectedConnectionChange}
             />
-          ) : null}
-          {editorDocument ? (
-            <DocumentEditorPanel
-              key={`${selectedCollectionName ?? "collection"}:${editorDocument.id}:${editorDocument.ejson}`}
-              document={editorDocument}
-              editorTheme={editorTheme}
-              isProduction={selectedConnection?.environment === "production"}
-              isReadOnly={selectedConnection?.readOnly ?? true}
-              isSaving={updateDocumentMutation.isPending}
-              requireProductionConfirmation={
-                settings.safety.confirmProductionWrites
+          ) : (
+            <WorkspaceEmptyState
+              label={emptyWorkspaceLabel}
+              actionLabel={
+                activeSection === "Explore"
+                  ? exploreEmptyState.actionLabel
+                  : "Open"
               }
-              onClose={() => setEditorDocument(null)}
-              onSave={(editedDocument, confirmedProductionWrite) =>
-                updateDocumentMutation.mutate({
-                  confirmedProductionWrite,
-                  documentId: editorDocument.id,
-                  editedDocument,
-                  originalDocument: editorDocument.ejson,
-                })
+              onAction={
+                activeSection === "Explore"
+                  ? exploreEmptyState.onAction
+                  : () => onSectionChange("Explore")
               }
+              title={emptyWorkspaceTitle}
             />
-          ) : null}
-        </>
-      ) : isConnectionManager ? (
-        <ConnectionManager
-          connections={connections}
-          isLoading={isConnectionsLoading}
-          selectedConnectionId={selectedConnectionId}
-          onConnectionsChanged={onConnectionsChanged}
-          onError={onConnectionError}
-          onSelectedConnectionChange={onSelectedConnectionChange}
-        />
-      ) : (
-        <WorkspaceEmptyState
-          label={emptyWorkspaceLabel}
-          actionLabel={
-            activeSection === "Explore" ? exploreEmptyState.actionLabel : "Open"
-          }
-          onAction={
-            activeSection === "Explore"
-              ? exploreEmptyState.onAction
-              : () => onSectionChange("Explore")
-          }
-          title={emptyWorkspaceTitle}
-        />
-      )}
+          )}
         </>
       )}
     </section>
@@ -2397,9 +2503,7 @@ const CollectionTabBar = ({
           </button>
           <button
             type="button"
-            disabled={
-              visibleCollectionTabs.at(-1)?.id === contextMenu.tabId
-            }
+            disabled={visibleCollectionTabs.at(-1)?.id === contextMenu.tabId}
             onClick={() => {
               onCollectionCloseSide(contextMenu.tabId, "right");
               closeContextMenu();
@@ -2439,9 +2543,7 @@ const CollectionTabBar = ({
                 closeContextMenu();
               }}
             >
-              <span>
-                {tab.id === activeCollectionTabId ? "✓" : ""}
-              </span>
+              <span>{tab.id === activeCollectionTabId ? "✓" : ""}</span>
               {tab.collectionName}
             </button>
           ))}
@@ -2551,8 +2653,7 @@ const QueriesWorkspace = ({
   const [selectedQueryId, setSelectedQueryId] = useState<string | null>(
     history[0]?.id ?? savedQueries[0]?.id ?? null,
   );
-  const visibleQueries =
-    activeQueryList === "saved" ? savedQueries : history;
+  const visibleQueries = activeQueryList === "saved" ? savedQueries : history;
   const visibleEmptyLabel =
     activeQueryList === "saved"
       ? "No saved queries yet."
@@ -2706,7 +2807,10 @@ const QueriesWorkspace = ({
                           </button>
                         </>
                       ) : (
-                        <button type="button" onClick={startRenameSelectedQuery}>
+                        <button
+                          type="button"
+                          onClick={startRenameSelectedQuery}
+                        >
                           Rename
                         </button>
                       )}
@@ -2749,10 +2853,7 @@ const QueriesWorkspace = ({
               ) : null}
 
               <div className="query-detail-grid">
-                <QueryCodeBlock
-                  label="Filter"
-                  value={selectedQuery.filter}
-                />
+                <QueryCodeBlock label="Filter" value={selectedQuery.filter} />
                 <QueryCodeBlock
                   label="Projection"
                   value={selectedQuery.projection}
@@ -2770,7 +2871,9 @@ const QueriesWorkspace = ({
                 <span>Limit {selectedQuery.limit}</span>
                 <span>Skip {selectedQuery.skip}</span>
                 {selectedQuery.lastRunAt ? (
-                  <span>Last run {formatRelativeTime(selectedQuery.lastRunAt)}</span>
+                  <span>
+                    Last run {formatRelativeTime(selectedQuery.lastRunAt)}
+                  </span>
                 ) : null}
                 {selectedQuery.executionTimeMs !== undefined ? (
                   <span>{selectedQuery.executionTimeMs} ms</span>
@@ -2961,10 +3064,7 @@ const TasksWorkspace = ({
     const handlePointerDown = (event: PointerEvent) => {
       const target = event.target;
 
-      if (
-        target instanceof Node &&
-        newTaskMenuRef.current?.contains(target)
-      ) {
+      if (target instanceof Node && newTaskMenuRef.current?.contains(target)) {
         return;
       }
 
@@ -3248,7 +3348,10 @@ const TasksWorkspace = ({
                       {task.nextRunAt ? (
                         <small className="task-next-run">
                           Next{" "}
-                          {formatTaskNextRun(task.nextRunAt, scheduleCountdownNow)}
+                          {formatTaskNextRun(
+                            task.nextRunAt,
+                            scheduleCountdownNow,
+                          )}
                         </small>
                       ) : null}
                     </td>
@@ -3318,15 +3421,14 @@ const TasksWorkspace = ({
                   selectedTask.type === "audit-cleanup"
                     ? "Cleanup"
                     : selectedTask.sourceQuery.kind === "aggregation"
-                    ? "Pipeline"
-                    : "Filter"
+                      ? "Pipeline"
+                      : "Filter"
                 }
                 value={
                   selectedTask.type === "audit-cleanup"
                     ? { retention: "30 days", scope: "local task run history" }
-                    :
-                  selectedTask.sourceQuery.pipeline ??
-                  selectedTask.sourceQuery.filter
+                    : (selectedTask.sourceQuery.pipeline ??
+                      selectedTask.sourceQuery.filter)
                 }
               />
               {selectedTask.result ? (
@@ -3343,7 +3445,9 @@ const TasksWorkspace = ({
                       <button
                         className="task-run-item"
                         key={run.id}
-                        onClick={() => setSelectedRun({ run, task: selectedTask })}
+                        onClick={() =>
+                          setSelectedRun({ run, task: selectedTask })
+                        }
                         type="button"
                       >
                         <span className={`task-status is-${run.status}`}>
@@ -3458,7 +3562,10 @@ const TaskRunResultModal = ({
     role="dialog"
     onClick={onClose}
   >
-    <div className="task-run-modal" onClick={(event) => event.stopPropagation()}>
+    <div
+      className="task-run-modal"
+      onClick={(event) => event.stopPropagation()}
+    >
       <header>
         <div>
           <span className={`task-status is-${run.status}`}>
@@ -3569,17 +3676,21 @@ const TaskScheduleModal = ({
           </button>
         </header>
         <div className="task-schedule-options">
-          {(["minute", "hourly", "daily", "weekly"] as const).map((schedule) => (
-            <button
-              className={task.schedule === schedule ? "is-active" : ""}
-              key={schedule}
-              onClick={() => onSchedule(schedule)}
-              type="button"
-            >
-              <span>{formatTaskSchedule(schedule)}</span>
-              <small>Next {formatTaskNextRun(getNextTaskRunAt(schedule), now)}</small>
-            </button>
-          ))}
+          {(["minute", "hourly", "daily", "weekly"] as const).map(
+            (schedule) => (
+              <button
+                className={task.schedule === schedule ? "is-active" : ""}
+                key={schedule}
+                onClick={() => onSchedule(schedule)}
+                type="button"
+              >
+                <span>{formatTaskSchedule(schedule)}</span>
+                <small>
+                  Next {formatTaskNextRun(getNextTaskRunAt(schedule), now)}
+                </small>
+              </button>
+            ),
+          )}
         </div>
         <div className="task-schedule-daily-at">
           <label>
@@ -3617,7 +3728,9 @@ const TaskScheduleModal = ({
             <input
               type="time"
               value={dailyScheduleTime}
-              onChange={(event) => onDailyScheduleTimeChange(event.target.value)}
+              onChange={(event) =>
+                onDailyScheduleTimeChange(event.target.value)
+              }
             />
           </label>
           <button
@@ -3679,56 +3792,56 @@ const TaskContextMenu = ({
       style={{ left, top }}
       role="menu"
     >
-    <button
-      type="button"
-      role="menuitem"
-      disabled={task.status === "running"}
-      onClick={onPerform}
-    >
-      Perform
-    </button>
-    <button
-      type="button"
-      role="menuitem"
-      disabled={task.status === "running"}
-      onClick={onRetry}
-    >
-      Retry
-    </button>
-    <button
-      type="button"
-      role="menuitem"
-      disabled={task.status !== "running"}
-      onClick={onCancel}
-    >
-      Cancel
-    </button>
-    <button type="button" role="menuitem" onClick={onPreview}>
-      Preview
-    </button>
-    <button type="button" role="menuitem" onClick={onSchedule}>
-      Schedule
-    </button>
-    <button
-      type="button"
-      role="menuitem"
-      disabled={task.schedule === "manual"}
-      onClick={onUnschedule}
-    >
-      Unschedule
-    </button>
-    <div className="task-context-menu-divider" />
-    <button type="button" role="menuitem" onClick={onClone}>
-      Clone
-    </button>
-    <button
-      className="danger-text-button"
-      type="button"
-      role="menuitem"
-      onClick={onRemove}
-    >
-      Remove
-    </button>
+      <button
+        type="button"
+        role="menuitem"
+        disabled={task.status === "running"}
+        onClick={onPerform}
+      >
+        Perform
+      </button>
+      <button
+        type="button"
+        role="menuitem"
+        disabled={task.status === "running"}
+        onClick={onRetry}
+      >
+        Retry
+      </button>
+      <button
+        type="button"
+        role="menuitem"
+        disabled={task.status !== "running"}
+        onClick={onCancel}
+      >
+        Cancel
+      </button>
+      <button type="button" role="menuitem" onClick={onPreview}>
+        Preview
+      </button>
+      <button type="button" role="menuitem" onClick={onSchedule}>
+        Schedule
+      </button>
+      <button
+        type="button"
+        role="menuitem"
+        disabled={task.schedule === "manual"}
+        onClick={onUnschedule}
+      >
+        Unschedule
+      </button>
+      <div className="task-context-menu-divider" />
+      <button type="button" role="menuitem" onClick={onClone}>
+        Clone
+      </button>
+      <button
+        className="danger-text-button"
+        type="button"
+        role="menuitem"
+        onClick={onRemove}
+      >
+        Remove
+      </button>
     </div>
   );
 };
@@ -3764,20 +3877,17 @@ const BookmarksWorkspace = ({
     () => bookmarks.filter((bookmark) => bookmark.tags.length > 0).length,
     [bookmarks],
   );
-  const visibleBookmarks = useMemo(
-    () => {
-      if (filterMode === "tags") {
-        return tagFilter
-          ? bookmarks.filter((bookmark) => bookmark.tags.includes(tagFilter))
-          : bookmarks.filter((bookmark) => bookmark.tags.length > 0);
-      }
+  const visibleBookmarks = useMemo(() => {
+    if (filterMode === "tags") {
+      return tagFilter
+        ? bookmarks.filter((bookmark) => bookmark.tags.includes(tagFilter))
+        : bookmarks.filter((bookmark) => bookmark.tags.length > 0);
+    }
 
-      return kindFilter === "all"
-        ? bookmarks
-        : bookmarks.filter((bookmark) => bookmark.kind === kindFilter);
-    },
-    [bookmarks, filterMode, kindFilter, tagFilter],
-  );
+    return kindFilter === "all"
+      ? bookmarks
+      : bookmarks.filter((bookmark) => bookmark.kind === kindFilter);
+  }, [bookmarks, filterMode, kindFilter, tagFilter]);
   const selectedBookmark =
     visibleBookmarks.find((bookmark) => bookmark.id === selectedBookmarkId) ??
     visibleBookmarks[0] ??
@@ -3790,7 +3900,8 @@ const BookmarksWorkspace = ({
   }> = [
     { count: bookmarks.length, kind: "all", label: "All" },
     {
-      count: bookmarks.filter((bookmark) => bookmark.kind === "database").length,
+      count: bookmarks.filter((bookmark) => bookmark.kind === "database")
+        .length,
       kind: "database",
       label: "Databases",
     },
@@ -3801,7 +3912,8 @@ const BookmarksWorkspace = ({
       label: "Collections",
     },
     {
-      count: bookmarks.filter((bookmark) => bookmark.kind === "document").length,
+      count: bookmarks.filter((bookmark) => bookmark.kind === "document")
+        .length,
       kind: "document",
       label: "Documents",
     },
@@ -3947,7 +4059,9 @@ const BookmarksWorkspace = ({
             <div className="queries-empty">
               <Icon name="mark" />
               <strong>No bookmarks yet</strong>
-              <span>Right-click a database, collection, or document to save it.</span>
+              <span>
+                Right-click a database, collection, or document to save it.
+              </span>
             </div>
           )}
         </section>
@@ -4002,7 +4116,8 @@ const BookmarkDetail = ({
   const [tags, setTags] = useState<string[]>(bookmark.tags);
   const unusedTagOptions = tagOptions.filter((tag) => !tags.includes(tag));
   const isDirty =
-    notes !== bookmark.notes || tags.join("\u0000") !== bookmark.tags.join("\u0000");
+    notes !== bookmark.notes ||
+    tags.join("\u0000") !== bookmark.tags.join("\u0000");
 
   const saveMetadata = () => {
     onUpdate(bookmark.id, {
@@ -4209,7 +4324,10 @@ const SettingsWorkspace = ({
           <h1>Settings</h1>
           <p>Local preferences for this Nexum installation.</p>
         </div>
-        <button type="button" onClick={() => onSettingsChange(defaultAppSettings)}>
+        <button
+          type="button"
+          onClick={() => onSettingsChange(defaultAppSettings)}
+        >
           Reset defaults
         </button>
       </header>
@@ -4838,6 +4956,7 @@ const QueryFieldAutocompleteInput = ({
 type ManualQueryWorkspaceProps = {
   isFetching: boolean;
   queryInputError: string | null;
+  queryResult: ManualQueryRunResult | null;
   schemaFields: SchemaFieldSummary[];
   value: string;
   onChange: (value: string) => void;
@@ -4847,39 +4966,120 @@ type ManualQueryWorkspaceProps = {
 const ManualQueryWorkspace = ({
   isFetching,
   queryInputError,
+  queryResult,
   schemaFields,
   value,
   onChange,
   onRunQuery,
-}: ManualQueryWorkspaceProps) => (
-  <section className="manual-query-workspace">
-    <div className="manual-query-editor-shell">
-      <ManualQueryEditor
-        fields={schemaFields}
-        value={value}
-        onChange={onChange}
-        onRunQuery={onRunQuery}
-      />
-      <div className="manual-query-actions">
-        <button
-          className="run-button compact"
-          disabled={isFetching}
-          onClick={onRunQuery}
-          type="button"
-        >
-          <span className="play-icon" />
-          Run query
-        </button>
+}: ManualQueryWorkspaceProps) => {
+  const [isSamplesOpen, setIsSamplesOpen] = useState(false);
+
+  useEffect(() => {
+    if (!isSamplesOpen) {
+      return undefined;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsSamplesOpen(false);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isSamplesOpen]);
+
+  const applySample = (sample: ManualQuerySample) => {
+    onChange(sample.insert);
+    setIsSamplesOpen(false);
+  };
+
+  return (
+    <section className="manual-query-workspace">
+      <div className="manual-query-editor-shell">
+        <ManualQueryEditor
+          fields={schemaFields}
+          value={value}
+          onChange={onChange}
+          onRunQuery={onRunQuery}
+        />
+        <div className="manual-query-actions">
+          <button
+            className="secondary-button compact manual-query-samples-button"
+            onClick={() => setIsSamplesOpen(true)}
+            type="button"
+          >
+            Samples
+          </button>
+          <button
+            className="run-button compact"
+            disabled={isFetching}
+            onClick={onRunQuery}
+            type="button"
+          >
+            <span className="play-icon" />
+            Run query
+          </button>
+        </div>
       </div>
-    </div>
-    <p className="manual-query-hint">
-      Write read-only MongoDB find syntax, for example{" "}
-      <code>find({`{status:"active"}`}).sort({`{createdAt:-1}`}).limit(50)</code>
-      .
-    </p>
-    {queryInputError ? <p className="query-error">{queryInputError}</p> : null}
-  </section>
-);
+      <p className="manual-query-hint">
+        Write MongoDB shell syntax for find, insert, update, or delete commands.
+      </p>
+      {queryResult ? (
+        <p className={`manual-query-result is-${queryResult.status}`}>
+          {queryResult.message}
+        </p>
+      ) : null}
+      {queryInputError ? (
+        <p className="query-error">{queryInputError}</p>
+      ) : null}
+      {isSamplesOpen ? (
+        <div
+          aria-modal="true"
+          className="task-run-modal-overlay"
+          role="dialog"
+          onClick={() => setIsSamplesOpen(false)}
+        >
+          <div
+            className="task-run-modal manual-query-samples-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header>
+              <div>
+                <span className="task-status is-idle">Samples</span>
+                <h2>Query samples</h2>
+                <p>Select a template to place it in the query editor.</p>
+              </div>
+              <button
+                aria-label="Close query samples"
+                onClick={() => setIsSamplesOpen(false)}
+                type="button"
+              >
+                ×
+              </button>
+            </header>
+            <div className="manual-query-samples-list">
+              {manualQuerySamples.map((sample) => (
+                <button
+                  key={sample.label}
+                  onClick={() => applySample(sample)}
+                  type="button"
+                >
+                  <span>{sample.label}</span>
+                  <small>{sample.detail}</small>
+                  <code>{sample.insert}</code>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
+};
 
 type ManualQuerySuggestion = {
   detail: string;
@@ -4898,12 +5098,54 @@ type ManualFunctionSuggestion = {
   selectionOffset: number;
 };
 
+type ManualQuerySample = {
+  detail: string;
+  insert: string;
+  label: string;
+};
+
 const manualQueryFunctionSuggestions: ManualFunctionSuggestion[] = [
   {
     detail: "function",
     insert: "find({})",
     label: "find",
     selectionOffset: "find({".length,
+  },
+  {
+    detail: "write",
+    insert: "insertOne({})",
+    label: "insertOne",
+    selectionOffset: "insertOne({".length,
+  },
+  {
+    detail: "write",
+    insert: "insertMany([])",
+    label: "insertMany",
+    selectionOffset: "insertMany([".length,
+  },
+  {
+    detail: "write",
+    insert: "updateOne({}, {$set: {}})",
+    label: "updateOne",
+    selectionOffset: "updateOne({".length,
+  },
+  {
+    detail: "write",
+    insert: "updateMany({}, {$set: {}})",
+    label: "updateMany",
+    selectionOffset: "updateMany({".length,
+  },
+  {
+    detail: "write",
+    insert: "deleteOne({})",
+    label: "deleteOne",
+    selectionOffset: "deleteOne({".length,
+  },
+  {
+    detail: "write",
+    insert: "deleteMany({})",
+    label: "deleteMany",
+    selectionOffset: "deleteMany({".length,
   },
   {
     detail: "function",
@@ -4928,6 +5170,49 @@ const manualQueryFunctionSuggestions: ManualFunctionSuggestion[] = [
     insert: ".limit(50)",
     label: "limit",
     selectionOffset: ".limit(".length,
+  },
+];
+
+const manualQuerySamples: ManualQuerySample[] = [
+  {
+    detail: "Read first page",
+    insert: "find({}).limit(50)",
+    label: "Find documents",
+  },
+  {
+    detail: "Filter, sort, and limit",
+    insert: 'find({ status: "active" }).sort({ createdAt: -1 }).limit(50)',
+    label: "Filtered find",
+  },
+  {
+    detail: "Create one document",
+    insert: 'insertOne({ title: "New document" })',
+    label: "Insert one",
+  },
+  {
+    detail: "Create multiple documents",
+    insert: 'insertMany([{ title: "First" }, { title: "Second" }])',
+    label: "Insert many",
+  },
+  {
+    detail: "Update one matching document",
+    insert: 'updateOne({ status: "pending" }, { $set: { status: "active" } })',
+    label: "Update one",
+  },
+  {
+    detail: "Update all matching documents",
+    insert: "updateMany({ archived: false }, { $set: { reviewed: true } })",
+    label: "Update many",
+  },
+  {
+    detail: "Delete one matching document",
+    insert: 'deleteOne({ status: "archived" })',
+    label: "Delete one",
+  },
+  {
+    detail: "Delete all matching documents",
+    insert: "deleteMany({ archived: true })",
+    label: "Delete many",
   },
 ];
 
@@ -5012,7 +5297,11 @@ const ManualQueryEditor = ({
             return;
           }
 
-          if (event.key === "Enter" && !event.shiftKey && !shouldShowSuggestions) {
+          if (
+            event.key === "Enter" &&
+            !event.shiftKey &&
+            !shouldShowSuggestions
+          ) {
             event.preventDefault();
             onRunQuery();
             return;
@@ -5049,7 +5338,10 @@ const ManualQueryEditor = ({
         onSelect={syncCaret}
       />
       {shouldShowSuggestions ? (
-        <div className="query-autocomplete-menu manual-query-menu" role="listbox">
+        <div
+          className="query-autocomplete-menu manual-query-menu"
+          role="listbox"
+        >
           {suggestions.map((suggestion, index) => (
             <button
               className={index === activeIndex ? "is-active" : ""}
@@ -5191,10 +5483,19 @@ const ExplainWorkspace = ({
             </header>
             <div className="explain-metrics">
               {[
-                ["Execution time", formatExplainMetric(summary?.executionTimeMs, "ms")],
+                [
+                  "Execution time",
+                  formatExplainMetric(summary?.executionTimeMs, "ms"),
+                ],
                 ["Returned", formatExplainMetric(summary?.nReturned)],
-                ["Docs examined", formatExplainMetric(summary?.totalDocsExamined)],
-                ["Keys examined", formatExplainMetric(summary?.totalKeysExamined)],
+                [
+                  "Docs examined",
+                  formatExplainMetric(summary?.totalDocsExamined),
+                ],
+                [
+                  "Keys examined",
+                  formatExplainMetric(summary?.totalKeysExamined),
+                ],
                 ["Index", formatExplainIndex(summary)],
                 ["Collection scan", summary?.hasCollectionScan ? "Yes" : "No"],
               ].map(([label, value]) => (
@@ -5274,7 +5575,8 @@ const AggregationPipelineWorkspace = ({
       };
     } catch (error) {
       return {
-        message: error instanceof Error ? error.message : "Pipeline is invalid.",
+        message:
+          error instanceof Error ? error.message : "Pipeline is invalid.",
         ok: false as const,
       };
     }
@@ -5366,7 +5668,9 @@ const AggregationPipelineWorkspace = ({
             <>
               <div className="aggregation-editor-header">
                 <div>
-                  <strong>{formatAggregationStageType(activeStage.type)}</strong>
+                  <strong>
+                    {formatAggregationStageType(activeStage.type)}
+                  </strong>
                   <span>{activeStage.enabled ? "Enabled" : "Disabled"}</span>
                 </div>
                 <div className="aggregation-editor-actions">
@@ -5706,7 +6010,9 @@ const AggregationStageEditor = ({
               placeholder="items"
               value={stage.path}
               onChange={(path) =>
-                onStageChange({ path } satisfies Partial<UnwindAggregationStage>)
+                onStageChange({
+                  path,
+                } satisfies Partial<UnwindAggregationStage>)
               }
             />
           </label>
@@ -7258,7 +7564,10 @@ const TreeResults = ({ documents }: TreeResultsProps) => {
     [documents],
   );
   const rootPaths = useMemo(
-    () => documents.map((document, index) => getDocumentTreeRootPath(document, index)),
+    () =>
+      documents.map((document, index) =>
+        getDocumentTreeRootPath(document, index),
+      ),
     [documents],
   );
   const [expandedState, setExpandedState] = useState<{
@@ -7347,13 +7656,11 @@ const TreeResults = ({ documents }: TreeResultsProps) => {
                     <span className="tree-results-toggle-placeholder" />
                   )}
                   <span
-                    className={`tree-results-kind-icon ${
-                        getTreeKindClass(row.typeLabel)
-                    }`}
+                    className={`tree-results-kind-icon ${getTreeKindClass(
+                      row.typeLabel,
+                    )}`}
                   />
-                  <span className="tree-results-key-label">
-                    {row.keyLabel}
-                  </span>
+                  <span className="tree-results-key-label">{row.keyLabel}</span>
                 </div>
                 <div
                   className={`tree-results-value ${getTreeValueClass(
@@ -7599,7 +7906,11 @@ const ResultsState = ({
     <strong>{title}</strong>
     <span>{label}</span>
     {actionLabel && onAction ? (
-      <button className="secondary-button compact-button" onClick={onAction} type="button">
+      <button
+        className="secondary-button compact-button"
+        onClick={onAction}
+        type="button"
+      >
         {actionLabel}
       </button>
     ) : null}
@@ -7738,10 +8049,7 @@ const readStoredTasks = (storageKey: string): SavedWorkspaceTask[] => {
   }
 };
 
-const writeStoredTasks = (
-  storageKey: string,
-  tasks: SavedWorkspaceTask[],
-) => {
+const writeStoredTasks = (storageKey: string, tasks: SavedWorkspaceTask[]) => {
   try {
     globalThis.localStorage?.setItem(storageKey, JSON.stringify(tasks));
   } catch {
@@ -7749,7 +8057,9 @@ const writeStoredTasks = (
   }
 };
 
-const isSavedWorkspaceQuery = (value: unknown): value is SavedWorkspaceQuery => {
+const isSavedWorkspaceQuery = (
+  value: unknown,
+): value is SavedWorkspaceQuery => {
   if (!value || typeof value !== "object") {
     return false;
   }
@@ -7824,7 +8134,8 @@ const isSavedWorkspaceTask = (value: unknown): value is SavedWorkspaceTask => {
       task.schedule === "daily-at" ||
       task.schedule === "weekly") &&
     (task.nextRunAt === undefined || typeof task.nextRunAt === "string") &&
-    (task.scheduleTime === undefined || typeof task.scheduleTime === "string") &&
+    (task.scheduleTime === undefined ||
+      typeof task.scheduleTime === "string") &&
     (task.runs === undefined ||
       (Array.isArray(task.runs) &&
         task.runs.every((run) => isSavedWorkspaceTaskRun(run)))) &&
@@ -7997,14 +8308,12 @@ const groupBookmarks = (
   for (const bookmark of bookmarks) {
     const databaseName = bookmark.database ?? "Connection";
     const key = `${bookmark.connectionId}:${databaseName}`;
-    const group =
-      groups.get(key) ??
-      {
-        bookmarks: [],
-        connectionName: bookmark.connectionName,
-        databaseName,
-        key,
-      };
+    const group = groups.get(key) ?? {
+      bookmarks: [],
+      connectionName: bookmark.connectionName,
+      databaseName,
+      key,
+    };
 
     group.bookmarks.push(bookmark);
     groups.set(key, group);
@@ -8916,6 +9225,162 @@ const buildManualFindQueryInput = (state: DocumentQueryState): string => {
   return parts.join("");
 };
 
+type ManualWriteOperation =
+  | "deleteMany"
+  | "deleteOne"
+  | "insertMany"
+  | "insertOne"
+  | "updateMany"
+  | "updateOne";
+
+type ManualWriteQuery = {
+  documents?: Record<string, unknown>[];
+  filter?: Record<string, unknown>;
+  kind: "write";
+  operation: ManualWriteOperation;
+  update?: Record<string, unknown>;
+};
+
+type ManualMongoQueryParseResult =
+  | { kind: "read"; query: DocumentQueryState }
+  | ManualWriteQuery;
+
+const manualWriteOperations: ManualWriteOperation[] = [
+  "insertOne",
+  "insertMany",
+  "updateOne",
+  "updateMany",
+  "deleteOne",
+  "deleteMany",
+];
+
+const parseManualMongoQueryInput = ({
+  defaultLimit,
+  value,
+}: {
+  defaultLimit: number;
+  value: string;
+}):
+  | { ok: true; value: ManualMongoQueryParseResult }
+  | { message: string; ok: false } => {
+  const normalizedValue = normalizeManualQueryCommand(value);
+
+  for (const operation of manualWriteOperations) {
+    const args = getManualQueryCallArguments(normalizedValue, operation);
+
+    if (!args) {
+      continue;
+    }
+
+    return parseManualWriteQuery(operation, args);
+  }
+
+  const readQuery = parseManualFindQueryInput({
+    defaultLimit,
+    value,
+  });
+
+  if (!readQuery.ok) {
+    return readQuery;
+  }
+
+  return {
+    ok: true,
+    value: {
+      kind: "read",
+      query: readQuery.value,
+    },
+  };
+};
+
+const parseManualWriteQuery = (
+  operation: ManualWriteOperation,
+  args: string,
+): { ok: true; value: ManualWriteQuery } | { message: string; ok: false } => {
+  const parsedArgs = splitTopLevelArguments(args);
+
+  switch (operation) {
+    case "insertOne": {
+      const [documentInput] = parsedArgs;
+      const document = parseJsonObject(documentInput ?? "", "Document");
+
+      if (!document.ok) {
+        return document;
+      }
+
+      return {
+        ok: true,
+        value: { documents: [document.value], kind: "write", operation },
+      };
+    }
+    case "insertMany": {
+      const [documentsInput] = parsedArgs;
+      const documents = parseJsonObjectArray(documentsInput ?? "", "Documents");
+
+      if (!documents.ok) {
+        return documents;
+      }
+
+      return {
+        ok: true,
+        value: { documents: documents.value, kind: "write", operation },
+      };
+    }
+    case "updateMany":
+    case "updateOne": {
+      const [filterInput, updateInput] = parsedArgs;
+      const filter = parseJsonObject(filterInput ?? "", "Filter");
+
+      if (!filter.ok) {
+        return filter;
+      }
+
+      const update = parseJsonObject(updateInput ?? "", "Update");
+
+      if (!update.ok) {
+        return update;
+      }
+
+      if (!Object.keys(update.value).some((key) => key.startsWith("$"))) {
+        return {
+          message: "Update must use MongoDB update operators like $set.",
+          ok: false,
+        };
+      }
+
+      return {
+        ok: true,
+        value: {
+          filter: filter.value,
+          kind: "write",
+          operation,
+          update: update.value,
+        },
+      };
+    }
+    case "deleteMany":
+    case "deleteOne": {
+      const [filterInput] = parsedArgs;
+      const filter = parseJsonObject(filterInput ?? "", "Filter");
+
+      if (!filter.ok) {
+        return filter;
+      }
+
+      return {
+        ok: true,
+        value: { filter: filter.value, kind: "write", operation },
+      };
+    }
+  }
+};
+
+const normalizeManualQueryCommand = (value: string): string =>
+  value
+    .trim()
+    .replace(/;\s*$/g, "")
+    .replace(/^db\.[A-Za-z_$][\w$.-]*\./, "");
+
 const parseManualFindQueryInput = ({
   defaultLimit,
   value,
@@ -8925,10 +9390,7 @@ const parseManualFindQueryInput = ({
 }):
   | { ok: true; value: DocumentQueryState }
   | { message: string; ok: false } => {
-  const normalizedValue = value
-    .trim()
-    .replace(/;\s*$/g, "")
-    .replace(/^db\.[A-Za-z_$][\w$.-]*\./, "");
+  const normalizedValue = normalizeManualQueryCommand(value);
 
   if (!normalizedValue) {
     return { message: "Query cannot be empty.", ok: false };
@@ -8960,7 +9422,8 @@ const parseManualFindQueryInput = ({
     };
   }
 
-  const [filterInput = "{}", projectionInput] = splitTopLevelArguments(findArgs);
+  const [filterInput = "{}", projectionInput] =
+    splitTopLevelArguments(findArgs);
   const filter = parseJsonObject(filterInput || "{}", "Filter");
 
   if (!filter.ok) {
@@ -9002,11 +9465,7 @@ const parseManualFindQueryInput = ({
     return skip;
   }
 
-  const limit = parseManualNumericCall(
-    normalizedValue,
-    "limit",
-    defaultLimit,
-  );
+  const limit = parseManualNumericCall(normalizedValue, "limit", defaultLimit);
 
   if (!limit.ok) {
     return limit;
@@ -9200,7 +9659,9 @@ const formatAggregationStageType = (
   }
 };
 
-const getAggregationStageSummary = (stage: AggregationPipelineStage): string => {
+const getAggregationStageSummary = (
+  stage: AggregationPipelineStage,
+): string => {
   switch (stage.type) {
     case "match":
       return summarizeObjectKeys(stage.filter, "empty filter");
@@ -9350,7 +9811,18 @@ const getManualQuerySuggestions = (
   value: string,
   caretIndex: number,
 ): ManualQuerySuggestion[] => {
+  const prefix = value.slice(0, caretIndex);
+  const functionMatch = /(?:^|[.\s])([A-Za-z]*)$/.exec(prefix);
+  const functionSuggestions = getManualQueryFunctionSuggestions(
+    functionMatch,
+    caretIndex,
+    prefix,
+  );
   const fieldContext = getQueryFieldSuggestionContext(value, caretIndex);
+
+  if (functionSuggestions.length > 0 && isManualQueryFunctionPosition(prefix)) {
+    return functionSuggestions;
+  }
 
   if (fieldContext) {
     return getQueryFieldSuggestions(fields, fieldContext.fragment).map(
@@ -9381,9 +9853,14 @@ const getManualQuerySuggestions = (
     );
   }
 
-  const prefix = value.slice(0, caretIndex);
-  const functionMatch = /(?:^|[.\s])([A-Za-z]*)$/.exec(prefix);
+  return functionSuggestions;
+};
 
+const getManualQueryFunctionSuggestions = (
+  functionMatch: RegExpExecArray | null,
+  caretIndex: number,
+  prefix: string,
+): ManualQuerySuggestion[] => {
   if (!functionMatch) {
     return [];
   }
@@ -9409,6 +9886,42 @@ const getManualQuerySuggestions = (
       replaceStart,
       selectionOffset: suggestion.selectionOffset,
     }));
+};
+
+const isManualQueryFunctionPosition = (prefix: string): boolean => {
+  let depth = 0;
+  let quote: "'" | '"' | "`" | null = null;
+  let isEscaped = false;
+
+  for (const char of prefix) {
+    if (quote) {
+      if (isEscaped) {
+        isEscaped = false;
+      } else if (char === "\\") {
+        isEscaped = true;
+      } else if (char === quote) {
+        quote = null;
+      }
+
+      continue;
+    }
+
+    if (char === '"' || char === "'" || char === "`") {
+      quote = char;
+      continue;
+    }
+
+    if (char === "{" || char === "[") {
+      depth += 1;
+      continue;
+    }
+
+    if (char === "}" || char === "]") {
+      depth = Math.max(depth - 1, 0);
+    }
+  }
+
+  return depth === 0;
 };
 
 const insertQueryFieldSuggestion = ({
@@ -9519,6 +10032,33 @@ const parseJsonObject = (
   }
 };
 
+const parseJsonObjectArray = (
+  value: string,
+  label: string,
+):
+  | { ok: true; value: Record<string, unknown>[] }
+  | { message: string; ok: false } => {
+  try {
+    const parsed = JSON.parse(normalizeMongoJsonInput(value)) as unknown;
+
+    if (
+      !Array.isArray(parsed) ||
+      parsed.some(
+        (item) => !item || Array.isArray(item) || typeof item !== "object",
+      )
+    ) {
+      return {
+        message: `${label} must be a JSON array of objects.`,
+        ok: false,
+      };
+    }
+
+    return { ok: true, value: parsed as Record<string, unknown>[] };
+  } catch {
+    return { message: `${label} must be valid JSON.`, ok: false };
+  }
+};
+
 const normalizeMongoJsonInput = (value: string): string => {
   const trimmedValue = value.trim();
 
@@ -9529,6 +10069,39 @@ const normalizeMongoJsonInput = (value: string): string => {
   return trimmedValue
     .replace(/([{,]\s*)([A-Za-z_$][\w$.-]*)(\s*:)/g, '$1"$2"$3')
     .replace(/,\s*([}\]])/g, "$1");
+};
+
+const formatManualWriteResult = (result: {
+  deletedCount?: number;
+  insertedCount?: number;
+  matchedCount?: number;
+  modifiedCount?: number;
+  operation: string;
+  upsertedCount?: number;
+}): string => {
+  const parts = [`${result.operation} completed`];
+
+  if (typeof result.insertedCount === "number") {
+    parts.push(`${result.insertedCount} inserted`);
+  }
+
+  if (typeof result.matchedCount === "number") {
+    parts.push(`${result.matchedCount} matched`);
+  }
+
+  if (typeof result.modifiedCount === "number") {
+    parts.push(`${result.modifiedCount} modified`);
+  }
+
+  if (typeof result.deletedCount === "number") {
+    parts.push(`${result.deletedCount} deleted`);
+  }
+
+  if (typeof result.upsertedCount === "number" && result.upsertedCount > 0) {
+    parts.push(`${result.upsertedCount} upserted`);
+  }
+
+  return parts.join(" · ");
 };
 
 const parseSortInput = (
@@ -10528,12 +11101,7 @@ const buildDocumentTreeChildRows = (
 
     return [
       row,
-      ...buildDocumentTreeChildRows(
-        childValue,
-        path,
-        depth + 1,
-        expandedPaths,
-      ),
+      ...buildDocumentTreeChildRows(childValue, path, depth + 1, expandedPaths),
     ];
   });
 

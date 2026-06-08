@@ -1333,9 +1333,12 @@ button {
 }
 
 .task-new-query-group > div button {
+  align-items: center;
   background: #f6fafb;
   border: 1px solid #dbe3ec;
+  display: inline-flex;
   font-size: 11px;
+  justify-content: center;
   min-height: 26px;
   padding: 0 8px;
   width: auto;
@@ -2779,8 +2782,63 @@ button {
 }
 
 .manual-query-actions {
+  align-items: center;
   display: flex;
+  gap: 8px;
   justify-content: flex-end;
+}
+
+.manual-query-samples-button {
+  height: 36px;
+}
+
+.manual-query-samples-modal {
+  max-width: 680px;
+}
+
+.manual-query-samples-list {
+  display: grid;
+  gap: 8px;
+  max-height: min(560px, calc(100vh - 190px));
+  overflow: auto;
+  padding: 14px;
+}
+
+.manual-query-samples-list button {
+  background: #ffffff;
+  border: 1px solid #dce3eb;
+  border-radius: 7px;
+  color: #283241;
+  cursor: pointer;
+  display: grid;
+  gap: 5px;
+  padding: 11px 12px;
+  text-align: left;
+}
+
+.manual-query-samples-list button:hover {
+  background: #eef4f8;
+  border-color: #9ed9e4;
+}
+
+.manual-query-samples-list span {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.manual-query-samples-list small {
+  color: #657186;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.manual-query-samples-list code {
+  color: #006f7b;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .manual-query-hint {
@@ -2794,6 +2852,32 @@ button {
   color: #006f7b;
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   font-weight: 700;
+}
+
+.manual-query-result {
+  border: 1px solid #dce3eb;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  margin: -2px 0 0;
+  padding: 9px 11px;
+}
+
+.manual-query-result.is-running {
+  background: #eef5fb;
+  color: #465266;
+}
+
+.manual-query-result.is-success {
+  background: #e6f6ec;
+  border-color: #bfe8cc;
+  color: #067647;
+}
+
+.manual-query-result.is-error {
+  background: #fff1f0;
+  border-color: #ffccc7;
+  color: #b42318;
 }
 
 .manual-query-menu {
@@ -4837,7 +4921,10 @@ input:disabled {
 .tree-results-head,
 .tree-results-row {
   display: grid;
-  grid-template-columns: minmax(320px, 40%) minmax(280px, 40%) minmax(140px, 20%);
+  grid-template-columns: minmax(320px, 40%) minmax(280px, 40%) minmax(
+      140px,
+      20%
+    );
 }
 
 .tree-results-head {
@@ -6030,6 +6117,59 @@ input:disabled {
   border-color: #55c7d4;
 }
 
+.app-shell.appearance-dark .tasks-toolbar .danger-text-button {
+  background: #2d1718;
+  border-color: #7f2f2f;
+  color: #ff9f96;
+}
+
+.app-shell.appearance-dark
+  .tasks-toolbar
+  .danger-text-button:hover:not(:disabled) {
+  background: #3a1b1d;
+  border-color: #ff8a80;
+  color: #ffc2bd;
+}
+
+.app-shell.appearance-dark .task-new-menu-popover {
+  background: #101820;
+  border-color: #334456;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.42);
+}
+
+.app-shell.appearance-dark .task-new-menu-popover button {
+  background: transparent;
+  color: #e8eef6;
+}
+
+.app-shell.appearance-dark .task-new-menu-popover button:hover {
+  background: #172635;
+}
+
+.app-shell.appearance-dark .task-new-menu-popover button span {
+  color: #e8eef6;
+}
+
+.app-shell.appearance-dark .task-new-menu-popover button small,
+.app-shell.appearance-dark .task-new-menu-popover p {
+  color: #9aa8ba;
+}
+
+.app-shell.appearance-dark .task-new-query-group > div button {
+  background: #0d141c;
+  border-color: #334456;
+  color: #d8e1ec;
+}
+
+.app-shell.appearance-dark .task-new-query-group > div button:hover {
+  background: #172635;
+  border-color: #3c5368;
+}
+
+.app-shell.appearance-dark .task-new-menu-divider {
+  border-color: #2b3948;
+}
+
 .app-shell.appearance-dark .secondary-button:hover,
 .app-shell.appearance-dark .compact-button:hover,
 .app-shell.appearance-dark .query-detail-actions button:hover,
@@ -6074,6 +6214,23 @@ input:disabled {
 .app-shell.appearance-dark .tasks-table td,
 .app-shell.appearance-dark .tasks-table th {
   border-color: #2b3948;
+}
+
+.app-shell.appearance-dark .tasks-table td {
+  color: #cbd7e6;
+}
+
+.app-shell.appearance-dark .tasks-table td strong,
+.app-shell.appearance-dark .tasks-table td span,
+.app-shell.appearance-dark .tasks-table td small {
+  color: inherit;
+}
+
+.app-shell.appearance-dark .tasks-table tbody tr:hover td,
+.app-shell.appearance-dark .tasks-table tbody tr:hover strong,
+.app-shell.appearance-dark .tasks-table tbody tr:hover span,
+.app-shell.appearance-dark .tasks-table tbody tr:hover small {
+  color: #e8eef6;
 }
 
 .app-shell.appearance-dark .task-status.is-idle {
@@ -6417,6 +6574,23 @@ input:disabled {
   .app-shell.appearance-system .tasks-table td,
   .app-shell.appearance-system .tasks-table th {
     border-color: #2b3948;
+  }
+
+  .app-shell.appearance-system .tasks-table td {
+    color: #cbd7e6;
+  }
+
+  .app-shell.appearance-system .tasks-table td strong,
+  .app-shell.appearance-system .tasks-table td span,
+  .app-shell.appearance-system .tasks-table td small {
+    color: inherit;
+  }
+
+  .app-shell.appearance-system .tasks-table tbody tr:hover td,
+  .app-shell.appearance-system .tasks-table tbody tr:hover strong,
+  .app-shell.appearance-system .tasks-table tbody tr:hover span,
+  .app-shell.appearance-system .tasks-table tbody tr:hover small {
+    color: #e8eef6;
   }
 
   .app-shell.appearance-system .task-status.is-idle {
@@ -7000,11 +7174,15 @@ input:disabled {
   border-color: #3a4d61;
 }
 
-.app-shell.appearance-dark .document-table-row.is-row-selected .document-table-cell {
+.app-shell.appearance-dark
+  .document-table-row.is-row-selected
+  .document-table-cell {
   background: #263645;
 }
 
-.app-shell.appearance-dark .document-table-row.is-row-selected .document-table-cell.is-selected,
+.app-shell.appearance-dark
+  .document-table-row.is-row-selected
+  .document-table-cell.is-selected,
 .app-shell.appearance-dark .document-table-cell.is-selected {
   background: #0b6ed8;
   color: #ffffff;
@@ -7244,11 +7422,15 @@ input:disabled {
     border-color: #3a4d61;
   }
 
-  .app-shell.appearance-system .document-table-row.is-row-selected .document-table-cell {
+  .app-shell.appearance-system
+    .document-table-row.is-row-selected
+    .document-table-cell {
     background: #263645;
   }
 
-  .app-shell.appearance-system .document-table-row.is-row-selected .document-table-cell.is-selected,
+  .app-shell.appearance-system
+    .document-table-row.is-row-selected
+    .document-table-cell.is-selected,
   .app-shell.appearance-system .document-table-cell.is-selected {
     background: #0b6ed8;
     color: #ffffff;
@@ -7373,6 +7555,46 @@ input:disabled {
 
 .app-shell.appearance-dark .manual-query-hint code {
   color: #55c7d4;
+}
+
+.app-shell.appearance-dark .manual-query-result {
+  border-color: #2b3948;
+}
+
+.app-shell.appearance-dark .manual-query-result.is-running {
+  background: #132231;
+  color: #b7c6d8;
+}
+
+.app-shell.appearance-dark .manual-query-result.is-success {
+  background: #0f2a22;
+  border-color: #1f6f4d;
+  color: #7ee2a8;
+}
+
+.app-shell.appearance-dark .manual-query-result.is-error {
+  background: #321c1e;
+  border-color: #7a2e2e;
+  color: #ffb4ab;
+}
+
+.app-shell.appearance-dark .manual-query-samples-list button {
+  background: #101820;
+  border-color: #2b3948;
+  color: #e8eef6;
+}
+
+.app-shell.appearance-dark .manual-query-samples-list button:hover {
+  background: #172635;
+  border-color: #45b8c6;
+}
+
+.app-shell.appearance-dark .manual-query-samples-list small {
+  color: #9fb0c3;
+}
+
+.app-shell.appearance-dark .manual-query-samples-list code {
+  color: #62d4e0;
 }
 
 .app-shell.appearance-dark .query-autocomplete-action {
@@ -7527,6 +7749,25 @@ input:disabled {
     color: #55c7d4;
   }
 
+  .app-shell.appearance-system .manual-query-samples-list button {
+    background: #101820;
+    border-color: #2b3948;
+    color: #e8eef6;
+  }
+
+  .app-shell.appearance-system .manual-query-samples-list button:hover {
+    background: #172635;
+    border-color: #45b8c6;
+  }
+
+  .app-shell.appearance-system .manual-query-samples-list small {
+    color: #9fb0c3;
+  }
+
+  .app-shell.appearance-system .manual-query-samples-list code {
+    color: #62d4e0;
+  }
+
   .app-shell.appearance-system .query-autocomplete-action {
     color: #9fb0c3;
   }
@@ -7538,6 +7779,27 @@ input:disabled {
 
   .app-shell.appearance-system .breadcrumb-separator {
     color: #8090a4;
+  }
+
+  .app-shell.appearance-system .manual-query-result {
+    border-color: #2b3948;
+  }
+
+  .app-shell.appearance-system .manual-query-result.is-running {
+    background: #132231;
+    color: #b7c6d8;
+  }
+
+  .app-shell.appearance-system .manual-query-result.is-success {
+    background: #0f2a22;
+    border-color: #1f6f4d;
+    color: #7ee2a8;
+  }
+
+  .app-shell.appearance-system .manual-query-result.is-error {
+    background: #321c1e;
+    border-color: #7a2e2e;
+    color: #ffb4ab;
   }
 
   .app-shell.appearance-system .view-mode-toggle {

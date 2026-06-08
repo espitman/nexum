@@ -176,6 +176,62 @@ export const mongodbUpdateDocumentPayloadSchema = z.object({
   originalDocument: z.string().min(1),
 });
 
+export const mongodbManualWritePayloadSchema = z.object({
+  collection: z.string().min(1),
+  confirmedProductionWrite: z.boolean().default(false),
+  connectionId: z.string().min(1),
+  database: z.string().min(1),
+  documents: z.array(z.record(z.string(), z.unknown())).max(500).optional(),
+  filter: z.record(z.string(), z.unknown()).optional(),
+  operation: z.enum([
+    "deleteMany",
+    "deleteOne",
+    "insertMany",
+    "insertOne",
+    "updateMany",
+    "updateOne",
+  ]),
+  update: z.record(z.string(), z.unknown()).optional(),
+}).superRefine((payload, context) => {
+  if (payload.operation === "insertOne") {
+    if (!payload.documents || payload.documents.length !== 1) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "insertOne requires exactly one document",
+        path: ["documents"],
+      });
+    }
+    return;
+  }
+
+  if (payload.operation === "insertMany") {
+    if (!payload.documents || payload.documents.length < 1) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "insertMany requires at least one document",
+        path: ["documents"],
+      });
+    }
+    return;
+  }
+
+  if (!payload.filter) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `${payload.operation} requires a filter`,
+      path: ["filter"],
+    });
+  }
+
+  if (payload.operation.startsWith("update") && !payload.update) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `${payload.operation} requires an update document`,
+      path: ["update"],
+    });
+  }
+});
+
 export const auditListPayloadSchema = z
   .object({
     connectionId: z.string().min(1).optional(),
@@ -209,6 +265,9 @@ export type MongodbExplainAggregatePayload = z.infer<
 >;
 export type MongodbUpdateDocumentPayload = z.infer<
   typeof mongodbUpdateDocumentPayloadSchema
+>;
+export type MongodbManualWritePayload = z.infer<
+  typeof mongodbManualWritePayloadSchema
 >;
 export type AuditListPayload = z.infer<typeof auditListPayloadSchema>;
 

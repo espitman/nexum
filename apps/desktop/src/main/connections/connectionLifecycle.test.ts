@@ -172,6 +172,26 @@ class FakeActiveConnection implements ActiveMongoConnection {
     ];
   }
 
+  async manualWrite(
+    input: Parameters<ActiveMongoConnection["manualWrite"]>[0],
+  ) {
+    this.updateInputs.push(input);
+
+    if (!input.operation.startsWith("update")) {
+      return {
+        acknowledged: true,
+        operation: input.operation,
+      };
+    }
+
+    return {
+      acknowledged: true,
+      matchedCount: 1,
+      modifiedCount: 1,
+      operation: input.operation,
+    };
+  }
+
   async updateDocument(
     input: Parameters<ActiveMongoConnection["updateDocument"]>[0],
   ) {

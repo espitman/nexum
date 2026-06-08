@@ -9,6 +9,7 @@ import {
   type ExplorerNodeDto,
   type MongoAggregateResult,
   type MongoExplainResult,
+  type MongoManualWriteResult,
 } from "../../ipc/contracts";
 import type { StoredConnectionTestResult } from "../connections";
 import { createValidatedIpcHandler, registerIpcHandlers } from "./router";
@@ -174,6 +175,21 @@ describe("registerIpcHandlers connection lifecycle", () => {
                 name: "_id_",
               },
             ]),
+          );
+        },
+        manualWrite(
+          _connectionId: string,
+          payload: unknown,
+        ): Result<Promise<MongoManualWriteResult>, AppError> {
+          findPayloads.push(payload);
+
+          return ok(
+            Promise.resolve({
+              acknowledged: true,
+              matchedCount: 1,
+              modifiedCount: 1,
+              operation: "updateOne",
+            }),
           );
         },
         updateDocument(

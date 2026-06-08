@@ -81,6 +81,34 @@ export type MongoUpdateDocumentResult = {
   modifiedCount: number;
 };
 
+export type MongoManualWriteOperation =
+  | "deleteMany"
+  | "deleteOne"
+  | "insertMany"
+  | "insertOne"
+  | "updateMany"
+  | "updateOne";
+
+export type MongoManualWriteInput = {
+  collection: string;
+  confirmedProductionWrite: boolean;
+  database: string;
+  documents?: Document[] | undefined;
+  filter?: Document | undefined;
+  operation: MongoManualWriteOperation;
+  update?: Document | undefined;
+};
+
+export type MongoManualWriteResult = {
+  acknowledged: boolean;
+  deletedCount?: number;
+  insertedCount?: number;
+  matchedCount?: number;
+  modifiedCount?: number;
+  operation: MongoManualWriteOperation;
+  upsertedCount?: number;
+};
+
 export type MongoListIndexesInput = {
   collection: string;
   database: string;
@@ -105,6 +133,7 @@ export interface ActiveMongoConnection {
   listCollections(databaseName: string): Promise<MongoCollectionMetadata[]>;
   listDatabases(): Promise<string[]>;
   listIndexes(input: MongoListIndexesInput): Promise<MongoIndexMetadata[]>;
+  manualWrite(input: MongoManualWriteInput): Promise<MongoManualWriteResult>;
   ping(): Promise<void>;
   updateDocument(
     input: MongoUpdateDocumentInput,
@@ -412,6 +441,85 @@ export class MongoDriverConnectionClient implements MongoConnectionDriver {
           meta: formatIndexMetadata(index),
           name: index.name ?? "unnamed",
         }));
+      },
+      async manualWrite(input) {
+        const collection = client
+          .db(input.database)
+          .collection(input.collection);
+
+        switch (input.operation) {
+          case "deleteMany": {
+            const result = await collection.deleteMany(
+              (input.filter ?? {}) as Filter<Document>,
+            );
+            return {
+              acknowledged: result.acknowledged,
+              deletedCount: result.deletedCount,
+              operation: input.operation,
+            };
+          }
+          case "deleteOne": {
+            const result = await collection.deleteOne(
+              (input.filter ?? {}) as Filter<Document>,
+            );
+            return {
+              acknowledged: result.acknowledged,
+              deletedCount: result.deletedCount,
+              operation: input.operation,
+            };
+          }
+          case "insertMany": {
+            const result = await collection.insertMany(input.documents ?? []);
+            return {
+              acknowledged: result.acknowledged,
+              insertedCount: result.insertedCount,
+              operation: input.operation,
+            };
+          }
+          case "insertOne": {
+            const [document] = input.documents ?? [];
+
+            if (!document) {
+              throw new AppError(
+                "DOCUMENT_EJSON_INVALID",
+                "insertOne requires a document",
+              );
+            }
+
+            const result = await collection.insertOne(document);
+            return {
+              acknowledged: result.acknowledged,
+              insertedCount: result.acknowledged ? 1 : 0,
+              operation: input.operation,
+            };
+          }
+          case "updateMany": {
+            const result = await collection.updateMany(
+              (input.filter ?? {}) as Filter<Document>,
+              input.update ?? {},
+            );
+            return {
+              acknowledged: result.acknowledged,
+              matchedCount: result.matchedCount,
+              modifiedCount: result.modifiedCount,
+              operation: input.operation,
+              upsertedCount: result.upsertedCount,
+            };
+          }
+          case "updateOne": {
+            const result = await collection.updateOne(
+              (input.filter ?? {}) as Filter<Document>,
+              input.update ?? {},
+            );
+            return {
+              acknowledged: result.acknowledged,
+              matchedCount: result.matchedCount,
+              modifiedCount: result.modifiedCount,
+              operation: input.operation,
+              upsertedCount: result.upsertedCount,
+            };
+          }
+        }
       },
       async ping() {
         await pingClient(client);
@@ -868,6 +976,121 @@ export class ConnectionLifecycleService {
     }
 
     return ok(session.listIndexes(input));
+  }
+
+  manualWrite(
+    connectionId: string,
+    input: MongoManualWriteInput,
+  ): Result<Promise<MongoManualWriteResult>, AppError> {
+    const metadata = this.#storage.getMetadata(connectionId);
+
+    if (!metadata.ok) {
+      return metadata;
+    }
+
+    const target = `${input.database}.${input.collection}`;
+    this.#recordDocumentWrite(metadata.value, "document.write.attempted", {
+      target,
+      metadata: {
+        environment: metadata.value.environment,
+        operation: input.operation,
+        readOnly: metadata.value.readOnly,
+      },
+    });
+
+    if (metadata.value.readOnly) {
+      this.#recordDocumentWrite(metadata.value, "document.write.blocked", {
+        target,
+        metadata: { operation: input.operation, reason: "read_only" },
+      });
+
+      return err(
+        new AppError("READ_ONLY_VIOLATION", "Connection is read-only", {
+          details: { connectionId },
+        }),
+      );
+    }
+
+    if (
+      metadata.value.environment === "production" &&
+      !input.confirmedProductionWrite
+    ) {
+      this.#recordDocumentWrite(metadata.value, "document.write.blocked", {
+        target,
+        metadata: {
+          environment: metadata.value.environment,
+          operation: input.operation,
+          reason: "production_confirmation_required",
+        },
+      });
+
+      return err(
+        new AppError(
+          "WRITE_CONFIRMATION_REQUIRED",
+          "Production writes require confirmation",
+          {
+            details: {
+              connectionId,
+              environment: metadata.value.environment,
+            },
+          },
+        ),
+      );
+    }
+
+    const session = this.#sessions.get(connectionId);
+
+    if (!session) {
+      this.#recordDocumentWrite(metadata.value, "document.write.blocked", {
+        target,
+        metadata: {
+          operation: input.operation,
+          reason: "connection_not_active",
+        },
+      });
+
+      return err(
+        new AppError("CONNECTION_NOT_ACTIVE", "Connection is not active", {
+          details: { connectionId },
+        }),
+      );
+    }
+
+    return ok(
+      session
+        .manualWrite(input)
+        .then((result) => {
+          this.#recordDocumentWrite(
+            metadata.value,
+            "document.write.completed",
+            {
+              target,
+              metadata: {
+                deletedCount: result.deletedCount,
+                insertedCount: result.insertedCount,
+                matchedCount: result.matchedCount,
+                modifiedCount: result.modifiedCount,
+                operation: result.operation,
+                upsertedCount: result.upsertedCount,
+              },
+            },
+          );
+
+          return result;
+        })
+        .catch((error: unknown) => {
+          this.#recordDocumentWrite(metadata.value, "document.write.blocked", {
+            target,
+            metadata: {
+              error: sanitizeError(error),
+              operation: input.operation,
+              reason: "driver_error",
+            },
+          });
+
+          throw error;
+        }),
+    );
   }
 
   updateDocument(

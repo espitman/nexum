@@ -23,6 +23,7 @@ import {
   mongodbExplainFindPayloadSchema,
   mongodbCollectionPayloadSchema,
   mongodbFindDocumentsPayloadSchema,
+  mongodbManualWritePayloadSchema,
   mongodbUpdateDocumentPayloadSchema,
   voidPayloadSchema,
 } from "../../ipc/validation";
@@ -276,6 +277,16 @@ export const registerIpcHandlers = (
     async (payload) =>
       unwrapResult(
         services.connections.listIndexes(payload.connectionId, payload),
+      ),
+    ipc,
+  );
+
+  registerValidatedHandler(
+    ipcChannels.mongodbManualWrite,
+    mongodbManualWritePayloadSchema,
+    async (payload) =>
+      unwrapResult(
+        services.connections.manualWrite(payload.connectionId, payload),
       ),
     ipc,
   );

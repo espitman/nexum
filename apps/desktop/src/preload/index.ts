@@ -13,6 +13,7 @@ import {
   type MongoIndexDto,
   type MongoAggregateResult,
   type MongoExplainResult,
+  type MongoManualWriteResult,
 } from "../ipc/contracts";
 import type {
   AuditListPayload,
@@ -25,6 +26,7 @@ import type {
   MongodbExplainAggregatePayload,
   MongodbExplainFindPayload,
   MongodbFindDocumentsPayload,
+  MongodbManualWritePayload,
   MongodbUpdateDocumentPayload,
 } from "../ipc/validation";
 
@@ -97,6 +99,9 @@ export type NexumDesktopApi = {
       payload: MongodbFindDocumentsPayload,
     ): Promise<DocumentQueryResult>;
     listIndexes(payload: MongodbCollectionPayload): Promise<MongoIndexDto[]>;
+    manualWrite(
+      payload: MongodbManualWritePayload,
+    ): Promise<MongoManualWriteResult>;
     updateDocument(
       payload: MongodbUpdateDocumentPayload,
     ): Promise<DocumentUpdateResult>;
@@ -135,6 +140,8 @@ const api: NexumDesktopApi = {
     findDocuments: (payload) =>
       invoke(ipcChannels.mongodbFindDocuments, payload),
     listIndexes: (payload) => invoke(ipcChannels.mongodbListIndexes, payload),
+    manualWrite: (payload) =>
+      invoke(ipcChannels.mongodbManualWrite, payload),
     updateDocument: (payload) =>
       invoke(ipcChannels.mongodbUpdateDocument, payload),
   },
