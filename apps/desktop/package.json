@@ -1,13 +1,15 @@
 {
   "name": "@nexum/desktop",
+  "productName": "Nexum",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "main": "out/main/index.js",
   "scripts": {
-    "dev": "electron-vite dev",
+    "prepare-runtime": "node scripts/prepare-electron-runtime.mjs",
+    "dev": "pnpm run prepare-runtime && ELECTRON_EXEC_PATH=.runtime/electron-dist/Nexum.app/Contents/MacOS/Nexum electron-vite dev",
     "build": "electron-vite build",
-    "preview": "electron-vite preview",
+    "preview": "pnpm run prepare-runtime && ELECTRON_EXEC_PATH=.runtime/electron-dist/Nexum.app/Contents/MacOS/Nexum electron-vite preview",
     "lint": "eslint .",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json",

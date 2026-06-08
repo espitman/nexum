@@ -1,11 +1,29 @@
 import { app, BrowserWindow, Menu } from "electron";
+import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { registerIpcHandlers } from "./ipc/router";
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
+const appName = "Nexum";
 
-app.setName("Nexum");
+app.setName(appName);
+if (process.platform === "darwin") {
+  app.setAboutPanelOptions({
+    applicationName: appName,
+  });
+}
+
+const getAppIconPath = () => {
+  const candidates = [
+    path.join(currentDir, "../../resources/nexum-icon.png"),
+    path.join(currentDir, "../../resources/nexum.icns"),
+    path.join(process.resourcesPath, "nexum-icon.png"),
+    path.join(process.resourcesPath, "nexum.icns"),
+  ];
+
+  return candidates.find((candidate) => fs.existsSync(candidate));
+};
 
 const blockedElectronShortcuts = new Set([
   "f5",
@@ -30,12 +48,14 @@ const getShortcutKey = (input: Electron.Input): string => {
 };
 
 const createMainWindow = () => {
+  const appIcon = getAppIconPath();
   const mainWindow = new BrowserWindow({
     width: 1728,
     height: 986,
     minWidth: 1280,
     minHeight: 760,
-    title: "Nexum",
+    title: appName,
+    ...(appIcon ? { icon: appIcon } : {}),
     titleBarStyle: "hiddenInset",
     trafficLightPosition: { x: 16, y: 18 },
     backgroundColor: "#f8fafc",
@@ -51,6 +71,10 @@ const createMainWindow = () => {
   mainWindow.once("ready-to-show", () => {
     mainWindow.show();
   });
+
+  if (process.platform === "darwin" && app.dock && appIcon) {
+    app.dock.setIcon(appIcon);
+  }
 
   mainWindow.webContents.once("did-finish-load", () => {
     void mainWindow.webContents
