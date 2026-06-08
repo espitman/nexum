@@ -345,12 +345,12 @@ This file tracks project phases, tasks, and subtasks. When a task is completed, 
   - [x] Add safety defaults for production and read-only behavior
   - [x] Add local data management for audit log retention
   - [x] Add about/version and diagnostics information
-- [ ] Verify sidebar workspaces
-  - [ ] Each sidebar item opens its workspace
-  - [ ] Active sidebar state persists during navigation
-  - [ ] Empty, loading, and error states are consistent
-  - [ ] Workspaces do not expose secrets
-  - [ ] Run lint, typecheck, and tests
+- [x] Verify sidebar workspaces
+  - [x] Each sidebar item opens its workspace
+  - [x] Active sidebar state persists during navigation
+  - [x] Empty, loading, and error states are consistent
+  - [x] Workspaces do not expose secrets
+  - [x] Run lint, typecheck, and tests
 
 ## Phase 13 — Multi-step Task Workflows
 
