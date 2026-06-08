@@ -5161,7 +5161,7 @@ const ExplainWorkspace = ({
                 ["Returned", formatExplainMetric(summary?.nReturned)],
                 ["Docs examined", formatExplainMetric(summary?.totalDocsExamined)],
                 ["Keys examined", formatExplainMetric(summary?.totalKeysExamined)],
-                ["Index", summary?.indexName ?? "Unknown"],
+                ["Index", formatExplainIndex(summary)],
                 ["Collection scan", summary?.hasCollectionScan ? "Yes" : "No"],
               ].map(([label, value]) => (
                 <div className="explain-metric" key={label}>
@@ -10347,6 +10347,18 @@ const formatExplainMetric = (
   }
 
   return `${value}${suffix ? ` ${suffix}` : ""}`;
+};
+
+const formatExplainIndex = (summary: ExplainPlanSummary | null): string => {
+  if (!summary) {
+    return "Unknown";
+  }
+
+  if (summary.indexName) {
+    return summary.indexName;
+  }
+
+  return summary.hasCollectionScan ? "Collection scan" : "No index reported";
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
