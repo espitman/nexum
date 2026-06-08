@@ -4592,16 +4592,14 @@ const QuerySection = ({
         </label>
         <label className="sort-control">
           <span>Sort</span>
-          <input
+          <QueryFieldAutocompleteInput
             aria-label="Sort"
+            fields={fieldSuggestions}
+            mode="sort"
+            placeholder='{ "createdAt": -1 }'
             value={sortInput}
-            onChange={(event) => onSortInputChange(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                onRunQuery();
-              }
-            }}
+            onChange={onSortInputChange}
+            onEnter={onRunQuery}
           />
         </label>
         <button
@@ -4626,7 +4624,7 @@ type QueryFieldAutocompleteInputProps = {
   canClear?: boolean;
   copyLabel?: string;
   fields: SchemaFieldSummary[];
-  mode: "field" | "filter" | "projection";
+  mode: "field" | "filter" | "projection" | "sort";
   placeholder?: string;
   value: string;
   onChange: (value: string) => void;
@@ -9421,7 +9419,7 @@ const insertQueryFieldSuggestion = ({
   value,
 }: {
   context: QueryFieldSuggestionContext;
-  mode: "field" | "filter" | "projection";
+  mode: "field" | "filter" | "projection" | "sort";
   path: string;
   type: string;
   value: string;
@@ -9457,7 +9455,7 @@ const getFormattedQueryFieldKey = (
 
 const getQueryFieldSuggestionValueSuffix = (
   after: string,
-  mode: "filter" | "projection",
+  mode: "filter" | "projection" | "sort",
   type: string,
 ): string => {
   const nextAfter = after.trimStart();
@@ -9470,10 +9468,10 @@ const getQueryFieldSuggestionValueSuffix = (
 };
 
 const getQueryFieldSuggestionDefaultValue = (
-  mode: "filter" | "projection",
+  mode: "filter" | "projection" | "sort",
   type: string,
 ): string => {
-  if (mode === "projection") {
+  if (mode === "projection" || mode === "sort") {
     return "1";
   }
 
