@@ -79,10 +79,15 @@ export type MongoManualWriteResult = {
   matchedCount?: number;
   modifiedCount?: number;
   operation:
+    | "bulkWrite"
     | "deleteMany"
     | "deleteOne"
+    | "findOneAndDelete"
+    | "findOneAndReplace"
+    | "findOneAndUpdate"
     | "insertMany"
     | "insertOne"
+    | "replaceOne"
     | "updateMany"
     | "updateOne";
   upsertedCount?: number;

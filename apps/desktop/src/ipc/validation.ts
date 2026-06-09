@@ -93,8 +93,9 @@ export const mongodbFindDocumentsPayloadSchema = z.object({
     .default({}),
 });
 
-export const mongodbExplainFindPayloadSchema =
-  mongodbFindDocumentsPayloadSchema.omit({ limit: true }).extend({
+export const mongodbExplainFindPayloadSchema = mongodbFindDocumentsPayloadSchema
+  .omit({ limit: true })
+  .extend({
     limit: z.number().int().min(1).max(500).default(50),
   });
 
@@ -104,65 +105,69 @@ export const mongodbCollectionPayloadSchema = z.object({
   database: z.string().min(1),
 });
 
-export const mongodbAggregatePayloadSchema = z.object({
-  collection: z.string().min(1),
-  connectionId: z.string().min(1),
-  database: z.string().min(1),
-  limit: z.number().int().min(1).max(500).default(50),
-  pipeline: z.array(z.record(z.string(), z.unknown())).max(50),
-}).superRefine((payload, context) => {
-  payload.pipeline.forEach((stage, index) => {
-    const stageNames = Object.keys(stage);
+export const mongodbAggregatePayloadSchema = z
+  .object({
+    collection: z.string().min(1),
+    connectionId: z.string().min(1),
+    database: z.string().min(1),
+    limit: z.number().int().min(1).max(500).default(50),
+    pipeline: z.array(z.record(z.string(), z.unknown())).max(50),
+  })
+  .superRefine((payload, context) => {
+    payload.pipeline.forEach((stage, index) => {
+      const stageNames = Object.keys(stage);
 
-    if (stageNames.length !== 1) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Each aggregation stage must contain exactly one operator",
-        path: ["pipeline", index],
-      });
-      return;
-    }
+      if (stageNames.length !== 1) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Each aggregation stage must contain exactly one operator",
+          path: ["pipeline", index],
+        });
+        return;
+      }
 
-    const stageName = stageNames[0];
+      const stageName = stageNames[0];
 
-    if (!stageName) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Aggregation stage operator is missing",
-        path: ["pipeline", index],
-      });
-      return;
-    }
+      if (!stageName) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Aggregation stage operator is missing",
+          path: ["pipeline", index],
+        });
+        return;
+      }
 
-    if (blockedAggregationStages.has(stageName)) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: `Blocked aggregation stage: ${stageName}`,
-        path: ["pipeline", index],
-      });
-      return;
-    }
+      if (blockedAggregationStages.has(stageName)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Blocked aggregation stage: ${stageName}`,
+          path: ["pipeline", index],
+        });
+        return;
+      }
 
-    if (!allowedAggregationStages.has(stageName)) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: `Unsupported aggregation stage in MVP: ${stageName}`,
-        path: ["pipeline", index],
-      });
-      return;
-    }
+      if (!allowedAggregationStages.has(stageName)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Unsupported aggregation stage in MVP: ${stageName}`,
+          path: ["pipeline", index],
+        });
+        return;
+      }
 
-    const blockedNestedStage = findBlockedAggregationOperator(stage[stageName]);
+      const blockedNestedStage = findBlockedAggregationOperator(
+        stage[stageName],
+      );
 
-    if (blockedNestedStage) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: `Blocked aggregation stage: ${blockedNestedStage}`,
-        path: ["pipeline", index],
-      });
-    }
+      if (blockedNestedStage) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Blocked aggregation stage: ${blockedNestedStage}`,
+          path: ["pipeline", index],
+        });
+      }
+    });
   });
-});
 
 export const mongodbExplainAggregatePayloadSchema =
   mongodbAggregatePayloadSchema;
@@ -176,61 +181,98 @@ export const mongodbUpdateDocumentPayloadSchema = z.object({
   originalDocument: z.string().min(1),
 });
 
-export const mongodbManualWritePayloadSchema = z.object({
-  collection: z.string().min(1),
-  confirmedProductionWrite: z.boolean().default(false),
-  connectionId: z.string().min(1),
-  database: z.string().min(1),
-  documents: z.array(z.record(z.string(), z.unknown())).max(500).optional(),
-  filter: z.record(z.string(), z.unknown()).optional(),
-  operation: z.enum([
-    "deleteMany",
-    "deleteOne",
-    "insertMany",
-    "insertOne",
-    "updateMany",
-    "updateOne",
-  ]),
-  update: z.record(z.string(), z.unknown()).optional(),
-}).superRefine((payload, context) => {
-  if (payload.operation === "insertOne") {
-    if (!payload.documents || payload.documents.length !== 1) {
+export const mongodbManualWritePayloadSchema = z
+  .object({
+    collection: z.string().min(1),
+    confirmedProductionWrite: z.boolean().default(false),
+    connectionId: z.string().min(1),
+    database: z.string().min(1),
+    documents: z.array(z.record(z.string(), z.unknown())).max(500).optional(),
+    filter: z.record(z.string(), z.unknown()).optional(),
+    operations: z.array(z.record(z.string(), z.unknown())).max(100).optional(),
+    operation: z.enum([
+      "bulkWrite",
+      "deleteMany",
+      "deleteOne",
+      "findOneAndDelete",
+      "findOneAndReplace",
+      "findOneAndUpdate",
+      "insertMany",
+      "insertOne",
+      "replaceOne",
+      "updateMany",
+      "updateOne",
+    ]),
+    options: z.record(z.string(), z.unknown()).optional(),
+    replacement: z.record(z.string(), z.unknown()).optional(),
+    update: z.record(z.string(), z.unknown()).optional(),
+  })
+  .superRefine((payload, context) => {
+    if (payload.operation === "bulkWrite") {
+      if (!payload.operations || payload.operations.length < 1) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "bulkWrite requires at least one operation",
+          path: ["operations"],
+        });
+      }
+      return;
+    }
+
+    if (payload.operation === "insertOne") {
+      if (!payload.documents || payload.documents.length !== 1) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "insertOne requires exactly one document",
+          path: ["documents"],
+        });
+      }
+      return;
+    }
+
+    if (payload.operation === "insertMany") {
+      if (!payload.documents || payload.documents.length < 1) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "insertMany requires at least one document",
+          path: ["documents"],
+        });
+      }
+      return;
+    }
+
+    if (
+      (payload.operation === "replaceOne" ||
+        payload.operation === "findOneAndReplace") &&
+      !payload.replacement
+    ) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "insertOne requires exactly one document",
-        path: ["documents"],
+        message: `${payload.operation} requires a replacement document`,
+        path: ["replacement"],
       });
     }
-    return;
-  }
 
-  if (payload.operation === "insertMany") {
-    if (!payload.documents || payload.documents.length < 1) {
+    if (!payload.filter) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "insertMany requires at least one document",
-        path: ["documents"],
+        message: `${payload.operation} requires a filter`,
+        path: ["filter"],
       });
     }
-    return;
-  }
 
-  if (!payload.filter) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: `${payload.operation} requires a filter`,
-      path: ["filter"],
-    });
-  }
-
-  if (payload.operation.startsWith("update") && !payload.update) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: `${payload.operation} requires an update document`,
-      path: ["update"],
-    });
-  }
-});
+    if (
+      (payload.operation.startsWith("update") ||
+        payload.operation === "findOneAndUpdate") &&
+      !payload.update
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `${payload.operation} requires an update document`,
+        path: ["update"],
+      });
+    }
+  });
 
 export const auditListPayloadSchema = z
   .object({

@@ -82,10 +82,15 @@ export type MongoUpdateDocumentResult = {
 };
 
 export type MongoManualWriteOperation =
+  | "bulkWrite"
   | "deleteMany"
   | "deleteOne"
+  | "findOneAndDelete"
+  | "findOneAndReplace"
+  | "findOneAndUpdate"
   | "insertMany"
   | "insertOne"
+  | "replaceOne"
   | "updateMany"
   | "updateOne";
 
@@ -95,7 +100,10 @@ export type MongoManualWriteInput = {
   database: string;
   documents?: Document[] | undefined;
   filter?: Document | undefined;
+  operations?: Document[] | undefined;
   operation: MongoManualWriteOperation;
+  options?: Document | undefined;
+  replacement?: Document | undefined;
   update?: Document | undefined;
 };
 
@@ -448,6 +456,18 @@ export class MongoDriverConnectionClient implements MongoConnectionDriver {
           .collection(input.collection);
 
         switch (input.operation) {
+          case "bulkWrite": {
+            const result = await collection.bulkWrite(input.operations ?? []);
+            return {
+              acknowledged: result.isOk(),
+              deletedCount: result.deletedCount,
+              insertedCount: result.insertedCount,
+              matchedCount: result.matchedCount,
+              modifiedCount: result.modifiedCount,
+              operation: input.operation,
+              upsertedCount: result.upsertedCount,
+            };
+          }
           case "deleteMany": {
             const result = await collection.deleteMany(
               (input.filter ?? {}) as Filter<Document>,
@@ -465,6 +485,51 @@ export class MongoDriverConnectionClient implements MongoConnectionDriver {
             return {
               acknowledged: result.acknowledged,
               deletedCount: result.deletedCount,
+              operation: input.operation,
+            };
+          }
+          case "findOneAndDelete": {
+            const result = await collection.findOneAndDelete(
+              (input.filter ?? {}) as Filter<Document>,
+              input.options ?? {},
+            );
+            return {
+              acknowledged: true,
+              deletedCount: result ? 1 : 0,
+              matchedCount: result ? 1 : 0,
+              operation: input.operation,
+            };
+          }
+          case "findOneAndReplace": {
+            if (!input.replacement) {
+              throw new AppError(
+                "DOCUMENT_EJSON_INVALID",
+                "findOneAndReplace requires a replacement document",
+              );
+            }
+
+            const result = await collection.findOneAndReplace(
+              (input.filter ?? {}) as Filter<Document>,
+              input.replacement,
+              input.options ?? {},
+            );
+            return {
+              acknowledged: true,
+              matchedCount: result ? 1 : 0,
+              modifiedCount: result ? 1 : 0,
+              operation: input.operation,
+            };
+          }
+          case "findOneAndUpdate": {
+            const result = await collection.findOneAndUpdate(
+              (input.filter ?? {}) as Filter<Document>,
+              input.update ?? {},
+              input.options ?? {},
+            );
+            return {
+              acknowledged: true,
+              matchedCount: result ? 1 : 0,
+              modifiedCount: result ? 1 : 0,
               operation: input.operation,
             };
           }
@@ -493,10 +558,32 @@ export class MongoDriverConnectionClient implements MongoConnectionDriver {
               operation: input.operation,
             };
           }
+          case "replaceOne": {
+            if (!input.replacement) {
+              throw new AppError(
+                "DOCUMENT_EJSON_INVALID",
+                "replaceOne requires a replacement document",
+              );
+            }
+
+            const result = await collection.replaceOne(
+              (input.filter ?? {}) as Filter<Document>,
+              input.replacement,
+              input.options ?? {},
+            );
+            return {
+              acknowledged: result.acknowledged,
+              matchedCount: result.matchedCount,
+              modifiedCount: result.modifiedCount,
+              operation: input.operation,
+              upsertedCount: result.upsertedCount,
+            };
+          }
           case "updateMany": {
             const result = await collection.updateMany(
               (input.filter ?? {}) as Filter<Document>,
               input.update ?? {},
+              input.options ?? {},
             );
             return {
               acknowledged: result.acknowledged,
@@ -510,6 +597,7 @@ export class MongoDriverConnectionClient implements MongoConnectionDriver {
             const result = await collection.updateOne(
               (input.filter ?? {}) as Filter<Document>,
               input.update ?? {},
+              input.options ?? {},
             );
             return {
               acknowledged: result.acknowledged,
@@ -898,15 +986,19 @@ export class ConnectionLifecycleService {
       session
         .explainAggregate(input)
         .then((result) => {
-          this.#recordAggregationEvent(metadata.value, "aggregation.explained", {
-            target,
-            metadata: {
-              executionTimeMs: result.executionTimeMs,
-              limit: input.limit,
-              stageCount: input.pipeline.length,
-              stages: input.pipeline.map((stage) => Object.keys(stage)[0]),
+          this.#recordAggregationEvent(
+            metadata.value,
+            "aggregation.explained",
+            {
+              target,
+              metadata: {
+                executionTimeMs: result.executionTimeMs,
+                limit: input.limit,
+                stageCount: input.pipeline.length,
+                stages: input.pipeline.map((stage) => Object.keys(stage)[0]),
+              },
             },
-          });
+          );
 
           return result;
         })

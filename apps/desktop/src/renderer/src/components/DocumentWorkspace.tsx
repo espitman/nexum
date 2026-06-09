@@ -909,6 +909,9 @@ export const DocumentWorkspace = ({
           documents: nextState.value.documents,
           filter: nextState.value.filter,
           operation: nextState.value.operation,
+          operations: nextState.value.operations,
+          options: nextState.value.options,
+          replacement: nextState.value.replacement,
           update: nextState.value.update,
         })
         .then(async (result) => {
@@ -2288,9 +2291,7 @@ export const DocumentWorkspace = ({
                   <ResultsSection
                     collectionLabel={selectedCollectionLabel ?? "Collection"}
                     documents={manualQueryDocuments}
-                    error={
-                      manualAggregateResult ? null : documentsQuery.error
-                    }
+                    error={manualAggregateResult ? null : documentsQuery.error}
                     hasMore={
                       manualAggregateResult
                         ? false
@@ -5224,6 +5225,30 @@ const manualQueryFunctionSuggestions: ManualFunctionSuggestion[] = [
     selectionOffset: "find({".length,
   },
   {
+    detail: "function",
+    insert: "findOne({})",
+    label: "findOne",
+    selectionOffset: "findOne({".length,
+  },
+  {
+    detail: "function",
+    insert: "countDocuments({})",
+    label: "countDocuments",
+    selectionOffset: "countDocuments({".length,
+  },
+  {
+    detail: "function",
+    insert: 'distinct("field", {})',
+    label: "distinct",
+    selectionOffset: 'distinct("'.length,
+  },
+  {
+    detail: "function",
+    insert: "estimatedDocumentCount()",
+    label: "estimatedDocumentCount",
+    selectionOffset: "estimatedDocumentCount(".length,
+  },
+  {
     detail: "aggregation",
     insert: "aggregate([])",
     label: "aggregate",
@@ -5252,6 +5277,36 @@ const manualQueryFunctionSuggestions: ManualFunctionSuggestion[] = [
     insert: "updateMany({}, {$set: {}})",
     label: "updateMany",
     selectionOffset: "updateMany({".length,
+  },
+  {
+    detail: "write",
+    insert: "replaceOne({}, {})",
+    label: "replaceOne",
+    selectionOffset: "replaceOne({".length,
+  },
+  {
+    detail: "write",
+    insert: "findOneAndUpdate({}, {$set: {}})",
+    label: "findOneAndUpdate",
+    selectionOffset: "findOneAndUpdate({".length,
+  },
+  {
+    detail: "write",
+    insert: "findOneAndReplace({}, {})",
+    label: "findOneAndReplace",
+    selectionOffset: "findOneAndReplace({".length,
+  },
+  {
+    detail: "write",
+    insert: "findOneAndDelete({})",
+    label: "findOneAndDelete",
+    selectionOffset: "findOneAndDelete({".length,
+  },
+  {
+    detail: "write",
+    insert: "bulkWrite([])",
+    label: "bulkWrite",
+    selectionOffset: "bulkWrite([".length,
   },
   {
     detail: "write",
@@ -5369,9 +5424,22 @@ const manualMongoOperatorSuggestions: ManualFunctionSuggestion[] = [
   "$first",
   "$last",
   "$size",
+  "$elemMatch",
+  "$all",
+  "$type",
+  "$mod",
+  "$expr",
   "$dateToString",
   "$toString",
   "$toInt",
+  "$toDouble",
+  "$toDecimal",
+  "$toBool",
+  "$literal",
+  "$cond",
+  "$map",
+  "$filter",
+  "$reduce",
 ].map((operator) => ({
   detail: "operator",
   insert: `${operator}: `,
@@ -5389,6 +5457,21 @@ const manualQuerySamples: ManualQuerySample[] = [
     detail: "Filter, sort, and limit",
     insert: 'find({ status: "active" }).sort({ createdAt: -1 }).limit(50)',
     label: "Filtered find",
+  },
+  {
+    detail: "Read one matching document",
+    insert: 'findOne({ status: "active" })',
+    label: "Find one",
+  },
+  {
+    detail: "Count matching documents",
+    insert: 'countDocuments({ status: "active" })',
+    label: "Count documents",
+  },
+  {
+    detail: "List unique values for a field",
+    insert: 'distinct("status", {})',
+    label: "Distinct values",
   },
   {
     detail: "Run an aggregation pipeline",
@@ -5415,6 +5498,23 @@ const manualQuerySamples: ManualQuerySample[] = [
     detail: "Update all matching documents",
     insert: "updateMany({ archived: false }, { $set: { reviewed: true } })",
     label: "Update many",
+  },
+  {
+    detail: "Replace one matching document",
+    insert: 'replaceOne({ _id: "..." }, { title: "Replacement" })',
+    label: "Replace one",
+  },
+  {
+    detail: "Update and return one matching document",
+    insert:
+      'findOneAndUpdate({ status: "pending" }, { $set: { status: "active" } })',
+    label: "Find one and update",
+  },
+  {
+    detail: "Run multiple writes together",
+    insert:
+      'bulkWrite([{ updateOne: { filter: { status: "pending" }, update: { $set: { status: "active" } } } }])',
+    label: "Bulk write",
   },
   {
     detail: "Delete one matching document",
@@ -9443,10 +9543,15 @@ const buildManualFindQueryInput = (state: DocumentQueryState): string => {
 };
 
 type ManualWriteOperation =
+  | "bulkWrite"
   | "deleteMany"
   | "deleteOne"
+  | "findOneAndDelete"
+  | "findOneAndReplace"
+  | "findOneAndUpdate"
   | "insertMany"
   | "insertOne"
+  | "replaceOne"
   | "updateMany"
   | "updateOne";
 
@@ -9455,6 +9560,9 @@ type ManualWriteQuery = {
   filter?: Record<string, unknown>;
   kind: "write";
   operation: ManualWriteOperation;
+  operations?: Record<string, unknown>[];
+  options?: Record<string, unknown>;
+  replacement?: Record<string, unknown>;
   update?: Record<string, unknown>;
 };
 
@@ -9474,6 +9582,11 @@ const manualWriteOperations: ManualWriteOperation[] = [
   "insertMany",
   "updateOne",
   "updateMany",
+  "replaceOne",
+  "findOneAndUpdate",
+  "findOneAndReplace",
+  "findOneAndDelete",
+  "bulkWrite",
   "deleteOne",
   "deleteMany",
 ];
@@ -9493,14 +9606,23 @@ const parseManualMongoQueryInput = ({
     "aggregate",
   );
 
-  if (aggregateArgs) {
+  if (aggregateArgs !== null) {
     return parseManualAggregateQuery(aggregateArgs, defaultLimit);
+  }
+
+  const readFunctionQuery = parseManualReadFunctionQuery(
+    normalizedValue,
+    defaultLimit,
+  );
+
+  if (readFunctionQuery) {
+    return readFunctionQuery;
   }
 
   for (const operation of manualWriteOperations) {
     const args = getManualQueryCallArguments(normalizedValue, operation);
 
-    if (!args) {
+    if (args === null) {
       continue;
     }
 
@@ -9528,7 +9650,9 @@ const parseManualMongoQueryInput = ({
 const parseManualAggregateQuery = (
   args: string,
   defaultLimit: number,
-): { ok: true; value: ManualAggregateQuery } | { message: string; ok: false } => {
+):
+  | { ok: true; value: ManualAggregateQuery }
+  | { message: string; ok: false } => {
   const [pipelineInput = "[]", optionsInput] = splitTopLevelArguments(args);
   const pipeline = parseJsonObjectArray(pipelineInput, "Pipeline");
 
@@ -9567,6 +9691,186 @@ const parseManualAggregateQuery = (
   };
 };
 
+const wrapStage = (name: string, value: unknown): Record<string, unknown> => ({
+  [name]: value,
+});
+
+const parseOptionalJsonObject = (
+  value: string | undefined,
+  label: string,
+):
+  | { ok: true; value: Record<string, unknown> }
+  | { message: string; ok: false } => {
+  if (!value?.trim()) {
+    return { ok: true, value: {} };
+  }
+
+  return parseJsonObject(value, label);
+};
+
+const getRecordOption = (
+  value: Record<string, unknown>,
+  key: string,
+): Record<string, unknown> | null => {
+  const candidate = value[key];
+
+  if (!candidate || Array.isArray(candidate) || typeof candidate !== "object") {
+    return null;
+  }
+
+  return candidate as Record<string, unknown>;
+};
+
+const parseManualStringArgument = (
+  value: string,
+  label: string,
+): { ok: true; value: string } | { message: string; ok: false } => {
+  const trimmedValue = value.trim();
+
+  if (!trimmedValue) {
+    return { message: `${label} is required.`, ok: false };
+  }
+
+  const quote = trimmedValue[0];
+
+  if (
+    (quote === '"' || quote === "'" || quote === "`") &&
+    trimmedValue.endsWith(quote)
+  ) {
+    return { ok: true, value: trimmedValue.slice(1, -1) };
+  }
+
+  return {
+    message: `${label} must be a quoted string.`,
+    ok: false,
+  };
+};
+
+const parseManualReadFunctionQuery = (
+  normalizedValue: string,
+  defaultLimit: number,
+):
+  | { ok: true; value: ManualMongoQueryParseResult }
+  | { message: string; ok: false }
+  | null => {
+  const findOneArgs = getManualQueryCallArguments(normalizedValue, "findOne");
+
+  if (findOneArgs !== null) {
+    const [filterInput = "{}", optionsInput] =
+      splitTopLevelArguments(findOneArgs);
+    const filter = parseJsonObject(filterInput || "{}", "Filter");
+
+    if (!filter.ok) {
+      return filter;
+    }
+
+    const options = parseOptionalJsonObject(optionsInput, "Find options");
+
+    if (!options.ok) {
+      return options;
+    }
+
+    const projection = getRecordOption(options.value, "projection");
+    const sortCandidate = getRecordOption(options.value, "sort");
+    const sort = sortCandidate
+      ? parseSortInput(JSON.stringify(sortCandidate))
+      : ({ ok: true, value: {} } as const);
+
+    if (!sort.ok) {
+      return sort;
+    }
+
+    return {
+      ok: true,
+      value: {
+        kind: "read",
+        query: {
+          ...defaultQueryState,
+          filter: filter.value,
+          limit: 1,
+          projection: projection ?? {},
+          sort: sort.value,
+        },
+      },
+    };
+  }
+
+  const countArgs = getManualQueryCallArguments(
+    normalizedValue,
+    "countDocuments",
+  );
+
+  if (countArgs !== null) {
+    const [filterInput = "{}"] = splitTopLevelArguments(countArgs);
+    const filter = parseJsonObject(filterInput || "{}", "Filter");
+
+    if (!filter.ok) {
+      return filter;
+    }
+
+    return {
+      ok: true,
+      value: {
+        kind: "aggregate",
+        limit: 1,
+        pipeline: [
+          wrapStage("$match", filter.value),
+          wrapStage("$count", "count"),
+        ],
+      },
+    };
+  }
+
+  const estimatedCountArgs = getManualQueryCallArguments(
+    normalizedValue,
+    "estimatedDocumentCount",
+  );
+
+  if (estimatedCountArgs !== null) {
+    return {
+      ok: true,
+      value: {
+        kind: "aggregate",
+        limit: 1,
+        pipeline: [wrapStage("$count", "count")],
+      },
+    };
+  }
+
+  const distinctArgs = getManualQueryCallArguments(normalizedValue, "distinct");
+
+  if (distinctArgs !== null) {
+    const [fieldInput, filterInput = "{}"] =
+      splitTopLevelArguments(distinctArgs);
+    const field = parseManualStringArgument(fieldInput ?? "", "Distinct field");
+
+    if (!field.ok) {
+      return field;
+    }
+
+    const filter = parseJsonObject(filterInput || "{}", "Filter");
+
+    if (!filter.ok) {
+      return filter;
+    }
+
+    return {
+      ok: true,
+      value: {
+        kind: "aggregate",
+        limit: defaultLimit,
+        pipeline: [
+          wrapStage("$match", filter.value),
+          wrapStage("$group", { _id: `$${field.value}` }),
+          wrapStage("$project", { _id: 0, value: "$_id" }),
+        ],
+      },
+    };
+  }
+
+  return null;
+};
+
 const parseManualWriteQuery = (
   operation: ManualWriteOperation,
   args: string,
@@ -9574,6 +9878,22 @@ const parseManualWriteQuery = (
   const parsedArgs = splitTopLevelArguments(args);
 
   switch (operation) {
+    case "bulkWrite": {
+      const [operationsInput] = parsedArgs;
+      const operations = parseJsonObjectArray(
+        operationsInput ?? "",
+        "Bulk write operations",
+      );
+
+      if (!operations.ok) {
+        return operations;
+      }
+
+      return {
+        ok: true,
+        value: { kind: "write", operation, operations: operations.value },
+      };
+    }
     case "insertOne": {
       const [documentInput] = parsedArgs;
       const document = parseJsonObject(documentInput ?? "", "Document");
@@ -9600,9 +9920,10 @@ const parseManualWriteQuery = (
         value: { documents: documents.value, kind: "write", operation },
       };
     }
+    case "findOneAndUpdate":
     case "updateMany":
     case "updateOne": {
-      const [filterInput, updateInput] = parsedArgs;
+      const [filterInput, updateInput, optionsInput] = parsedArgs;
       const filter = parseJsonObject(filterInput ?? "", "Filter");
 
       if (!filter.ok) {
@@ -9622,6 +9943,12 @@ const parseManualWriteQuery = (
         };
       }
 
+      const options = parseOptionalJsonObject(optionsInput, "Write options");
+
+      if (!options.ok) {
+        return options;
+      }
+
       return {
         ok: true,
         value: {
@@ -9629,21 +9956,76 @@ const parseManualWriteQuery = (
           kind: "write",
           operation,
           update: update.value,
+          options: options.value,
         },
       };
     }
-    case "deleteMany":
-    case "deleteOne": {
-      const [filterInput] = parsedArgs;
+    case "findOneAndReplace":
+    case "replaceOne": {
+      const [filterInput, replacementInput, optionsInput] = parsedArgs;
       const filter = parseJsonObject(filterInput ?? "", "Filter");
 
       if (!filter.ok) {
         return filter;
       }
 
+      const replacement = parseJsonObject(
+        replacementInput ?? "",
+        "Replacement",
+      );
+
+      if (!replacement.ok) {
+        return replacement;
+      }
+
+      if (Object.keys(replacement.value).some((key) => key.startsWith("$"))) {
+        return {
+          message: "Replacement document cannot use update operators.",
+          ok: false,
+        };
+      }
+
+      const options = parseOptionalJsonObject(optionsInput, "Write options");
+
+      if (!options.ok) {
+        return options;
+      }
+
       return {
         ok: true,
-        value: { filter: filter.value, kind: "write", operation },
+        value: {
+          filter: filter.value,
+          kind: "write",
+          operation,
+          options: options.value,
+          replacement: replacement.value,
+        },
+      };
+    }
+    case "findOneAndDelete":
+    case "deleteMany":
+    case "deleteOne": {
+      const [filterInput, optionsInput] = parsedArgs;
+      const filter = parseJsonObject(filterInput ?? "", "Filter");
+
+      if (!filter.ok) {
+        return filter;
+      }
+
+      const options = parseOptionalJsonObject(optionsInput, "Write options");
+
+      if (!options.ok) {
+        return options;
+      }
+
+      return {
+        ok: true,
+        value: {
+          filter: filter.value,
+          kind: "write",
+          operation,
+          options: options.value,
+        },
       };
     }
   }
@@ -9689,9 +10071,10 @@ const parseManualFindQueryInput = ({
 
   const findArgs = getManualQueryCallArguments(normalizedValue, "find");
 
-  if (!findArgs) {
+  if (findArgs === null) {
     return {
-      message: "Manual query must start with find(...) or a filter object.",
+      message:
+        "Manual query must start with find(...), aggregate(...), a supported collection function, or a filter object.",
       ok: false,
     };
   }
