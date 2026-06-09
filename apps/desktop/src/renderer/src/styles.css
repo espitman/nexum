@@ -16,6 +16,33 @@
   box-sizing: border-box;
 }
 
+* {
+  scrollbar-color: #8d98a7 transparent;
+  scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #8d98a7;
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #6f7b8b;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
 body {
   margin: 0;
 }
@@ -2793,52 +2820,74 @@ button {
 }
 
 .manual-query-samples-modal {
+  grid-template-rows: auto minmax(0, 1fr);
   max-width: 680px;
+  max-height: min(760px, calc(100vh - 48px));
+  overflow: hidden;
+  text-align: left;
 }
 
 .manual-query-samples-list {
   display: grid;
   gap: 8px;
-  max-height: min(560px, calc(100vh - 190px));
+  max-height: none;
   overflow: auto;
   padding: 14px;
 }
 
-.manual-query-samples-list button {
+.task-run-modal.manual-query-samples-modal .manual-query-samples-list button {
+  align-items: start;
   background: #ffffff;
   border: 1px solid #dce3eb;
   border-radius: 7px;
   color: #283241;
   cursor: pointer;
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 5px;
+  justify-content: flex-start;
   padding: 11px 12px;
   text-align: left;
+  width: 100%;
 }
 
-.manual-query-samples-list button:hover {
+.task-run-modal.manual-query-samples-modal .manual-query-samples-list button > * {
+  min-width: 0;
+}
+
+.task-run-modal.manual-query-samples-modal .manual-query-samples-list button:hover {
   background: #eef4f8;
   border-color: #9ed9e4;
 }
 
 .manual-query-samples-list span {
+  display: block;
   font-size: 13px;
   font-weight: 800;
+  text-align: left;
+  width: 100%;
 }
 
 .manual-query-samples-list small {
   color: #657186;
+  display: block;
   font-size: 11px;
   font-weight: 700;
+  text-align: left;
+  width: 100%;
 }
 
 .manual-query-samples-list code {
   color: #006f7b;
+  display: block;
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   font-size: 11px;
+  max-width: 100%;
   overflow: hidden;
+  text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
+  width: 100%;
 }
 
 .manual-query-hint {
@@ -5865,6 +5914,23 @@ input:disabled {
 .app-shell.appearance-dark {
   background: #101820;
   color: #d8e1ec;
+  scrollbar-color: #3a4654 transparent;
+}
+
+.app-shell.appearance-dark * {
+  scrollbar-color: #3a4654 transparent;
+}
+
+.app-shell.appearance-dark *::-webkit-scrollbar-thumb {
+  background: #3a4654;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+.app-shell.appearance-dark *::-webkit-scrollbar-thumb:hover {
+  background: #526071;
+  border: 3px solid transparent;
+  background-clip: content-box;
 }
 
 .app-shell.appearance-dark .connection-rail,
@@ -6278,6 +6344,23 @@ input:disabled {
   .app-shell.appearance-system {
     background: #101820;
     color: #d8e1ec;
+    scrollbar-color: #3a4654 transparent;
+  }
+
+  .app-shell.appearance-system * {
+    scrollbar-color: #3a4654 transparent;
+  }
+
+  .app-shell.appearance-system *::-webkit-scrollbar-thumb {
+    background: #3a4654;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+
+  .app-shell.appearance-system *::-webkit-scrollbar-thumb:hover {
+    background: #526071;
+    border: 3px solid transparent;
+    background-clip: content-box;
   }
 
   .app-shell.appearance-system .connection-rail,
