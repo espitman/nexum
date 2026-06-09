@@ -164,6 +164,7 @@ type CollectionTabState = {
   filterInput: string;
   isQueryBuilderOpen: boolean;
   limitInput: string;
+  manualAggregateResult: ManualAggregateRunResult | null;
   manualQueryInput: string;
   manualQueryResult: ManualQueryRunResult | null;
   pendingInlineDocuments: Map<string, ParsedDocument>;
@@ -183,6 +184,11 @@ type CollectionTabState = {
 type ManualQueryRunResult = {
   message: string;
   status: "error" | "running" | "success";
+};
+
+type ManualAggregateRunResult = {
+  documents: string[];
+  executionTimeMs: number;
 };
 
 const defaultQueryState: DocumentQueryState = {
@@ -292,6 +298,7 @@ export const DocumentWorkspace = ({
       filterInput: "{}",
       isQueryBuilderOpen: false,
       limitInput: `${settings.query.defaultPageSize}`,
+      manualAggregateResult: null,
       manualQueryInput: `find({}).limit(${settings.query.defaultPageSize})`,
       manualQueryResult: null,
       pendingInlineDocuments: new Map(),
@@ -375,6 +382,7 @@ export const DocumentWorkspace = ({
     filterInput,
     isQueryBuilderOpen,
     limitInput,
+    manualAggregateResult,
     manualQueryInput,
     manualQueryResult,
     pendingInlineDocuments,
@@ -475,6 +483,9 @@ export const DocumentWorkspace = ({
   const setManualQueryResult = (
     value: SetStateAction<ManualQueryRunResult | null>,
   ) => setCollectionTabField("manualQueryResult", value);
+  const setManualAggregateResult = (
+    value: SetStateAction<ManualAggregateRunResult | null>,
+  ) => setCollectionTabField("manualAggregateResult", value);
   const setProjectionInput = (value: SetStateAction<string>) =>
     setQueryInputField("projectionInput", value);
   const setQueryState = (value: SetStateAction<DocumentQueryState>) =>
@@ -540,6 +551,9 @@ export const DocumentWorkspace = ({
       : null,
     explainRunResult: state.explainRunResult
       ? cloneStructuredValue(state.explainRunResult)
+      : null,
+    manualAggregateResult: state.manualAggregateResult
+      ? cloneStructuredValue(state.manualAggregateResult)
       : null,
     pendingInlineDocuments: new Map(state.pendingInlineDocuments),
     queryBuilderModel: cloneStructuredValue(state.queryBuilderModel),
@@ -657,6 +671,10 @@ export const DocumentWorkspace = ({
     () => parseEjsonDocuments(documentsQuery.data?.documents ?? []),
     [documentsQuery.data?.documents],
   );
+  const manualAggregateDocuments = useMemo(
+    () => parseEjsonDocuments(manualAggregateResult?.documents ?? []),
+    [manualAggregateResult?.documents],
+  );
   const displayedDocuments = useMemo(() => {
     if (pendingInlineDocuments.size === 0) {
       return parsedDocuments;
@@ -666,6 +684,10 @@ export const DocumentWorkspace = ({
       (document) => pendingInlineDocuments.get(document.id) ?? document,
     );
   }, [parsedDocuments, pendingInlineDocuments]);
+  const manualQueryDocuments =
+    manualAggregateResult !== null
+      ? manualAggregateDocuments
+      : displayedDocuments;
   const schemaParsedDocuments = useMemo(
     () => parseEjsonDocuments(schemaDocumentsQuery.data?.documents ?? []),
     [schemaDocumentsQuery.data?.documents],
@@ -781,6 +803,63 @@ export const DocumentWorkspace = ({
       return;
     }
 
+    if (nextState.value.kind === "aggregate") {
+      if (!window.nexum) {
+        const message = "Preload API is unavailable";
+        setManualQueryResult({ message, status: "error" });
+        setQueryInputError(message);
+        onConnectionError("Manual aggregation failed", message);
+        return;
+      }
+
+      if (!selectedConnectionId || !selectedCollectionPath) {
+        const message = "No collection selected";
+        setManualQueryResult({ message, status: "error" });
+        setQueryInputError(message);
+        onConnectionError("Manual aggregation failed", message);
+        return;
+      }
+
+      setQueryInputError(null);
+      setSelectedDocument(null);
+      setEditorDocument(null);
+      setManualAggregateResult(null);
+      setManualQueryResult({
+        message: "Running aggregate...",
+        status: "running",
+      });
+
+      void window.nexum.mongodb
+        .aggregate({
+          collection: selectedCollectionPath.collection,
+          connectionId: selectedConnectionId,
+          database: selectedCollectionPath.database,
+          limit: nextState.value.limit,
+          pipeline: nextState.value.pipeline,
+        })
+        .then((result) => {
+          setManualAggregateResult(result);
+          setManualQueryResult({
+            message: `${result.documents.length} document${
+              result.documents.length === 1 ? "" : "s"
+            } returned in ${result.executionTimeMs} ms.`,
+            status: "success",
+          });
+        })
+        .catch((error: unknown) => {
+          const message =
+            error instanceof Error
+              ? getSafeWorkspaceErrorMessage(error)
+              : "Unable to run manual aggregation.";
+          setManualAggregateResult(null);
+          setManualQueryResult({ message, status: "error" });
+          setQueryInputError(message);
+          onConnectionError("Manual aggregation failed", message);
+        });
+
+      return;
+    }
+
     if (nextState.value.kind === "write") {
       if (!window.nexum) {
         const message = "Preload API is unavailable";
@@ -815,6 +894,7 @@ export const DocumentWorkspace = ({
       }
 
       setQueryInputError(null);
+      setManualAggregateResult(null);
       setManualQueryResult({
         message: `Running ${nextState.value.operation}...`,
         status: "running",
@@ -852,6 +932,7 @@ export const DocumentWorkspace = ({
     }
 
     setManualQueryResult(null);
+    setManualAggregateResult(null);
 
     setQueryInputError(null);
     setSelectedDocument(null);
@@ -2206,11 +2287,22 @@ export const DocumentWorkspace = ({
                   />
                   <ResultsSection
                     collectionLabel={selectedCollectionLabel ?? "Collection"}
-                    documents={displayedDocuments}
-                    error={documentsQuery.error}
-                    hasMore={documentsQuery.data?.hasMore ?? false}
-                    isFetching={documentsQuery.isFetching}
-                    isInitialLoading={documentsQuery.isLoading}
+                    documents={manualQueryDocuments}
+                    error={
+                      manualAggregateResult ? null : documentsQuery.error
+                    }
+                    hasMore={
+                      manualAggregateResult
+                        ? false
+                        : (documentsQuery.data?.hasMore ?? false)
+                    }
+                    isFetching={
+                      documentsQuery.isFetching ||
+                      manualQueryResult?.status === "running"
+                    }
+                    isInitialLoading={
+                      manualAggregateResult ? false : documentsQuery.isLoading
+                    }
                     isSavingDocument={updateDocumentMutation.isPending}
                     editorTheme={editorTheme}
                     onCellEdit={applyCellEdit}
@@ -2219,7 +2311,14 @@ export const DocumentWorkspace = ({
                     onDocumentBookmark={createDocumentBookmark}
                     onDocumentOpen={setEditorDocument}
                     onDocumentSelect={setSelectedDocument}
-                    onRefresh={() => void documentsQuery.refetch()}
+                    onRefresh={() => {
+                      if (manualAggregateResult) {
+                        runManualQuery();
+                        return;
+                      }
+
+                      void documentsQuery.refetch();
+                    }}
                     onTablePathChange={handleTablePathChange}
                     schemaFields={schemaFields}
                     selectedDocumentId={selectedDocument?.id ?? null}
@@ -2228,10 +2327,23 @@ export const DocumentWorkspace = ({
                     onViewModeChange={setDocumentViewMode}
                   />
                   <WorkspaceFooter
-                    canGoNext={documentsQuery.data?.hasMore ?? false}
-                    canGoPrevious={queryState.skip > 0}
-                    executionTimeMs={documentsQuery.data?.executionTimeMs}
-                    hasMore={documentsQuery.data?.hasMore ?? false}
+                    canGoNext={
+                      manualAggregateResult
+                        ? false
+                        : (documentsQuery.data?.hasMore ?? false)
+                    }
+                    canGoPrevious={
+                      manualAggregateResult ? false : queryState.skip > 0
+                    }
+                    executionTimeMs={
+                      manualAggregateResult?.executionTimeMs ??
+                      documentsQuery.data?.executionTimeMs
+                    }
+                    hasMore={
+                      manualAggregateResult
+                        ? false
+                        : (documentsQuery.data?.hasMore ?? false)
+                    }
                     healthLabel={healthLabel}
                     limit={queryState.limit}
                     onFirstPage={() => goToPage(1)}
@@ -2250,8 +2362,8 @@ export const DocumentWorkspace = ({
                         ),
                       )
                     }
-                    resultCount={displayedDocuments.length}
-                    skip={queryState.skip}
+                    resultCount={manualQueryDocuments.length}
+                    skip={manualAggregateResult ? 0 : queryState.skip}
                   />
                 </>
               ) : null}
@@ -5084,7 +5196,7 @@ const ManualQueryWorkspace = ({
 type ManualQuerySuggestion = {
   detail: string;
   insert: string;
-  kind: "field" | "function";
+  kind: "field" | "function" | "operator" | "stage";
   label: string;
   replaceEnd: number;
   replaceStart: number;
@@ -5110,6 +5222,12 @@ const manualQueryFunctionSuggestions: ManualFunctionSuggestion[] = [
     insert: "find({})",
     label: "find",
     selectionOffset: "find({".length,
+  },
+  {
+    detail: "aggregation",
+    insert: "aggregate([])",
+    label: "aggregate",
+    selectionOffset: "aggregate([".length,
   },
   {
     detail: "write",
@@ -5173,6 +5291,94 @@ const manualQueryFunctionSuggestions: ManualFunctionSuggestion[] = [
   },
 ];
 
+const manualAggregateStageSuggestions: ManualFunctionSuggestion[] = [
+  {
+    detail: "stage",
+    insert: "$match: {}",
+    label: "$match",
+    selectionOffset: "$match: {".length,
+  },
+  {
+    detail: "stage",
+    insert: "$project: {}",
+    label: "$project",
+    selectionOffset: "$project: {".length,
+  },
+  {
+    detail: "stage",
+    insert: "$sort: {}",
+    label: "$sort",
+    selectionOffset: "$sort: {".length,
+  },
+  {
+    detail: "stage",
+    insert: "$limit: 50",
+    label: "$limit",
+    selectionOffset: "$limit: ".length,
+  },
+  {
+    detail: "stage",
+    insert: "$skip: 0",
+    label: "$skip",
+    selectionOffset: "$skip: ".length,
+  },
+  {
+    detail: "stage",
+    insert: "$group: { _id: null }",
+    label: "$group",
+    selectionOffset: "$group: { _id: ".length,
+  },
+  {
+    detail: "stage",
+    insert: '$unwind: "$field"',
+    label: "$unwind",
+    selectionOffset: '$unwind: "$'.length,
+  },
+  {
+    detail: "stage",
+    insert: '$count: "count"',
+    label: "$count",
+    selectionOffset: '$count: "'.length,
+  },
+];
+
+const manualMongoOperatorSuggestions: ManualFunctionSuggestion[] = [
+  "$eq",
+  "$ne",
+  "$gt",
+  "$gte",
+  "$lt",
+  "$lte",
+  "$in",
+  "$nin",
+  "$and",
+  "$or",
+  "$not",
+  "$exists",
+  "$regex",
+  "$set",
+  "$unset",
+  "$inc",
+  "$push",
+  "$pull",
+  "$addToSet",
+  "$sum",
+  "$avg",
+  "$min",
+  "$max",
+  "$first",
+  "$last",
+  "$size",
+  "$dateToString",
+  "$toString",
+  "$toInt",
+].map((operator) => ({
+  detail: "operator",
+  insert: `${operator}: `,
+  label: operator,
+  selectionOffset: `${operator}: `.length,
+}));
+
 const manualQuerySamples: ManualQuerySample[] = [
   {
     detail: "Read first page",
@@ -5183,6 +5389,12 @@ const manualQuerySamples: ManualQuerySample[] = [
     detail: "Filter, sort, and limit",
     insert: 'find({ status: "active" }).sort({ createdAt: -1 }).limit(50)',
     label: "Filtered find",
+  },
+  {
+    detail: "Run an aggregation pipeline",
+    insert:
+      'aggregate([{ $match: { status: "active" } }, { $project: { title: 1 } }])',
+    label: "Aggregate pipeline",
   },
   {
     detail: "Create one document",
@@ -5354,7 +5566,12 @@ const ManualQueryEditor = ({
               type="button"
             >
               <span className="field-kind-icon">
-                {suggestion.kind === "function" ? "ƒ" : "f"}
+                {suggestion.kind === "function"
+                  ? "ƒ"
+                  : suggestion.kind === "stage" ||
+                      suggestion.kind === "operator"
+                    ? "$"
+                    : "f"}
               </span>
               <span>{suggestion.label}</span>
               <small>{suggestion.detail}</small>
@@ -9241,8 +9458,15 @@ type ManualWriteQuery = {
   update?: Record<string, unknown>;
 };
 
+type ManualAggregateQuery = {
+  kind: "aggregate";
+  limit: number;
+  pipeline: Record<string, unknown>[];
+};
+
 type ManualMongoQueryParseResult =
   | { kind: "read"; query: DocumentQueryState }
+  | ManualAggregateQuery
   | ManualWriteQuery;
 
 const manualWriteOperations: ManualWriteOperation[] = [
@@ -9264,6 +9488,14 @@ const parseManualMongoQueryInput = ({
   | { ok: true; value: ManualMongoQueryParseResult }
   | { message: string; ok: false } => {
   const normalizedValue = normalizeManualQueryCommand(value);
+  const aggregateArgs = getManualQueryCallArguments(
+    normalizedValue,
+    "aggregate",
+  );
+
+  if (aggregateArgs) {
+    return parseManualAggregateQuery(aggregateArgs, defaultLimit);
+  }
 
   for (const operation of manualWriteOperations) {
     const args = getManualQueryCallArguments(normalizedValue, operation);
@@ -9289,6 +9521,48 @@ const parseManualMongoQueryInput = ({
     value: {
       kind: "read",
       query: readQuery.value,
+    },
+  };
+};
+
+const parseManualAggregateQuery = (
+  args: string,
+  defaultLimit: number,
+): { ok: true; value: ManualAggregateQuery } | { message: string; ok: false } => {
+  const [pipelineInput = "[]", optionsInput] = splitTopLevelArguments(args);
+  const pipeline = parseJsonObjectArray(pipelineInput, "Pipeline");
+
+  if (!pipeline.ok) {
+    return pipeline;
+  }
+
+  let limit = defaultLimit;
+
+  if (optionsInput?.trim()) {
+    const options = parseJsonObject(optionsInput, "Aggregate options");
+
+    if (!options.ok) {
+      return options;
+    }
+
+    if (typeof options.value.limit === "number") {
+      limit = options.value.limit;
+    }
+  }
+
+  if (!Number.isInteger(limit) || limit < 1 || limit > 500) {
+    return {
+      message: "Limit must be an integer between 1 and 500.",
+      ok: false,
+    };
+  }
+
+  return {
+    ok: true,
+    value: {
+      kind: "aggregate",
+      limit,
+      pipeline: pipeline.value,
     },
   };
 };
@@ -9818,10 +10092,15 @@ const getManualQuerySuggestions = (
     caretIndex,
     prefix,
   );
+  const dollarContext = getManualDollarSuggestionContext(prefix, caretIndex);
   const fieldContext = getQueryFieldSuggestionContext(value, caretIndex);
 
   if (functionSuggestions.length > 0 && isManualQueryFunctionPosition(prefix)) {
     return functionSuggestions;
+  }
+
+  if (dollarContext) {
+    return getManualDollarSuggestions(dollarContext);
   }
 
   if (fieldContext) {
@@ -9854,6 +10133,58 @@ const getManualQuerySuggestions = (
   }
 
   return functionSuggestions;
+};
+
+const getManualDollarSuggestionContext = (
+  prefix: string,
+  caretIndex: number,
+): { fragment: string; start: number } | null => {
+  const match = /(\$[A-Za-z]*)$/.exec(prefix);
+
+  if (!match) {
+    return null;
+  }
+
+  const fragment = match[1] ?? "";
+
+  return {
+    fragment,
+    start: caretIndex - fragment.length,
+  };
+};
+
+const getManualDollarSuggestions = ({
+  fragment,
+  start,
+}: {
+  fragment: string;
+  start: number;
+}): ManualQuerySuggestion[] => {
+  const normalizedFragment = fragment.toLowerCase();
+  const suggestions = [
+    ...manualAggregateStageSuggestions.map((suggestion) => ({
+      ...suggestion,
+      kind: "stage" as const,
+    })),
+    ...manualMongoOperatorSuggestions.map((suggestion) => ({
+      ...suggestion,
+      kind: "operator" as const,
+    })),
+  ];
+
+  return suggestions
+    .filter((suggestion) =>
+      suggestion.label.toLowerCase().startsWith(normalizedFragment),
+    )
+    .map((suggestion) => ({
+      detail: suggestion.detail,
+      insert: suggestion.insert,
+      kind: suggestion.kind,
+      label: suggestion.label,
+      replaceEnd: start + fragment.length,
+      replaceStart: start,
+      selectionOffset: suggestion.selectionOffset,
+    }));
 };
 
 const getManualQueryFunctionSuggestions = (
