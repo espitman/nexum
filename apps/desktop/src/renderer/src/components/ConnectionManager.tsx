@@ -447,7 +447,7 @@ export const ConnectionManager = ({
           <footer className="connection-form-footer">
             {selectedConnection.status === "connected" ? (
               <button
-                className="secondary-button"
+                className="run-button compact connection-action-button connection-primary-action"
                 disabled={isSubmitting}
                 onClick={() => void disconnectSelectedConnection()}
                 type="button"
@@ -456,7 +456,7 @@ export const ConnectionManager = ({
               </button>
             ) : (
               <button
-                className="secondary-button"
+                className="run-button compact connection-action-button connection-primary-action"
                 disabled={isSubmitting}
                 onClick={() => void connectSelectedConnection()}
                 type="button"
@@ -465,7 +465,7 @@ export const ConnectionManager = ({
               </button>
             )}
             <button
-              className="run-button compact"
+              className="secondary-button connection-action-button connection-secondary-action"
               type="button"
               onClick={editSelectedConnection}
             >
