@@ -141,10 +141,35 @@ export type SavedWorkspaceTask = {
     | "weekly";
   scheduleTime?: string;
   sourceQuery: SavedWorkspaceQuery;
+  steps: SavedWorkspaceTaskStep[];
   status: "idle" | "running" | "success" | "failed";
   target: string;
-  type: "aggregation" | "audit-cleanup" | "export" | "find" | "schema-inference";
+  type:
+    | "aggregation"
+    | "audit-cleanup"
+    | "export"
+    | "find"
+    | "schema-inference";
   name: string;
+};
+
+export type SavedWorkspaceTaskStep = {
+  continueOnError: boolean;
+  enabled: boolean;
+  id: string;
+  mode: "aggregation" | "manual" | "visual";
+  name: string;
+  outputName: string;
+  queryText: string;
+  sourceQuery?: SavedWorkspaceQuery;
+  type: SavedWorkspaceTask["type"];
+  visualQuery?: {
+    filter: Record<string, unknown>;
+    limit: number;
+    projection: Record<string, unknown>;
+    skip: number;
+    sort: Record<string, 1 | -1>;
+  };
 };
 
 export type SavedWorkspaceTaskRun = {
@@ -154,7 +179,23 @@ export type SavedWorkspaceTaskRun = {
   id: string;
   message: string;
   resultCount?: number;
+  stepRuns?: SavedWorkspaceTaskStepRun[];
   startedAt: string;
   status: "failed" | "success";
   trigger: "manual" | "schedule";
+};
+
+export type SavedWorkspaceTaskStepRun = {
+  error?: string;
+  executionTimeMs?: number;
+  finishedAt: string;
+  id: string;
+  message: string;
+  name: string;
+  outputName: string;
+  resultCount?: number;
+  startedAt: string;
+  status: "failed" | "skipped" | "success";
+  stepId: string;
+  type: SavedWorkspaceTask["type"];
 };

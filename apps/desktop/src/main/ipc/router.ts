@@ -7,6 +7,7 @@ import {
   ConnectionStorageService,
   ElectronConnectionMetadataStore,
   KeychainConnectionSecretStore,
+  type MongoManualWriteInput,
   type StoredConnectionSummary,
   type StoredConnectionTestResult,
 } from "../connections";
@@ -237,7 +238,9 @@ export const registerIpcHandlers = (
     ipcChannels.mongodbAggregate,
     mongodbAggregatePayloadSchema,
     async (payload) =>
-      unwrapResult(services.connections.aggregate(payload.connectionId, payload)),
+      unwrapResult(
+        services.connections.aggregate(payload.connectionId, payload),
+      ),
     ipc,
   );
 
@@ -286,7 +289,10 @@ export const registerIpcHandlers = (
     mongodbManualWritePayloadSchema,
     async (payload) =>
       unwrapResult(
-        services.connections.manualWrite(payload.connectionId, payload),
+        services.connections.manualWrite(
+          payload.connectionId,
+          payload as MongoManualWriteInput,
+        ),
       ),
     ipc,
   );

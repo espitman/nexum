@@ -10,6 +10,7 @@ import { AuditLogService, type AuditLogAction } from "@nexum/core";
 import {
   BSON,
   MongoClient,
+  type AnyBulkWriteOperation,
   type Document,
   type Filter,
   type Sort,
@@ -100,7 +101,7 @@ export type MongoManualWriteInput = {
   database: string;
   documents?: Document[] | undefined;
   filter?: Document | undefined;
-  operations?: Document[] | undefined;
+  operations?: AnyBulkWriteOperation<Document>[] | undefined;
   operation: MongoManualWriteOperation;
   options?: Document | undefined;
   replacement?: Document | undefined;

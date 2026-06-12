@@ -73,6 +73,8 @@ import type {
   SavedWorkspaceBookmark,
   SavedWorkspaceQuery,
   SavedWorkspaceTask,
+  SavedWorkspaceTaskStep,
+  SavedWorkspaceTaskStepRun,
   SchemaFieldSummary,
 } from "../types";
 import { ConnectionManager } from "./ConnectionManager";
@@ -334,6 +336,12 @@ export const DocumentWorkspace = ({
   const lastRecordedHistoryIdRef = useRef<string | null>(null);
   const runningTaskIdsRef = useRef<Set<string>>(new Set());
   const cancelRequestedTaskIdsRef = useRef<Set<string>>(new Set());
+  const lastQueryTargetRef = useRef<{
+    collection: string;
+    connectionId: string;
+    connectionName: string;
+    database: string;
+  } | null>(null);
   const [isSystemDark, setIsSystemDark] = useState(
     () =>
       globalThis.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false,
@@ -740,6 +748,12 @@ export const DocumentWorkspace = ({
           database: selectedCollectionPath.database,
         }
       : null;
+
+  useEffect(() => {
+    if (currentQueryTarget) {
+      lastQueryTargetRef.current = currentQueryTarget;
+    }
+  }, [currentQueryTarget]);
   const emptyWorkspaceTitle =
     activeSection === "Explore" ? exploreEmptyState.title : activeSection;
   const emptyWorkspaceLabel =
@@ -1045,6 +1059,38 @@ export const DocumentWorkspace = ({
     }
   };
 
+  const buildQuerySnapshotForTarget = (
+    state: DocumentQueryState,
+    target: NonNullable<typeof currentQueryTarget>,
+    overrides: Partial<SavedWorkspaceQuery> = {},
+  ): SavedWorkspaceQuery | null => {
+    if (!target) {
+      return null;
+    }
+
+    const now = new Date().toISOString();
+
+    return {
+      collection: target.collection,
+      connectionId: target.connectionId,
+      connectionName: target.connectionName,
+      createdAt: now,
+      database: target.database,
+      filter: state.filter,
+      id: `query_${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
+      kind: "find",
+      lastRunAt: now,
+      limit: state.limit,
+      name: `${target.collection} find`,
+      notes: "",
+      projection: state.projection,
+      skip: state.skip,
+      sort: state.sort,
+      updatedAt: now,
+      ...overrides,
+    };
+  };
+
   const buildQuerySnapshot = (
     state: DocumentQueryState,
     overrides: Partial<SavedWorkspaceQuery> = {},
@@ -1053,27 +1099,7 @@ export const DocumentWorkspace = ({
       return null;
     }
 
-    const now = new Date().toISOString();
-
-    return {
-      collection: currentQueryTarget.collection,
-      connectionId: currentQueryTarget.connectionId,
-      connectionName: currentQueryTarget.connectionName,
-      createdAt: now,
-      database: currentQueryTarget.database,
-      filter: state.filter,
-      id: `query_${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
-      kind: "find",
-      lastRunAt: now,
-      limit: state.limit,
-      name: `${currentQueryTarget.collection} find`,
-      notes: "",
-      projection: state.projection,
-      skip: state.skip,
-      sort: state.sort,
-      updatedAt: now,
-      ...overrides,
-    };
+    return buildQuerySnapshotForTarget(state, currentQueryTarget, overrides);
   };
 
   const recordQueryRun = (state: DocumentQueryState) => {
@@ -1244,6 +1270,8 @@ export const DocumentWorkspace = ({
         ),
       );
 
+      const stepRuns: SavedWorkspaceTask["runs"][number]["stepRuns"] = [];
+
       try {
         const query = task.sourceQuery;
         let executionTimeMs: number | undefined;
@@ -1295,70 +1323,112 @@ export const DocumentWorkspace = ({
             throw new Error("Preload API is unavailable");
           }
 
-          if (task.type === "schema-inference") {
-            const result = await withQueryTimeout(
-              window.nexum.mongodb.findDocuments({
-                collection: query.collection,
-                connectionId: query.connectionId,
-                database: query.database,
-                filter: {},
-                limit: settings.query.maxSampleSize,
-                projection: {},
-                skip: 0,
-                sort: {},
-              }),
-              settings.query.timeoutMs,
-            );
-            const fields = inferDocumentSchema(
-              parseEjsonDocuments(result.documents),
-              settings.query.maxSampleSize,
-            );
+          const context: TaskWorkflowContext = { steps: {} };
+          const steps = getTaskWorkflowSteps(task);
 
-            executionTimeMs = result.executionTimeMs;
-            resultCount = fields.length;
-            message = `Inferred ${fields.length} schema field${
-              fields.length === 1 ? "" : "s"
-            } from ${result.documents.length} sampled document${
-              result.documents.length === 1 ? "" : "s"
-            }.`;
-          } else {
-            const result =
-              query.kind === "aggregation"
-                ? await withQueryTimeout(
-                    window.nexum.mongodb.aggregate({
-                      collection: query.collection,
-                      connectionId: query.connectionId,
-                      database: query.database,
-                      limit: query.limit,
-                      pipeline: query.pipeline ?? [],
-                    }),
-                    settings.query.timeoutMs,
-                  )
-                : await withQueryTimeout(
-                    window.nexum.mongodb.findDocuments({
-                      collection: query.collection,
-                      connectionId: query.connectionId,
-                      database: query.database,
-                      filter: query.filter,
-                      limit: query.limit,
-                      projection: query.projection,
-                      skip: query.skip,
-                      sort: query.sort,
-                    }),
-                    settings.query.timeoutMs,
-                  );
+          for (const step of steps) {
+            if (cancelRequestedTaskIdsRef.current.has(task.id)) {
+              cancelRequestedTaskIdsRef.current.delete(task.id);
 
-            executionTimeMs = result.executionTimeMs;
-            resultCount = result.documents.length;
-            message =
-              task.type === "export"
-                ? `Prepared JSON export for ${result.documents.length} document${
-                    result.documents.length === 1 ? "" : "s"
-                  } in ${result.executionTimeMs} ms.`
-                : `${result.documents.length} document${
-                    result.documents.length === 1 ? "" : "s"
-                  } returned in ${result.executionTimeMs} ms.`;
+              throw new Error("Task canceled by user.");
+            }
+
+            const stepStartedAt = new Date().toISOString();
+
+            if (!step.enabled) {
+              stepRuns.push({
+                finishedAt: stepStartedAt,
+                id: `task_step_run_${
+                  globalThis.crypto?.randomUUID?.() ?? Date.now()
+                }`,
+                message: "Step disabled.",
+                name: step.name,
+                outputName: step.outputName,
+                startedAt: stepStartedAt,
+                status: "skipped",
+                stepId: step.id,
+                type: step.type,
+              });
+              continue;
+            }
+
+            try {
+              const stepResult = await executeTaskWorkflowStep({
+                context,
+                defaultLimit: settings.query.defaultPageSize,
+                maxSampleSize: settings.query.maxSampleSize,
+                query,
+                queryTimeoutMs: settings.query.timeoutMs,
+                step,
+                task,
+              });
+              const stepFinishedAt = new Date().toISOString();
+              stepRuns.push({
+                ...(stepResult.executionTimeMs !== undefined
+                  ? { executionTimeMs: stepResult.executionTimeMs }
+                  : {}),
+                finishedAt: stepFinishedAt,
+                id: `task_step_run_${
+                  globalThis.crypto?.randomUUID?.() ?? Date.now()
+                }`,
+                message: stepResult.message,
+                name: step.name,
+                outputName: step.outputName,
+                ...(stepResult.resultCount !== undefined
+                  ? { resultCount: stepResult.resultCount }
+                  : {}),
+                startedAt: stepStartedAt,
+                status: "success",
+                stepId: step.id,
+                type: step.type,
+              });
+            } catch (error) {
+              const stepFinishedAt = new Date().toISOString();
+              const stepMessage =
+                error instanceof Error
+                  ? getSafeWorkspaceErrorMessage(error)
+                  : "Task step failed.";
+
+              stepRuns.push({
+                error: stepMessage,
+                finishedAt: stepFinishedAt,
+                id: `task_step_run_${
+                  globalThis.crypto?.randomUUID?.() ?? Date.now()
+                }`,
+                message: stepMessage,
+                name: step.name,
+                outputName: step.outputName,
+                startedAt: stepStartedAt,
+                status: "failed",
+                stepId: step.id,
+                type: step.type,
+              });
+
+              if (!step.continueOnError) {
+                throw new Error(`${step.name}: ${stepMessage}`);
+              }
+            }
           }
+
+          const successfulStepRuns = stepRuns.filter(
+            (stepRun) => stepRun.status === "success",
+          );
+          const failedStepRuns = stepRuns.filter(
+            (stepRun) => stepRun.status === "failed",
+          );
+          const skippedStepRuns = stepRuns.filter(
+            (stepRun) => stepRun.status === "skipped",
+          );
+
+          executionTimeMs = successfulStepRuns.reduce(
+            (total, stepRun) => total + (stepRun.executionTimeMs ?? 0),
+            0,
+          );
+          resultCount = successfulStepRuns.reduce(
+            (total, stepRun) => total + (stepRun.resultCount ?? 0),
+            0,
+          );
+          message = `Workflow completed: ${successfulStepRuns.length} succeeded, ${skippedStepRuns.length} skipped, ${failedStepRuns.length} failed.`;
         }
 
         const finishedAt = new Date().toISOString();
@@ -1375,6 +1445,7 @@ export const DocumentWorkspace = ({
           id: `task_run_${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
           message,
           ...(resultCount !== undefined ? { resultCount } : {}),
+          ...(stepRuns.length > 0 ? { stepRuns } : {}),
           startedAt,
           status: "success",
           trigger,
@@ -1414,6 +1485,7 @@ export const DocumentWorkspace = ({
           finishedAt,
           id: `task_run_${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
           message,
+          ...(stepRuns.length > 0 ? { stepRuns } : {}),
           startedAt,
           status: "failed",
           trigger,
@@ -1452,6 +1524,7 @@ export const DocumentWorkspace = ({
     [
       setTasks,
       settings.localData.keepAuditLogDays,
+      settings.query.defaultPageSize,
       settings.query.maxSampleSize,
       settings.query.timeoutMs,
       tasks,
@@ -1463,7 +1536,7 @@ export const DocumentWorkspace = ({
     type: SavedWorkspaceTask["type"] = query.kind === "aggregation"
       ? "aggregation"
       : "find",
-  ) => {
+  ): string => {
     const now = new Date().toISOString();
     const task: SavedWorkspaceTask = {
       createdAt: now,
@@ -1473,12 +1546,59 @@ export const DocumentWorkspace = ({
       schedule: "manual",
       runs: [],
       sourceQuery: query,
+      steps: [createTaskStepFromQuery(query, type)],
       status: "idle",
-      target: `${query.database}.${query.collection}`,
+      target:
+        query.database && query.collection
+          ? `${query.database}.${query.collection}`
+          : "No target selected",
       type,
     };
 
     setTasks((currentTasks) => [task, ...currentTasks]);
+
+    return task.id;
+  };
+
+  const createBlankWorkflowTask = (): string | null => {
+    const fallbackConnection =
+      selectedConnection ??
+      connections.find((connection) => connection.status === "connected") ??
+      connections[0] ??
+      null;
+    const target = currentQueryTarget ??
+      lastQueryTargetRef.current ?? {
+        collection: "",
+        connectionId: fallbackConnection?.id ?? "",
+        connectionName: fallbackConnection?.name ?? "Draft",
+        database: "",
+      };
+    const hasRealTarget =
+      Boolean(target.collection) && Boolean(target.database);
+
+    const snapshot = buildQuerySnapshotForTarget(
+      {
+        filter: {},
+        limit: settings.query.defaultPageSize,
+        projection: {},
+        skip: 0,
+        sort: {},
+      },
+      target,
+      {
+        name: hasRealTarget ? `${target.collection} workflow` : "New workflow",
+      },
+    );
+
+    if (!snapshot) {
+      onConnectionError(
+        "Create task failed",
+        "Select a connected collection before creating a task.",
+      );
+      return null;
+    }
+
+    return createTaskFromQuery(snapshot, "find");
   };
 
   const createTaskFromCurrentQuery = (
@@ -1557,6 +1677,10 @@ export const DocumentWorkspace = ({
       lastModifiedAt: now,
       name: `${task.name} copy`,
       runs: [],
+      steps: getTaskWorkflowSteps(task).map((step) => ({
+        ...step,
+        id: `task_step_${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
+      })),
       status: "idle",
     };
 
@@ -1613,6 +1737,24 @@ export const DocumentWorkspace = ({
           schedule: "manual",
         };
       }),
+    );
+  };
+
+  const updateTask = (
+    taskId: string,
+    updater: (task: SavedWorkspaceTask) => SavedWorkspaceTask,
+  ) => {
+    const now = new Date().toISOString();
+
+    setTasks((currentTasks) =>
+      currentTasks.map((task) =>
+        task.id === taskId
+          ? {
+              ...updater(task),
+              lastModifiedAt: now,
+            }
+          : task,
+      ),
     );
   };
 
@@ -2038,19 +2180,19 @@ export const DocumentWorkspace = ({
 
       {activeSection === "Tasks" ? (
         <TasksWorkspace
-          history={queryHistory}
-          savedQueries={savedQueries}
+          connections={connections}
+          schemaFields={schemaFields}
           tasks={tasks}
           onCancel={cancelTask}
           onClone={cloneTask}
-          onCreateFromCurrent={createTaskFromCurrentQuery}
-          onCreateFromQuery={createTaskFromQuery}
+          onCreateBlank={createBlankWorkflowTask}
           onPerform={performTask}
           onPreview={previewTask}
           onRemove={removeTask}
           onRetry={retryTask}
           onSchedule={scheduleTask}
           onUnschedule={unscheduleTask}
+          onUpdate={updateTask}
         />
       ) : null}
 
@@ -3065,16 +3207,12 @@ const QueryCodeBlock = ({
 );
 
 type TasksWorkspaceProps = {
-  history: SavedWorkspaceQuery[];
-  savedQueries: SavedWorkspaceQuery[];
+  connections: ConnectionProfile[];
+  schemaFields: SchemaFieldSummary[];
   tasks: SavedWorkspaceTask[];
   onCancel: (task: SavedWorkspaceTask) => void;
   onClone: (task: SavedWorkspaceTask) => void;
-  onCreateFromCurrent: (type?: SavedWorkspaceTask["type"]) => void;
-  onCreateFromQuery: (
-    query: SavedWorkspaceQuery,
-    type?: SavedWorkspaceTask["type"],
-  ) => void;
+  onCreateBlank: () => string | null;
   onPerform: (task: SavedWorkspaceTask) => void;
   onPreview: (task: SavedWorkspaceTask) => void;
   onRemove: (taskId: string) => void;
@@ -3085,27 +3223,34 @@ type TasksWorkspaceProps = {
     scheduleTime?: string,
   ) => void;
   onUnschedule: (taskId: string) => void;
+  onUpdate: (
+    taskId: string,
+    updater: (task: SavedWorkspaceTask) => SavedWorkspaceTask,
+  ) => void;
 };
 
 const TasksWorkspace = ({
-  history,
-  savedQueries,
+  connections,
+  schemaFields,
   tasks,
   onCancel,
   onClone,
-  onCreateFromCurrent,
-  onCreateFromQuery,
+  onCreateBlank,
   onPerform,
   onPreview,
   onRemove,
   onRetry,
   onSchedule,
   onUnschedule,
+  onUpdate,
 }: TasksWorkspaceProps) => {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(
     tasks[0]?.id ?? null,
   );
-  const [isNewTaskMenuOpen, setIsNewTaskMenuOpen] = useState(false);
+  const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
+  const [taskWorkspaceView, setTaskWorkspaceView] = useState<
+    "step-edit" | "steps" | "tasks"
+  >("tasks");
   const [customScheduleMinutes, setCustomScheduleMinutes] = useState("5");
   const [dailyScheduleTime, setDailyScheduleTime] = useState("09:00");
   const [scheduleCountdownNow, setScheduleCountdownNow] = useState(() =>
@@ -3114,6 +3259,13 @@ const TasksWorkspace = ({
   const [scheduleModalTaskId, setScheduleModalTaskId] = useState<string | null>(
     null,
   );
+  const [visualStepDraft, setVisualStepDraft] = useState({
+    filter: "{}",
+    limit: "50",
+    projection: "{}",
+    skip: "0",
+    sort: "{}",
+  });
   const [selectedRun, setSelectedRun] = useState<{
     run: SavedWorkspaceTask["runs"][number];
     task: SavedWorkspaceTask;
@@ -3123,11 +3275,16 @@ const TasksWorkspace = ({
     x: number;
     y: number;
   } | null>(null);
-  const newTaskMenuRef = useRef<HTMLDivElement | null>(null);
   const taskContextMenuRef = useRef<HTMLDivElement | null>(null);
-  const querySources = [...savedQueries, ...history].slice(0, 10);
   const selectedTask =
     tasks.find((task) => task.id === selectedTaskId) ?? tasks[0] ?? null;
+  const selectedTaskSteps = selectedTask
+    ? getTaskWorkflowSteps(selectedTask)
+    : [];
+  const selectedStep =
+    selectedTaskSteps.find((step) => step.id === selectedStepId) ??
+    selectedTaskSteps[0] ??
+    null;
   const contextTask = taskContextMenu
     ? (tasks.find((task) => task.id === taskContextMenu.taskId) ?? null)
     : null;
@@ -3156,6 +3313,217 @@ const TasksWorkspace = ({
   };
 
   useEffect(() => {
+    if (!selectedStep) {
+      return;
+    }
+
+    const visualQuery = normalizeTaskStepVisualQuery(selectedStep.visualQuery);
+    setVisualStepDraft({
+      filter: JSON.stringify(visualQuery.filter),
+      limit: String(visualQuery.limit),
+      projection: JSON.stringify(visualQuery.projection),
+      skip: String(visualQuery.skip),
+      sort: JSON.stringify(visualQuery.sort),
+    });
+  }, [selectedStep?.id]);
+
+  useEffect(() => {
+    if (!selectedTask) {
+      setSelectedStepId(null);
+      return;
+    }
+
+    const steps = getTaskWorkflowSteps(selectedTask);
+
+    const firstStep = steps[0];
+
+    if (firstStep && !steps.some((step) => step.id === selectedStepId)) {
+      setSelectedStepId(firstStep.id);
+    }
+  }, [selectedStepId, selectedTask]);
+
+  const updateSelectedTaskSteps = (
+    updater: (steps: SavedWorkspaceTaskStep[]) => SavedWorkspaceTaskStep[],
+  ) => {
+    if (!selectedTask) {
+      return;
+    }
+
+    onUpdate(selectedTask.id, (task) => ({
+      ...task,
+      steps: updater(getTaskWorkflowSteps(task)).map(normalizeTaskStep),
+    }));
+  };
+
+  const updateSelectedStep = (patch: Partial<SavedWorkspaceTaskStep>) => {
+    if (!selectedStep) {
+      return;
+    }
+
+    updateSelectedTaskSteps((steps) =>
+      steps.map((step) =>
+        step.id === selectedStep.id
+          ? normalizeTaskStep({
+              ...step,
+              ...patch,
+            })
+          : step,
+      ),
+    );
+  };
+
+  const updateSelectedStepSourceQuery = (
+    patch: Partial<SavedWorkspaceQuery>,
+  ) => {
+    if (!selectedStep || !selectedTask) {
+      return;
+    }
+
+    const baseQuery = selectedStep.sourceQuery ?? selectedTask.sourceQuery;
+
+    updateSelectedStep({
+      sourceQuery: {
+        ...baseQuery,
+        ...patch,
+        updatedAt: new Date().toISOString(),
+      },
+    });
+  };
+
+  const updateSelectedStepMode = (mode: SavedWorkspaceTaskStep["mode"]) => {
+    if (!selectedStep) {
+      return;
+    }
+
+    const type = mode === "aggregation" ? "aggregation" : "find";
+    updateSelectedStep({
+      mode,
+      outputName: createTaskStepOutputName(mode),
+      queryText:
+        mode === "aggregation"
+          ? "aggregate([])"
+          : mode === "visual"
+            ? buildManualFindQueryInput(
+                normalizeTaskStepVisualQuery(selectedStep.visualQuery),
+              )
+            : selectedStep.queryText || "find({}).limit(50)",
+      type,
+    });
+  };
+
+  const updateVisualStepDraft = (
+    key: keyof typeof visualStepDraft,
+    value: string,
+  ) => {
+    setVisualStepDraft((currentDraft) => {
+      const nextDraft = {
+        ...currentDraft,
+        [key]: value,
+      };
+      const parsed = parseDocumentQueryInputs({
+        filterInput: nextDraft.filter,
+        limitInput: nextDraft.limit,
+        projectionInput: nextDraft.projection,
+        skipInput: nextDraft.skip,
+        sortInput: nextDraft.sort,
+      });
+
+      if (parsed.ok) {
+        updateSelectedStep({
+          queryText: buildManualFindQueryInput(parsed.value),
+          visualQuery: parsed.value,
+        });
+      }
+
+      return nextDraft;
+    });
+  };
+
+  const addTaskStep = () => {
+    if (!selectedTask) {
+      return;
+    }
+
+    const step = {
+      ...createTaskStepFromQuery(selectedTask.sourceQuery, "find"),
+      name: `Step ${selectedTaskSteps.length + 1}`,
+      queryText: "find({}).limit(50)",
+      visualQuery: {
+        filter: {},
+        limit: 50,
+        projection: {},
+        skip: 0,
+        sort: {},
+      },
+    };
+    updateSelectedTaskSteps((steps) => [...steps, step]);
+    setSelectedStepId(step.id);
+    setTaskWorkspaceView("step-edit");
+  };
+
+  const cloneSelectedStep = () => {
+    if (!selectedStep) {
+      return;
+    }
+
+    const clonedStep: SavedWorkspaceTaskStep = {
+      ...selectedStep,
+      id: `task_step_${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
+      name: `${selectedStep.name} copy`,
+      outputName: createTaskStepOutputName(`${selectedStep.outputName} copy`),
+    };
+    updateSelectedTaskSteps((steps) => {
+      const index = steps.findIndex((step) => step.id === selectedStep.id);
+
+      return index === -1
+        ? [...steps, clonedStep]
+        : [...steps.slice(0, index + 1), clonedStep, ...steps.slice(index + 1)];
+    });
+    setSelectedStepId(clonedStep.id);
+    setTaskWorkspaceView("step-edit");
+  };
+
+  const removeSelectedStep = () => {
+    if (!selectedStep || selectedTaskSteps.length <= 1) {
+      return;
+    }
+
+    updateSelectedTaskSteps((steps) =>
+      steps.filter((step) => step.id !== selectedStep.id),
+    );
+    setSelectedStepId(
+      selectedTaskSteps.find((step) => step.id !== selectedStep.id)?.id ?? null,
+    );
+    setTaskWorkspaceView("steps");
+  };
+
+  const moveSelectedStep = (direction: -1 | 1) => {
+    if (!selectedStep) {
+      return;
+    }
+
+    updateSelectedTaskSteps((steps) => {
+      const index = steps.findIndex((step) => step.id === selectedStep.id);
+      const nextIndex = index + direction;
+
+      if (index === -1 || nextIndex < 0 || nextIndex >= steps.length) {
+        return steps;
+      }
+
+      const nextSteps = [...steps];
+      const [step] = nextSteps.splice(index, 1);
+
+      if (!step) {
+        return steps;
+      }
+
+      nextSteps.splice(nextIndex, 0, step);
+
+      return nextSteps;
+    });
+  };
+
+  useEffect(() => {
     if (!hasScheduledFutureTask) {
       return;
     }
@@ -3168,36 +3536,6 @@ const TasksWorkspace = ({
       window.clearInterval(intervalId);
     };
   }, [hasScheduledFutureTask]);
-
-  useEffect(() => {
-    if (!isNewTaskMenuOpen) {
-      return;
-    }
-
-    const handlePointerDown = (event: PointerEvent) => {
-      const target = event.target;
-
-      if (target instanceof Node && newTaskMenuRef.current?.contains(target)) {
-        return;
-      }
-
-      setIsNewTaskMenuOpen(false);
-    };
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setIsNewTaskMenuOpen(false);
-      }
-    };
-
-    document.addEventListener("pointerdown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [isNewTaskMenuOpen]);
 
   useEffect(() => {
     if (!selectedRun && !scheduleModalTaskId) {
@@ -3295,98 +3633,20 @@ const TasksWorkspace = ({
           <Icon name="table" />
           Preview
         </button>
-        <div className="task-new-menu" ref={newTaskMenuRef}>
-          <button
-            className="is-primary"
-            onClick={() => setIsNewTaskMenuOpen((isOpen) => !isOpen)}
-            type="button"
-          >
-            <span>+</span>
-            New Task
-          </button>
-          {isNewTaskMenuOpen ? (
-            <div className="task-new-menu-popover">
-              <button
-                type="button"
-                onClick={() => {
-                  onCreateFromCurrent();
-                  setIsNewTaskMenuOpen(false);
-                }}
-              >
-                Current document query
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  onCreateFromCurrent("export");
-                  setIsNewTaskMenuOpen(false);
-                }}
-              >
-                Export current result
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  onCreateFromCurrent("schema-inference");
-                  setIsNewTaskMenuOpen(false);
-                }}
-              >
-                Analyze current schema
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  onCreateFromCurrent("audit-cleanup");
-                  setIsNewTaskMenuOpen(false);
-                }}
-              >
-                Clean local task history
-              </button>
-              <div className="task-new-menu-divider" />
-              {querySources.length > 0 ? (
-                querySources.map((query) => (
-                  <div className="task-new-query-group" key={query.id}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onCreateFromQuery(query);
-                        setIsNewTaskMenuOpen(false);
-                      }}
-                    >
-                      <span>{query.name}</span>
-                      <small>
-                        {query.kind === "aggregation" ? "Pipeline" : "Find"} ·{" "}
-                        {query.database}.{query.collection}
-                      </small>
-                    </button>
-                    <div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onCreateFromQuery(query, "export");
-                          setIsNewTaskMenuOpen(false);
-                        }}
-                      >
-                        Export
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onCreateFromQuery(query, "schema-inference");
-                          setIsNewTaskMenuOpen(false);
-                        }}
-                      >
-                        Schema
-                      </button>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <p>No saved queries or history yet.</p>
-              )}
-            </div>
-          ) : null}
-        </div>
+        <button
+          className="is-primary"
+          onClick={() => {
+            const taskId = onCreateBlank();
+            if (taskId) {
+              setSelectedTaskId(taskId);
+              setTaskWorkspaceView("steps");
+            }
+          }}
+          type="button"
+        >
+          <span>+</span>
+          New Task
+        </button>
         <button
           disabled={!selectedTask}
           onClick={() => selectedTask && onClone(selectedTask)}
@@ -3418,179 +3678,431 @@ const TasksWorkspace = ({
         </button>
       </div>
 
-      <div className="tasks-layout">
-        <section className="tasks-table-panel">
-          {tasks.length > 0 ? (
-            <table className="tasks-table">
-              <thead>
-                <tr>
-                  <th>Task Name</th>
-                  <th>Type</th>
-                  <th>Target</th>
-                  <th>Status</th>
-                  <th>Schedule</th>
-                  <th>Last Modified</th>
-                </tr>
-              </thead>
-              <tbody>
-                {tasks.map((task) => (
-                  <tr
-                    className={selectedTaskId === task.id ? "is-active" : ""}
-                    key={task.id}
-                    onClick={() => setSelectedTaskId(task.id)}
-                    onContextMenu={(event) => {
-                      event.preventDefault();
-                      setSelectedTaskId(task.id);
-                      setTaskContextMenu({
-                        taskId: task.id,
-                        x: event.clientX,
-                        y: event.clientY,
+      <div className={`tasks-layout is-${taskWorkspaceView}`}>
+        {taskWorkspaceView === "tasks" ? (
+          <section className="tasks-table-panel task-page-panel">
+            {tasks.length > 0 ? (
+              <table className="tasks-table">
+                <thead>
+                  <tr>
+                    <th>Task Name</th>
+                    <th>Type</th>
+                    <th>Target</th>
+                    <th>Status</th>
+                    <th>Schedule</th>
+                    <th>Last Modified</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tasks.map((task) => (
+                    <tr
+                      className={selectedTaskId === task.id ? "is-active" : ""}
+                      key={task.id}
+                      onClick={() => setSelectedTaskId(task.id)}
+                      onContextMenu={(event) => {
+                        event.preventDefault();
+                        setSelectedTaskId(task.id);
+                        setTaskContextMenu({
+                          taskId: task.id,
+                          x: event.clientX,
+                          y: event.clientY,
+                        });
+                      }}
+                    >
+                      <td>{task.name}</td>
+                      <td>{formatTaskType(task)}</td>
+                      <td>{task.target}</td>
+                      <td>
+                        <span className={`task-status is-${task.status}`}>
+                          {formatTaskStatus(task.status)}
+                        </span>
+                      </td>
+                      <td>
+                        {formatTaskSchedule(task.schedule, task.scheduleTime)}
+                        {task.nextRunAt ? (
+                          <small className="task-next-run">
+                            Next{" "}
+                            {formatTaskNextRun(
+                              task.nextRunAt,
+                              scheduleCountdownNow,
+                            )}
+                          </small>
+                        ) : null}
+                      </td>
+                      <td>{formatAbsoluteTime(task.lastModifiedAt)}</td>
+                      <td>
+                        <button
+                          className="task-inline-button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setSelectedTaskId(task.id);
+                            setTaskWorkspaceView("steps");
+                          }}
+                          type="button"
+                        >
+                          Edit
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div className="tasks-empty">
+                <Icon name="check" />
+                <strong>No tasks yet</strong>
+                <span>
+                  Create a task from the current query, a saved query, or recent
+                  history.
+                </span>
+              </div>
+            )}
+          </section>
+        ) : null}
+
+        {taskWorkspaceView === "steps" && selectedTask ? (
+          <section className="task-workflow-panel task-page-panel">
+            <div className="task-workflow-header">
+              <div>
+                <strong>{selectedTask.name}</strong>
+                <span>Workflow steps</span>
+              </div>
+              <div className="task-page-actions">
+                <button
+                  onClick={() => setTaskWorkspaceView("tasks")}
+                  type="button"
+                >
+                  Back to tasks
+                </button>
+                <button onClick={addTaskStep} type="button">
+                  New step
+                </button>
+              </div>
+            </div>
+            <div className="task-step-table" role="list">
+              <div className="task-step-row task-step-row-header">
+                <span>#</span>
+                <strong>Step</strong>
+                <strong>Target</strong>
+                <strong>Status</strong>
+                <strong>Actions</strong>
+              </div>
+              {selectedTaskSteps.map((step, index) => {
+                const latestStepRun =
+                  selectedTask.runs[0]?.stepRuns?.find(
+                    (stepRun) => stepRun.stepId === step.id,
+                  ) ?? null;
+                const stepTarget = getTaskStepTarget(step, selectedTask);
+
+                return (
+                  <div className="task-step-row" key={step.id} role="listitem">
+                    <span>{index + 1}</span>
+                    <div>
+                      <strong>{step.name}</strong>
+                      <small>
+                        {formatTaskStepMode(step.mode)} {"->"} {step.outputName}
+                      </small>
+                    </div>
+                    <div>
+                      <strong>{formatStepTargetLabel(stepTarget)}</strong>
+                      <small>
+                        {stepTarget.connectionName || "No connection"}
+                      </small>
+                    </div>
+                    {latestStepRun ? (
+                      <em className={`is-${latestStepRun.status}`}>
+                        {formatTaskStepRunStatus(latestStepRun.status)}
+                      </em>
+                    ) : (
+                      <em className="is-skipped">Not run</em>
+                    )}
+                    <button
+                      onClick={() => {
+                        setSelectedStepId(step.id);
+                        setTaskWorkspaceView("step-edit");
+                      }}
+                      type="button"
+                    >
+                      Edit
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
+
+        {taskWorkspaceView === "step-edit" && selectedTask && selectedStep ? (
+          <section className="task-workflow-panel task-page-panel">
+            <div className="task-workflow-header">
+              <div>
+                <strong>{selectedStep.name}</strong>
+                <span>Choose a target and configure how this step runs.</span>
+              </div>
+              <button
+                onClick={() => setTaskWorkspaceView("steps")}
+                type="button"
+              >
+                Back to steps
+              </button>
+            </div>
+            <div className="task-step-editor">
+              <div className="task-step-target-grid">
+                <label>
+                  <span>Connection</span>
+                  <select
+                    value={
+                      getTaskStepTarget(selectedStep, selectedTask).connectionId
+                    }
+                    onChange={(event) => {
+                      const connection = connections.find(
+                        (item) => item.id === event.target.value,
+                      );
+
+                      updateSelectedStepSourceQuery({
+                        connectionId: event.target.value,
+                        connectionName:
+                          connection?.name ??
+                          getTaskStepTarget(selectedStep, selectedTask)
+                            .connectionName,
                       });
                     }}
                   >
-                    <td>{task.name}</td>
-                    <td>{formatTaskType(task)}</td>
-                    <td>{task.target}</td>
-                    <td>
-                      <span className={`task-status is-${task.status}`}>
-                        {formatTaskStatus(task.status)}
-                      </span>
-                    </td>
-                    <td>
-                      {formatTaskSchedule(task.schedule, task.scheduleTime)}
-                      {task.nextRunAt ? (
-                        <small className="task-next-run">
-                          Next{" "}
-                          {formatTaskNextRun(
-                            task.nextRunAt,
-                            scheduleCountdownNow,
-                          )}
-                        </small>
-                      ) : null}
-                    </td>
-                    <td>{formatAbsoluteTime(task.lastModifiedAt)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <div className="tasks-empty">
-              <Icon name="check" />
-              <strong>No tasks yet</strong>
-              <span>
-                Create a task from the current query, a saved query, or recent
-                history.
-              </span>
-            </div>
-          )}
-        </section>
-
-        <aside className="task-detail-panel">
-          {selectedTask ? (
-            <>
-              <div>
-                <span className={`task-status is-${selectedTask.status}`}>
-                  {formatTaskStatus(selectedTask.status)}
-                </span>
-                <h2>{selectedTask.name}</h2>
-                <p>
-                  {selectedTask.sourceQuery.connectionName} ·{" "}
-                  {selectedTask.target}
-                </p>
-              </div>
-              <dl>
-                <div>
-                  <dt>Type</dt>
-                  <dd>{formatTaskType(selectedTask)}</dd>
-                </div>
-                <div>
-                  <dt>Schedule</dt>
-                  <dd>
-                    {formatTaskSchedule(
-                      selectedTask.schedule,
-                      selectedTask.scheduleTime,
-                    )}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Next run</dt>
-                  <dd>
-                    {selectedTask.nextRunAt
-                      ? formatAbsoluteTime(selectedTask.nextRunAt)
-                      : "Not scheduled"}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Last run</dt>
-                  <dd>
-                    {selectedTask.lastRunAt
-                      ? formatAbsoluteTime(selectedTask.lastRunAt)
-                      : "Never"}
-                  </dd>
-                </div>
-              </dl>
-              <QueryCodeBlock
-                label={
-                  selectedTask.type === "audit-cleanup"
-                    ? "Cleanup"
-                    : selectedTask.sourceQuery.kind === "aggregation"
-                      ? "Pipeline"
-                      : "Filter"
-                }
-                value={
-                  selectedTask.type === "audit-cleanup"
-                    ? { retention: "30 days", scope: "local task run history" }
-                    : (selectedTask.sourceQuery.pipeline ??
-                      selectedTask.sourceQuery.filter)
-                }
-              />
-              {selectedTask.result ? (
-                <p className="task-result">{selectedTask.result}</p>
-              ) : null}
-              <section className="task-runs-panel">
-                <div className="task-runs-header">
-                  <strong>Runs</strong>
-                  <span>{selectedTask.runs.length}</span>
-                </div>
-                {selectedTask.runs.length > 0 ? (
-                  <div className="task-runs-list">
-                    {selectedTask.runs.map((run) => (
-                      <button
-                        className="task-run-item"
-                        key={run.id}
-                        onClick={() =>
-                          setSelectedRun({ run, task: selectedTask })
-                        }
-                        type="button"
-                      >
-                        <span className={`task-status is-${run.status}`}>
-                          {run.status === "success" ? "Succeeded" : "Failed"}
-                        </span>
-                        <strong>{run.message}</strong>
-                        <small>
-                          {formatAbsoluteTime(run.finishedAt)} · {run.trigger}
-                          {run.executionTimeMs !== undefined
-                            ? ` · ${run.executionTimeMs} ms`
-                            : ""}
-                        </small>
-                      </button>
+                    <option value="">Select connection</option>
+                    {connections.map((connection) => (
+                      <option key={connection.id} value={connection.id}>
+                        {connection.name}
+                      </option>
                     ))}
+                  </select>
+                </label>
+                <label>
+                  <span>Database</span>
+                  <input
+                    list="task-step-database-options"
+                    placeholder="database"
+                    value={
+                      getTaskStepTarget(selectedStep, selectedTask).database
+                    }
+                    onChange={(event) =>
+                      updateSelectedStepSourceQuery({
+                        database: event.target.value,
+                      })
+                    }
+                  />
+                </label>
+                <label>
+                  <span>Collection</span>
+                  <input
+                    list="task-step-collection-options"
+                    placeholder="collection"
+                    value={
+                      getTaskStepTarget(selectedStep, selectedTask).collection
+                    }
+                    onChange={(event) =>
+                      updateSelectedStepSourceQuery({
+                        collection: event.target.value,
+                      })
+                    }
+                  />
+                </label>
+                <datalist id="task-step-database-options">
+                  {getTaskDatabaseSuggestions(selectedTask).map((database) => (
+                    <option key={database} value={database} />
+                  ))}
+                </datalist>
+                <datalist id="task-step-collection-options">
+                  {getTaskCollectionSuggestions(selectedTask).map(
+                    (collection) => (
+                      <option key={collection} value={collection} />
+                    ),
+                  )}
+                </datalist>
+              </div>
+              <label>
+                <span>Name</span>
+                <input
+                  value={selectedStep.name}
+                  onChange={(event) =>
+                    updateSelectedStep({ name: event.target.value })
+                  }
+                />
+              </label>
+              <label>
+                <span>Output key</span>
+                <input
+                  value={selectedStep.outputName}
+                  onChange={(event) =>
+                    updateSelectedStep({
+                      outputName: createTaskStepOutputName(event.target.value),
+                    })
+                  }
+                />
+              </label>
+              <div className="task-step-mode-switch">
+                {(["manual", "visual", "aggregation"] as const).map((mode) => (
+                  <button
+                    className={selectedStep.mode === mode ? "is-active" : ""}
+                    key={mode}
+                    onClick={() => updateSelectedStepMode(mode)}
+                    type="button"
+                  >
+                    {formatTaskStepMode(mode)}
+                  </button>
+                ))}
+              </div>
+              {selectedStep.mode === "visual" ? (
+                <div className="task-step-visual-query">
+                  <label>
+                    <span>Filter</span>
+                    <QueryFieldAutocompleteInput
+                      aria-label="Task step filter"
+                      fields={schemaFields}
+                      mode="filter"
+                      value={visualStepDraft.filter}
+                      onChange={(value) =>
+                        updateVisualStepDraft("filter", value)
+                      }
+                      onEnter={() => selectedTask && onPerform(selectedTask)}
+                    />
+                  </label>
+                  <label>
+                    <span>Projection</span>
+                    <QueryFieldAutocompleteInput
+                      aria-label="Task step projection"
+                      fields={schemaFields}
+                      mode="projection"
+                      value={visualStepDraft.projection}
+                      onChange={(value) =>
+                        updateVisualStepDraft("projection", value)
+                      }
+                      onEnter={() => selectedTask && onPerform(selectedTask)}
+                    />
+                  </label>
+                  <div className="task-step-visual-row">
+                    <label>
+                      <span>Limit</span>
+                      <input
+                        inputMode="numeric"
+                        value={visualStepDraft.limit}
+                        onChange={(event) =>
+                          updateVisualStepDraft("limit", event.target.value)
+                        }
+                      />
+                    </label>
+                    <label>
+                      <span>Skip</span>
+                      <input
+                        inputMode="numeric"
+                        value={visualStepDraft.skip}
+                        onChange={(event) =>
+                          updateVisualStepDraft("skip", event.target.value)
+                        }
+                      />
+                    </label>
                   </div>
-                ) : (
-                  <p className="task-runs-empty">
-                    Scheduled and manual executions will appear here.
-                  </p>
-                )}
-              </section>
-            </>
-          ) : (
-            <div className="tasks-empty">
-              <Icon name="check" />
-              <strong>Select a task</strong>
-              <span>Task details and last result will appear here.</span>
+                  <label>
+                    <span>Sort</span>
+                    <QueryFieldAutocompleteInput
+                      aria-label="Task step sort"
+                      fields={schemaFields}
+                      mode="sort"
+                      value={visualStepDraft.sort}
+                      onChange={(value) => updateVisualStepDraft("sort", value)}
+                      onEnter={() => selectedTask && onPerform(selectedTask)}
+                    />
+                  </label>
+                </div>
+              ) : (
+                <label className="task-step-editor-query">
+                  <span>
+                    {selectedStep.mode === "aggregation"
+                      ? "Aggregation"
+                      : "Query"}
+                  </span>
+                  <ManualQueryEditor
+                    fields={schemaFields}
+                    mode={selectedStep.mode}
+                    value={selectedStep.queryText}
+                    onChange={(value) =>
+                      updateSelectedStep({ queryText: value })
+                    }
+                    onRunQuery={() => selectedTask && onPerform(selectedTask)}
+                  />
+                </label>
+              )}
+              <div className="task-step-options">
+                <label>
+                  <input
+                    checked={selectedStep.enabled}
+                    type="checkbox"
+                    onChange={(event) =>
+                      updateSelectedStep({
+                        enabled: event.target.checked,
+                      })
+                    }
+                  />
+                  Enabled
+                </label>
+                <label>
+                  <input
+                    checked={selectedStep.continueOnError}
+                    type="checkbox"
+                    onChange={(event) =>
+                      updateSelectedStep({
+                        continueOnError: event.target.checked,
+                      })
+                    }
+                  />
+                  Continue on error
+                </label>
+              </div>
+              <div className="task-step-actions">
+                <button
+                  disabled={
+                    selectedTaskSteps.findIndex(
+                      (step) => step.id === selectedStep.id,
+                    ) === 0
+                  }
+                  onClick={() => moveSelectedStep(-1)}
+                  type="button"
+                >
+                  Up
+                </button>
+                <button
+                  disabled={
+                    selectedTaskSteps.findIndex(
+                      (step) => step.id === selectedStep.id,
+                    ) ===
+                    selectedTaskSteps.length - 1
+                  }
+                  onClick={() => moveSelectedStep(1)}
+                  type="button"
+                >
+                  Down
+                </button>
+                <button onClick={cloneSelectedStep} type="button">
+                  Clone
+                </button>
+                <button
+                  className="danger-text-button"
+                  disabled={selectedTaskSteps.length <= 1}
+                  onClick={removeSelectedStep}
+                  type="button"
+                >
+                  Remove
+                </button>
+                <button
+                  onClick={() => setTaskWorkspaceView("steps")}
+                  type="button"
+                >
+                  Done
+                </button>
+              </div>
             </div>
-          )}
-        </aside>
+          </section>
+        ) : null}
       </div>
       {taskContextMenu && contextTask ? (
         <TaskContextMenu
@@ -3727,6 +4239,29 @@ const TaskRunResultModal = ({
         <span>Message</span>
         <p>{run.message}</p>
       </section>
+      {run.stepRuns && run.stepRuns.length > 0 ? (
+        <section className="task-run-modal-steps">
+          <span>Steps</span>
+          <div>
+            {run.stepRuns.map((stepRun, index) => (
+              <article key={stepRun.id}>
+                <small>{index + 1}</small>
+                <div>
+                  <strong>{stepRun.name}</strong>
+                  <span>
+                    {stepRun.outputName} ·{" "}
+                    {formatTaskStepRunStatus(stepRun.status)}
+                    {stepRun.executionTimeMs !== undefined
+                      ? ` · ${stepRun.executionTimeMs} ms`
+                      : ""}
+                  </span>
+                  <p>{stepRun.message}</p>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
       {run.error ? (
         <section className="task-run-modal-message is-error">
           <span>Error</span>
@@ -5530,11 +6065,13 @@ const manualQuerySamples: ManualQuerySample[] = [
 
 const ManualQueryEditor = ({
   fields,
+  mode = "manual",
   value,
   onChange,
   onRunQuery,
 }: {
   fields: SchemaFieldSummary[];
+  mode?: "aggregation" | "manual";
   value: string;
   onChange: (value: string) => void;
   onRunQuery: () => void;
@@ -5544,8 +6081,8 @@ const ManualQueryEditor = ({
   const [caretIndex, setCaretIndex] = useState(value.length);
   const [isFocused, setIsFocused] = useState(false);
   const suggestions = useMemo(
-    () => getManualQuerySuggestions(fields, value, caretIndex),
-    [caretIndex, fields, value],
+    () => getManualQuerySuggestions(fields, value, caretIndex, mode),
+    [caretIndex, fields, mode, value],
   );
   const shouldShowSuggestions = isFocused && suggestions.length > 0;
 
@@ -8456,6 +8993,9 @@ const isSavedWorkspaceTask = (value: unknown): value is SavedWorkspaceTask => {
     (task.runs === undefined ||
       (Array.isArray(task.runs) &&
         task.runs.every((run) => isSavedWorkspaceTaskRun(run)))) &&
+    (task.steps === undefined ||
+      (Array.isArray(task.steps) &&
+        task.steps.every((step) => isSavedWorkspaceTaskStep(step)))) &&
     (task.status === "idle" ||
       task.status === "running" ||
       task.status === "success" ||
@@ -8476,6 +9016,31 @@ const isSavedWorkspaceTaskType = (
   value === "schema-inference" ||
   value === "audit-cleanup";
 
+const isSavedWorkspaceTaskStep = (
+  value: unknown,
+): value is SavedWorkspaceTaskStep => {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const step = value as Partial<SavedWorkspaceTaskStep>;
+
+  return (
+    typeof step.id === "string" &&
+    typeof step.name === "string" &&
+    typeof step.outputName === "string" &&
+    typeof step.queryText === "string" &&
+    (step.mode === undefined ||
+      step.mode === "aggregation" ||
+      step.mode === "manual" ||
+      step.mode === "visual") &&
+    typeof step.enabled === "boolean" &&
+    typeof step.continueOnError === "boolean" &&
+    isSavedWorkspaceTaskType(step.type) &&
+    (step.sourceQuery === undefined || isSavedWorkspaceQuery(step.sourceQuery))
+  );
+};
+
 const isSavedWorkspaceTaskRun = (
   value: unknown,
 ): value is SavedWorkspaceTask["runs"][number] => {
@@ -8495,7 +9060,39 @@ const isSavedWorkspaceTaskRun = (
     (run.error === undefined || typeof run.error === "string") &&
     (run.executionTimeMs === undefined ||
       typeof run.executionTimeMs === "number") &&
-    (run.resultCount === undefined || typeof run.resultCount === "number")
+    (run.resultCount === undefined || typeof run.resultCount === "number") &&
+    (run.stepRuns === undefined ||
+      (Array.isArray(run.stepRuns) &&
+        run.stepRuns.every((stepRun) => isSavedWorkspaceTaskStepRun(stepRun))))
+  );
+};
+
+const isSavedWorkspaceTaskStepRun = (
+  value: unknown,
+): value is SavedWorkspaceTaskStepRun => {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const stepRun = value as Partial<SavedWorkspaceTaskStepRun>;
+
+  return (
+    typeof stepRun.finishedAt === "string" &&
+    typeof stepRun.id === "string" &&
+    typeof stepRun.message === "string" &&
+    typeof stepRun.name === "string" &&
+    typeof stepRun.outputName === "string" &&
+    typeof stepRun.startedAt === "string" &&
+    typeof stepRun.stepId === "string" &&
+    isSavedWorkspaceTaskType(stepRun.type) &&
+    (stepRun.status === "failed" ||
+      stepRun.status === "skipped" ||
+      stepRun.status === "success") &&
+    (stepRun.error === undefined || typeof stepRun.error === "string") &&
+    (stepRun.executionTimeMs === undefined ||
+      typeof stepRun.executionTimeMs === "number") &&
+    (stepRun.resultCount === undefined ||
+      typeof stepRun.resultCount === "number")
   );
 };
 
@@ -8504,7 +9101,15 @@ const normalizeSavedWorkspaceTask = (
 ): SavedWorkspaceTask => {
   const normalizedTask: SavedWorkspaceTask = {
     ...task,
-    runs: Array.isArray(task.runs) ? task.runs : [],
+    runs: Array.isArray(task.runs)
+      ? task.runs.map((run) => ({
+          ...run,
+          ...(Array.isArray(run.stepRuns)
+            ? { stepRuns: run.stepRuns.filter(isSavedWorkspaceTaskStepRun) }
+            : {}),
+        }))
+      : [],
+    steps: getTaskWorkflowSteps(task),
     status: task.status === "running" ? "idle" : task.status,
   };
 
@@ -8757,6 +9362,32 @@ const formatTaskStatus = (status: SavedWorkspaceTask["status"]): string => {
   }
 
   return "Failed";
+};
+
+const formatTaskStepRunStatus = (
+  status: SavedWorkspaceTaskStepRun["status"],
+): string => {
+  if (status === "success") {
+    return "Succeeded";
+  }
+
+  if (status === "skipped") {
+    return "Skipped";
+  }
+
+  return "Failed";
+};
+
+const formatTaskStepMode = (mode: SavedWorkspaceTaskStep["mode"]): string => {
+  if (mode === "aggregation") {
+    return "Aggregation";
+  }
+
+  if (mode === "visual") {
+    return "Visual query";
+  }
+
+  return "Manual query";
 };
 
 const getNextTaskRunAt = (
@@ -9540,6 +10171,534 @@ const buildManualFindQueryInput = (state: DocumentQueryState): string => {
   parts.push(`.limit(${state.limit})`);
 
   return parts.join("");
+};
+
+type TaskWorkflowContextValue = {
+  count?: number;
+  documents?: Record<string, unknown>[];
+  first?: Record<string, unknown> | null;
+  ids?: unknown[];
+  result?: unknown;
+  summary?: Record<string, unknown>;
+};
+
+type TaskWorkflowContext = {
+  steps: Record<string, TaskWorkflowContextValue>;
+};
+
+type TaskWorkflowStepResult = {
+  executionTimeMs?: number;
+  message: string;
+  resultCount?: number;
+};
+
+const createTaskStepFromQuery = (
+  query: SavedWorkspaceQuery,
+  type: SavedWorkspaceTask["type"] = query.kind === "aggregation"
+    ? "aggregation"
+    : "find",
+): SavedWorkspaceTaskStep => ({
+  continueOnError: false,
+  enabled: true,
+  id: `task_step_${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
+  mode: type === "aggregation" ? "aggregation" : "manual",
+  name: getTaskTypeSuffix(type),
+  outputName: createTaskStepOutputName(type),
+  queryText: getTaskStepQueryText(query, type),
+  sourceQuery: query,
+  type,
+  visualQuery: getTaskStepVisualQuery(query),
+});
+
+const createTaskStepFromTask = (
+  task: SavedWorkspaceTask,
+): SavedWorkspaceTaskStep => ({
+  ...createTaskStepFromQuery(task.sourceQuery, task.type),
+  id: `${task.id}_step_1`,
+  name: getTaskTypeSuffix(task.type),
+});
+
+const getTaskWorkflowSteps = (
+  task: SavedWorkspaceTask,
+): SavedWorkspaceTaskStep[] =>
+  Array.isArray(task.steps) && task.steps.length > 0
+    ? task.steps.map(normalizeTaskStep)
+    : [createTaskStepFromTask(task)];
+
+const normalizeTaskStep = (
+  step: SavedWorkspaceTaskStep,
+): SavedWorkspaceTaskStep => ({
+  continueOnError: Boolean(step.continueOnError),
+  enabled: step.enabled !== false,
+  id:
+    typeof step.id === "string" && step.id
+      ? step.id
+      : `task_step_${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
+  name:
+    typeof step.name === "string" && step.name
+      ? step.name
+      : getTaskTypeSuffix(step.type),
+  mode:
+    step.mode === "aggregation" ||
+    step.mode === "manual" ||
+    step.mode === "visual"
+      ? step.mode
+      : step.type === "aggregation"
+        ? "aggregation"
+        : "manual",
+  outputName: createTaskStepOutputName(step.outputName || step.type),
+  queryText: typeof step.queryText === "string" ? step.queryText : "",
+  ...(step.sourceQuery ? { sourceQuery: step.sourceQuery } : {}),
+  type: isSavedWorkspaceTaskType(step.type) ? step.type : "find",
+  visualQuery: normalizeTaskStepVisualQuery(step.visualQuery),
+});
+
+const createTaskStepOutputName = (value: string): string => {
+  const words = value
+    .replace(/[^a-zA-Z0-9]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (words.length === 0) {
+    return "stepOutput";
+  }
+
+  return words
+    .map((word, index) => {
+      const lowerWord = word.toLowerCase();
+
+      return index === 0
+        ? lowerWord
+        : `${lowerWord.charAt(0).toUpperCase()}${lowerWord.slice(1)}`;
+    })
+    .join("");
+};
+
+const getTaskStepQueryText = (
+  query: SavedWorkspaceQuery,
+  type: SavedWorkspaceTask["type"],
+): string => {
+  if (type === "audit-cleanup") {
+    return "cleanupAuditLogs()";
+  }
+
+  if (type === "aggregation" || query.kind === "aggregation") {
+    return `aggregate(${JSON.stringify(query.pipeline ?? [], null, 2)})`;
+  }
+
+  return buildManualFindQueryInput({
+    filter: query.filter,
+    limit: query.limit,
+    projection: query.projection,
+    skip: query.skip,
+    sort: query.sort,
+  });
+};
+
+const getTaskStepVisualQuery = (
+  query: SavedWorkspaceQuery,
+): DocumentQueryState => ({
+  filter: query.filter,
+  limit: query.limit,
+  projection: query.projection,
+  skip: query.skip,
+  sort: query.sort,
+});
+
+const normalizeTaskStepVisualQuery = (
+  value: SavedWorkspaceTaskStep["visualQuery"],
+): DocumentQueryState => ({
+  filter: isRecord(value?.filter) ? value.filter : {},
+  limit:
+    typeof value?.limit === "number" && Number.isInteger(value.limit)
+      ? value.limit
+      : defaultAppSettings.query.defaultPageSize,
+  projection: isRecord(value?.projection) ? value.projection : {},
+  skip:
+    typeof value?.skip === "number" && Number.isInteger(value.skip)
+      ? value.skip
+      : 0,
+  sort: isRecord(value?.sort)
+    ? Object.fromEntries(
+        Object.entries(value.sort).filter(
+          (entry): entry is [string, 1 | -1] =>
+            entry[1] === 1 || entry[1] === -1,
+        ),
+      )
+    : {},
+});
+
+const getTaskStepTarget = (
+  step: SavedWorkspaceTaskStep,
+  task: SavedWorkspaceTask,
+): SavedWorkspaceQuery => step.sourceQuery ?? task.sourceQuery;
+
+const isConcreteTaskTarget = (query: SavedWorkspaceQuery): boolean =>
+  Boolean(query.connectionId.trim()) &&
+  Boolean(query.database.trim()) &&
+  Boolean(query.collection.trim()) &&
+  query.database !== "Select database" &&
+  query.collection !== "Select collection";
+
+const formatStepTargetLabel = (query: SavedWorkspaceQuery): string =>
+  isConcreteTaskTarget(query)
+    ? `${query.database}.${query.collection}`
+    : "Select database and collection";
+
+const getTaskDatabaseSuggestions = (task: SavedWorkspaceTask): string[] => {
+  const databases = new Set<string>();
+
+  [
+    task.sourceQuery,
+    ...getTaskWorkflowSteps(task).map((step) => step.sourceQuery),
+  ]
+    .filter(Boolean)
+    .forEach((query) => {
+      if (query && query.database && query.database !== "Select database") {
+        databases.add(query.database);
+      }
+    });
+
+  return [...databases].sort((left, right) => left.localeCompare(right));
+};
+
+const getTaskCollectionSuggestions = (task: SavedWorkspaceTask): string[] => {
+  const collections = new Set<string>();
+
+  [
+    task.sourceQuery,
+    ...getTaskWorkflowSteps(task).map((step) => step.sourceQuery),
+  ]
+    .filter(Boolean)
+    .forEach((query) => {
+      if (
+        query &&
+        query.collection &&
+        query.collection !== "Select collection"
+      ) {
+        collections.add(query.collection);
+      }
+    });
+
+  return [...collections].sort((left, right) => left.localeCompare(right));
+};
+
+const getTaskStepExecutableQueryText = (
+  step: SavedWorkspaceTaskStep,
+  context: TaskWorkflowContext,
+): string => {
+  if (step.mode === "visual") {
+    return buildManualFindQueryInput(
+      normalizeTaskStepVisualQuery(step.visualQuery),
+    );
+  }
+
+  const resolvedQueryText = resolveTaskWorkflowTemplate(
+    step.queryText,
+    context,
+  );
+
+  if (step.mode === "aggregation") {
+    const trimmedQuery = resolvedQueryText.trim();
+
+    return trimmedQuery.startsWith("aggregate(")
+      ? trimmedQuery
+      : `aggregate(${trimmedQuery || "[]"})`;
+  }
+
+  return resolvedQueryText;
+};
+
+const resolveTaskWorkflowTemplate = (
+  queryText: string,
+  context: TaskWorkflowContext,
+): string =>
+  queryText.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_match, rawPath: string) => {
+    const value = resolveTaskWorkflowPath(context, rawPath);
+
+    return JSON.stringify(value ?? null);
+  });
+
+const resolveTaskWorkflowPath = (
+  context: TaskWorkflowContext,
+  rawPath: string,
+): unknown => {
+  const segments = rawPath.split(".").filter(Boolean);
+
+  return segments.reduce<unknown>((currentValue, segment) => {
+    if (Array.isArray(currentValue)) {
+      return currentValue[Number(segment)];
+    }
+
+    if (isRecord(currentValue)) {
+      return currentValue[segment];
+    }
+
+    return undefined;
+  }, context);
+};
+
+const setTaskWorkflowOutput = ({
+  context,
+  documents,
+  outputName,
+  result,
+  summary,
+}: {
+  context: TaskWorkflowContext;
+  documents?: Record<string, unknown>[];
+  outputName: string;
+  result?: unknown;
+  summary?: Record<string, unknown>;
+}) => {
+  const normalizedOutputName = createTaskStepOutputName(outputName);
+  const first = documents?.[0] ?? null;
+
+  context.steps[normalizedOutputName] = {
+    first,
+    result,
+    ...(documents ? { count: documents.length, documents } : {}),
+    ...(documents ? { ids: documents.map(getTaskDocumentIdValue) } : {}),
+    ...(summary ? { summary } : {}),
+  };
+};
+
+const getTaskDocumentIdValue = (document: Record<string, unknown>): unknown => {
+  const idValue = document._id;
+
+  if (isRecord(idValue)) {
+    if (typeof idValue.$oid === "string") {
+      return idValue.$oid;
+    }
+
+    if (typeof idValue.$numberInt === "string") {
+      return Number(idValue.$numberInt);
+    }
+
+    if (typeof idValue.$numberLong === "string") {
+      return idValue.$numberLong;
+    }
+  }
+
+  return idValue;
+};
+
+const executeTaskWorkflowStep = async ({
+  context,
+  defaultLimit,
+  maxSampleSize,
+  query,
+  queryTimeoutMs,
+  step,
+}: {
+  context: TaskWorkflowContext;
+  defaultLimit: number;
+  maxSampleSize: number;
+  query: SavedWorkspaceQuery;
+  queryTimeoutMs: number;
+  step: SavedWorkspaceTaskStep;
+  task: SavedWorkspaceTask;
+}): Promise<TaskWorkflowStepResult> => {
+  if (!window.nexum) {
+    throw new Error("Preload API is unavailable");
+  }
+
+  const targetQuery = step.sourceQuery ?? query;
+
+  if (!isConcreteTaskTarget(targetQuery)) {
+    throw new Error(
+      `${step.name}: choose a connection, database, and collection before running this step.`,
+    );
+  }
+
+  const resolvedQueryText = getTaskStepExecutableQueryText(step, context);
+
+  if (step.type === "schema-inference") {
+    const result = await withQueryTimeout(
+      window.nexum.mongodb.findDocuments({
+        collection: targetQuery.collection,
+        connectionId: targetQuery.connectionId,
+        database: targetQuery.database,
+        filter: targetQuery.filter,
+        limit: maxSampleSize,
+        projection: targetQuery.projection,
+        skip: targetQuery.skip,
+        sort: targetQuery.sort,
+      }),
+      queryTimeoutMs,
+    );
+    const documents = parseEjsonDocuments(result.documents).map(
+      (document) => document.value,
+    );
+    const fields = inferDocumentSchema(
+      parseEjsonDocuments(result.documents),
+      maxSampleSize,
+    );
+
+    setTaskWorkflowOutput({
+      context,
+      documents,
+      outputName: step.outputName,
+      result: fields,
+      summary: { fields: fields.length },
+    });
+
+    return {
+      executionTimeMs: result.executionTimeMs,
+      message: `Inferred ${fields.length} schema field${
+        fields.length === 1 ? "" : "s"
+      }.`,
+      resultCount: fields.length,
+    };
+  }
+
+  if (step.type === "export") {
+    const parsedQuery = parseManualMongoQueryInput({
+      defaultLimit,
+      value: resolvedQueryText,
+    });
+
+    if (!parsedQuery.ok) {
+      throw new Error(parsedQuery.message);
+    }
+
+    const queryState =
+      parsedQuery.value.kind === "read" ? parsedQuery.value.query : targetQuery;
+    const result = await withQueryTimeout(
+      window.nexum.mongodb.findDocuments({
+        collection: targetQuery.collection,
+        connectionId: targetQuery.connectionId,
+        database: targetQuery.database,
+        filter: queryState.filter,
+        limit: queryState.limit,
+        projection: queryState.projection,
+        skip: queryState.skip,
+        sort: queryState.sort,
+      }),
+      queryTimeoutMs,
+    );
+    const documents = parseEjsonDocuments(result.documents).map(
+      (document) => document.value,
+    );
+
+    setTaskWorkflowOutput({
+      context,
+      documents,
+      outputName: step.outputName,
+      result: result.documents,
+    });
+
+    return {
+      executionTimeMs: result.executionTimeMs,
+      message: `Prepared ${documents.length} document${
+        documents.length === 1 ? "" : "s"
+      } for export.`,
+      resultCount: documents.length,
+    };
+  }
+
+  const parsedQuery = parseManualMongoQueryInput({
+    defaultLimit,
+    value: resolvedQueryText,
+  });
+
+  if (!parsedQuery.ok) {
+    throw new Error(parsedQuery.message);
+  }
+
+  if (parsedQuery.value.kind === "aggregate") {
+    const result = await withQueryTimeout(
+      window.nexum.mongodb.aggregate({
+        collection: targetQuery.collection,
+        connectionId: targetQuery.connectionId,
+        database: targetQuery.database,
+        limit: parsedQuery.value.limit,
+        pipeline: parsedQuery.value.pipeline,
+      }),
+      queryTimeoutMs,
+    );
+    const documents = parseEjsonDocuments(result.documents).map(
+      (document) => document.value,
+    );
+
+    setTaskWorkflowOutput({
+      context,
+      documents,
+      outputName: step.outputName,
+      result: result.documents,
+    });
+
+    return {
+      executionTimeMs: result.executionTimeMs,
+      message: `${documents.length} document${
+        documents.length === 1 ? "" : "s"
+      } returned.`,
+      resultCount: documents.length,
+    };
+  }
+
+  if (parsedQuery.value.kind === "write") {
+    const result = await withQueryTimeout(
+      window.nexum.mongodb.manualWrite({
+        collection: targetQuery.collection,
+        confirmedProductionWrite: false,
+        connectionId: targetQuery.connectionId,
+        database: targetQuery.database,
+        documents: parsedQuery.value.documents,
+        filter: parsedQuery.value.filter,
+        operation: parsedQuery.value.operation,
+        operations: parsedQuery.value.operations,
+        options: parsedQuery.value.options,
+        replacement: parsedQuery.value.replacement,
+        update: parsedQuery.value.update,
+      }),
+      queryTimeoutMs,
+    );
+
+    setTaskWorkflowOutput({
+      context,
+      outputName: step.outputName,
+      result,
+      summary: result,
+    });
+
+    return {
+      message: formatManualWriteResult(result),
+    };
+  }
+
+  const result = await withQueryTimeout(
+    window.nexum.mongodb.findDocuments({
+      collection: targetQuery.collection,
+      connectionId: targetQuery.connectionId,
+      database: targetQuery.database,
+      filter: parsedQuery.value.query.filter,
+      limit: parsedQuery.value.query.limit,
+      projection: parsedQuery.value.query.projection,
+      skip: parsedQuery.value.query.skip,
+      sort: parsedQuery.value.query.sort,
+    }),
+    queryTimeoutMs,
+  );
+  const documents = parseEjsonDocuments(result.documents).map(
+    (document) => document.value,
+  );
+
+  setTaskWorkflowOutput({
+    context,
+    documents,
+    outputName: step.outputName,
+    result: result.documents,
+  });
+
+  return {
+    executionTimeMs: result.executionTimeMs,
+    message: `${documents.length} document${
+      documents.length === 1 ? "" : "s"
+    } returned.`,
+    resultCount: documents.length,
+  };
 };
 
 type ManualWriteOperation =
@@ -10467,6 +11626,7 @@ const getManualQuerySuggestions = (
   fields: SchemaFieldSummary[],
   value: string,
   caretIndex: number,
+  mode: "aggregation" | "manual" = "manual",
 ): ManualQuerySuggestion[] => {
   const prefix = value.slice(0, caretIndex);
   const functionMatch = /(?:^|[.\s])([A-Za-z]*)$/.exec(prefix);
@@ -10477,6 +11637,19 @@ const getManualQuerySuggestions = (
   );
   const dollarContext = getManualDollarSuggestionContext(prefix, caretIndex);
   const fieldContext = getQueryFieldSuggestionContext(value, caretIndex);
+
+  if (mode === "aggregation") {
+    const aggregationSuggestions = getManualAggregationSuggestions({
+      caretIndex,
+      dollarContext,
+      prefix,
+      value,
+    });
+
+    if (aggregationSuggestions.length > 0) {
+      return aggregationSuggestions;
+    }
+  }
 
   if (functionSuggestions.length > 0 && isManualQueryFunctionPosition(prefix)) {
     return functionSuggestions;
@@ -10516,6 +11689,63 @@ const getManualQuerySuggestions = (
   }
 
   return functionSuggestions;
+};
+
+const getManualAggregationSuggestions = ({
+  caretIndex,
+  dollarContext,
+  prefix,
+  value,
+}: {
+  caretIndex: number;
+  dollarContext: { fragment: string; start: number } | null;
+  prefix: string;
+  value: string;
+}): ManualQuerySuggestion[] => {
+  if (dollarContext) {
+    return getManualDollarSuggestions(dollarContext);
+  }
+
+  const stageFragmentMatch = /(?:^|[\s[{,])(\$?[A-Za-z]*)$/.exec(prefix);
+
+  if (!stageFragmentMatch) {
+    return [];
+  }
+
+  const fragment = stageFragmentMatch[1] ?? "";
+  const normalizedFragment = fragment.replace(/^\$/, "").toLowerCase();
+  const replaceStart = caretIndex - fragment.length;
+  const trimmedValue = value.trim();
+  const isPipelineContext =
+    trimmedValue === "" ||
+    trimmedValue === "[]" ||
+    /^aggregate\s*\(\s*\[/.test(trimmedValue) ||
+    prefix.includes("[");
+
+  if (!isPipelineContext) {
+    return [];
+  }
+
+  return manualAggregateStageSuggestions
+    .filter((suggestion) =>
+      suggestion.label
+        .replace(/^\$/, "")
+        .toLowerCase()
+        .startsWith(normalizedFragment),
+    )
+    .map((suggestion) => {
+      const insert = `{ ${suggestion.insert} }`;
+
+      return {
+        detail: suggestion.detail,
+        insert,
+        kind: "stage" as const,
+        label: suggestion.label,
+        replaceEnd: caretIndex,
+        replaceStart,
+        selectionOffset: "{ ".length + suggestion.selectionOffset,
+      };
+    });
 };
 
 const getManualDollarSuggestionContext = (
