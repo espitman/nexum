@@ -3488,11 +3488,27 @@ const TasksWorkspace = ({
       return;
     }
 
+    removeTaskStep(selectedStep.id);
+  };
+
+  const removeTaskStep = (stepId: string) => {
+    if (selectedTaskSteps.length <= 1) {
+      return;
+    }
+
+    const stepToRemove = selectedTaskSteps.find((step) => step.id === stepId);
+    const stepName = stepToRemove?.name ?? "this step";
+    const confirmed = window.confirm(`Remove "${stepName}"?`);
+
+    if (!confirmed) {
+      return;
+    }
+
     updateSelectedTaskSteps((steps) =>
-      steps.filter((step) => step.id !== selectedStep.id),
+      steps.filter((step) => step.id !== stepId),
     );
     setSelectedStepId(
-      selectedTaskSteps.find((step) => step.id !== selectedStep.id)?.id ?? null,
+      selectedTaskSteps.find((step) => step.id !== stepId)?.id ?? null,
     );
     setTaskWorkspaceView("steps");
   };
@@ -3765,8 +3781,21 @@ const TasksWorkspace = ({
           <section className="task-workflow-panel task-page-panel">
             <div className="task-workflow-header">
               <div>
-                <strong>{selectedTask.name}</strong>
-                <span>Workflow steps</span>
+                <div className="task-workflow-title-row">
+                  <strong>{selectedTask.name}</strong>
+                  <span className={`task-status is-${selectedTask.status}`}>
+                    {formatTaskStatus(selectedTask.status)}
+                  </span>
+                </div>
+                <span>
+                  {selectedTaskSteps.length} workflow step
+                  {selectedTaskSteps.length === 1 ? "" : "s"} {" - "}
+                  {formatTaskType(selectedTask)} {" - "}
+                  {formatTaskSchedule(
+                    selectedTask.schedule,
+                    selectedTask.scheduleTime,
+                  )}
+                </span>
               </div>
               <div className="task-page-actions">
                 <button
@@ -3780,14 +3809,7 @@ const TasksWorkspace = ({
                 </button>
               </div>
             </div>
-            <div className="task-step-table" role="list">
-              <div className="task-step-row task-step-row-header">
-                <span>#</span>
-                <strong>Step</strong>
-                <strong>Target</strong>
-                <strong>Status</strong>
-                <strong>Actions</strong>
-              </div>
+            <div className="task-step-runbook" role="list">
               {selectedTaskSteps.map((step, index) => {
                 const latestStepRun =
                   selectedTask.runs[0]?.stepRuns?.find(
@@ -3796,36 +3818,61 @@ const TasksWorkspace = ({
                 const stepTarget = getTaskStepTarget(step, selectedTask);
 
                 return (
-                  <div className="task-step-row" key={step.id} role="listitem">
-                    <span>{index + 1}</span>
-                    <div>
-                      <strong>{step.name}</strong>
-                      <small>
-                        {formatTaskStepMode(step.mode)} {"->"} {step.outputName}
-                      </small>
+                  <div
+                    className="task-step-runbook-item"
+                    key={step.id}
+                    role="listitem"
+                  >
+                    <div className="task-step-marker" aria-hidden="true">
+                      <span>{index + 1}</span>
                     </div>
-                    <div>
-                      <strong>{formatStepTargetLabel(stepTarget)}</strong>
-                      <small>
-                        {stepTarget.connectionName || "No connection"}
-                      </small>
+                    <div className="task-step-runbook-body">
+                      <div className="task-step-runbook-main">
+                        <div>
+                          <strong>{step.name}</strong>
+                          <small>
+                            {formatTaskStepMode(step.mode)} {"->"}{" "}
+                            {step.outputName}
+                          </small>
+                        </div>
+                        {latestStepRun ? (
+                          <em className={`is-${latestStepRun.status}`}>
+                            {formatTaskStepRunStatus(latestStepRun.status)}
+                          </em>
+                        ) : (
+                          <em className="is-skipped">Not run</em>
+                        )}
+                      </div>
+                      <div className="task-step-runbook-meta">
+                        <span>
+                          <b>Target</b>
+                          {formatStepTargetLabel(stepTarget)}
+                        </span>
+                        <span>
+                          <b>Connection</b>
+                          {stepTarget.connectionName || "No connection"}
+                        </span>
+                      </div>
                     </div>
-                    {latestStepRun ? (
-                      <em className={`is-${latestStepRun.status}`}>
-                        {formatTaskStepRunStatus(latestStepRun.status)}
-                      </em>
-                    ) : (
-                      <em className="is-skipped">Not run</em>
-                    )}
-                    <button
-                      onClick={() => {
-                        setSelectedStepId(step.id);
-                        setTaskWorkspaceView("step-edit");
-                      }}
-                      type="button"
-                    >
-                      Edit
-                    </button>
+                    <div className="task-step-runbook-actions">
+                      <button
+                        onClick={() => {
+                          setSelectedStepId(step.id);
+                          setTaskWorkspaceView("step-edit");
+                        }}
+                        type="button"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="danger-text-button"
+                        disabled={selectedTaskSteps.length <= 1}
+                        onClick={() => removeTaskStep(step.id)}
+                        type="button"
+                      >
+                        Remove
+                      </button>
+                    </div>
                   </div>
                 );
               })}

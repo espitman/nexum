@@ -1692,9 +1692,16 @@ button {
   gap: 8px;
 }
 
-.task-workflow-header div {
+.task-workflow-header > div {
   display: grid;
   gap: 3px;
+}
+
+.task-workflow-title-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .task-workflow-header .task-page-actions {
@@ -1738,6 +1745,187 @@ button {
   align-content: start;
   display: grid;
   min-height: 0;
+}
+
+.task-step-runbook {
+  align-content: start;
+  display: grid;
+  min-height: 0;
+}
+
+.task-step-runbook-item {
+  align-items: stretch;
+  border-bottom: 1px solid #e7edf4;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  min-width: 0;
+  padding: 12px 0;
+  position: relative;
+}
+
+.task-step-runbook-item:last-child {
+  border-bottom: 0;
+}
+
+.task-step-marker {
+  display: flex;
+  justify-content: center;
+  position: relative;
+}
+
+.task-step-marker::after {
+  background: #dfe5ed;
+  bottom: -12px;
+  content: "";
+  position: absolute;
+  top: 28px;
+  width: 1px;
+}
+
+.task-step-runbook-item:last-child .task-step-marker::after {
+  display: none;
+}
+
+.task-step-marker > span {
+  align-items: center;
+  background: #edf3f7;
+  border: 1px solid #dbe3ec;
+  border-radius: 999px;
+  color: #667286;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 800;
+  height: 26px;
+  justify-content: center;
+  position: relative;
+  width: 26px;
+  z-index: 1;
+}
+
+.task-step-runbook-body {
+  background: #ffffff;
+  border: 1px solid #dfe5ed;
+  border-radius: var(--task-panel-radius);
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.task-step-runbook-main {
+  align-items: start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.task-step-runbook-main > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.task-step-runbook-main strong {
+  color: #263142;
+  font-size: 12px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-step-runbook-main small {
+  color: #667286;
+  font-size: 11px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-step-runbook-main em {
+  border-radius: 999px;
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 800;
+  padding: 4px 7px;
+}
+
+.task-step-runbook-main em.is-success {
+  background: #dff5e8;
+  color: #087240;
+}
+
+.task-step-runbook-main em.is-failed {
+  background: #ffe5e1;
+  color: #b7241c;
+}
+
+.task-step-runbook-main em.is-running {
+  background: #fff4d8;
+  color: #9a5a00;
+}
+
+.task-step-runbook-main em.is-skipped {
+  background: #edf3f7;
+  color: #5d6879;
+}
+
+.task-step-runbook-meta {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-width: 0;
+}
+
+.task-step-runbook-meta span {
+  background: #f8fafc;
+  border: 1px solid #edf2f7;
+  border-radius: var(--task-panel-radius);
+  color: #263142;
+  display: grid;
+  font-size: 11px;
+  font-weight: 800;
+  gap: 3px;
+  min-width: 0;
+  overflow: hidden;
+  padding: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-step-runbook-meta b {
+  color: #667286;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.task-step-runbook-actions {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  justify-content: center;
+}
+
+.task-step-runbook-actions button {
+  border: 1px solid #dbe3ec;
+  border-radius: var(--task-panel-radius);
+  color: #3b4656;
+  font-size: 12px;
+  font-weight: 800;
+  height: 30px;
+  padding: 0 10px;
+  width: 78px;
+}
+
+.task-step-runbook-actions .danger-text-button {
+  border-color: #ffc9c3;
+  color: #b7241c;
 }
 
 .task-step-row {
@@ -6792,6 +6980,8 @@ input:disabled {
 .app-shell.appearance-dark .task-workflow-panel,
 .app-shell.appearance-dark .task-step-card,
 .app-shell.appearance-dark .task-step-editor,
+.app-shell.appearance-dark .task-step-runbook-body,
+.app-shell.appearance-dark .task-step-runbook-item,
 .app-shell.appearance-dark .task-step-row,
 .app-shell.appearance-dark .task-step-table,
 .app-shell.appearance-dark .task-step-mode-switch {
@@ -6799,11 +6989,13 @@ input:disabled {
 }
 
 .app-shell.appearance-dark .task-workflow-panel,
-.app-shell.appearance-dark .task-step-card {
+.app-shell.appearance-dark .task-step-card,
+.app-shell.appearance-dark .task-step-runbook-body {
   background: #101820;
 }
 
 .app-shell.appearance-dark .task-workflow-header strong,
+.app-shell.appearance-dark .task-step-runbook-main strong,
 .app-shell.appearance-dark .task-step-row strong,
 .app-shell.appearance-dark .task-step-card strong,
 .app-shell.appearance-dark .task-step-editor input,
@@ -6813,9 +7005,12 @@ input:disabled {
 }
 
 .app-shell.appearance-dark .task-workflow-header span,
+.app-shell.appearance-dark .task-step-runbook-main small,
+.app-shell.appearance-dark .task-step-runbook-meta b,
 .app-shell.appearance-dark .task-step-row small,
 .app-shell.appearance-dark .task-step-card small,
 .app-shell.appearance-dark .task-step-editor label,
+.app-shell.appearance-dark .task-step-marker > span,
 .app-shell.appearance-dark .task-step-row > span,
 .app-shell.appearance-dark .task-step-card > span {
   color: #9aa8ba;
@@ -6823,6 +7018,7 @@ input:disabled {
 
 .app-shell.appearance-dark .task-workflow-header button,
 .app-shell.appearance-dark .task-inline-button,
+.app-shell.appearance-dark .task-step-runbook-actions button,
 .app-shell.appearance-dark .task-step-row button,
 .app-shell.appearance-dark .task-step-actions button {
   background: #0d141c;
@@ -6832,6 +7028,7 @@ input:disabled {
 
 .app-shell.appearance-dark .task-workflow-header button:hover,
 .app-shell.appearance-dark .task-inline-button:hover,
+.app-shell.appearance-dark .task-step-runbook-actions button:hover,
 .app-shell.appearance-dark .task-step-row button:hover,
 .app-shell.appearance-dark .task-step-actions button:hover:not(:disabled) {
   background: #172635;
@@ -6853,8 +7050,26 @@ input:disabled {
   background: #172635;
 }
 
+.app-shell.appearance-dark .task-step-marker::after {
+  background: #334456;
+}
+
+.app-shell.appearance-dark .task-step-marker > span,
 .app-shell.appearance-dark .task-step-row > span {
   background: #172635;
+  border-color: #334456;
+}
+
+.app-shell.appearance-dark .task-step-runbook-meta span {
+  background: #0d141c;
+  border-color: #334456;
+  color: #e8eef6;
+}
+
+.app-shell.appearance-dark .task-step-runbook-actions .danger-text-button {
+  background: #2d1718;
+  border-color: #7f2f2f;
+  color: #ff9f96;
 }
 
 .app-shell.appearance-dark .task-step-row-header {
