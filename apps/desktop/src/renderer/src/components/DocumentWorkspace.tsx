@@ -5499,7 +5499,7 @@ const QueryFieldAutocompleteInput = ({
             event.target.selectionStart ?? event.target.value.length,
           );
         }}
-        onClick={syncCaret}
+        onClick={() => syncCaret()}
         onFocus={() => {
           setIsFocused(true);
           syncCaret();
@@ -5541,7 +5541,7 @@ const QueryFieldAutocompleteInput = ({
             }
           }
         }}
-        onSelect={syncCaret}
+        onSelect={() => syncCaret()}
       />
       {hasActions ? (
         <span className="query-autocomplete-actions">
@@ -6080,20 +6080,24 @@ const ManualQueryEditor = ({
   const [activeIndex, setActiveIndex] = useState(0);
   const [caretIndex, setCaretIndex] = useState(value.length);
   const [isFocused, setIsFocused] = useState(false);
+  const [menuPosition, setMenuPosition] = useState({ left: 0, top: 36 });
   const suggestions = useMemo(
     () => getManualQuerySuggestions(fields, value, caretIndex, mode),
     [caretIndex, fields, mode, value],
   );
   const shouldShowSuggestions = isFocused && suggestions.length > 0;
 
-  const syncCaret = () => {
+  const syncCaret = (nextCaret?: number) => {
     const editor = editorRef.current;
 
     if (!editor) {
       return;
     }
 
-    setCaretIndex(editor.selectionStart ?? value.length);
+    const caret = nextCaret ?? editor.selectionStart ?? value.length;
+
+    setCaretIndex(caret);
+    setMenuPosition(getManualQueryMenuPosition(editor, caret));
   };
 
   const applySuggestion = (suggestion: ManualQuerySuggestion) => {
@@ -6113,7 +6117,7 @@ const ManualQueryEditor = ({
 
       editor.focus();
       editor.setSelectionRange(nextCaret, nextCaret);
-      setCaretIndex(nextCaret);
+      syncCaret(nextCaret);
     });
   };
 
@@ -6130,11 +6134,9 @@ const ManualQueryEditor = ({
           onChange(event.target.value);
           setIsFocused(true);
           setActiveIndex(0);
-          setCaretIndex(
-            event.target.selectionStart ?? event.target.value.length,
-          );
+          syncCaret(event.target.selectionStart ?? event.target.value.length);
         }}
-        onClick={syncCaret}
+        onClick={() => syncCaret()}
         onFocus={() => {
           setIsFocused(true);
           syncCaret();
@@ -6184,12 +6186,18 @@ const ManualQueryEditor = ({
             }
           }
         }}
-        onSelect={syncCaret}
+        onSelect={() => syncCaret()}
       />
       {shouldShowSuggestions ? (
         <div
           className="query-autocomplete-menu manual-query-menu"
           role="listbox"
+          style={
+            {
+              "--manual-query-menu-left": `${menuPosition.left}px`,
+              "--manual-query-menu-top": `${menuPosition.top}px`,
+            } as CSSProperties
+          }
         >
           {suggestions.map((suggestion, index) => (
             <button
@@ -6218,6 +6226,28 @@ const ManualQueryEditor = ({
       ) : null}
     </div>
   );
+};
+
+const getManualQueryMenuPosition = (
+  editor: HTMLTextAreaElement,
+  caretIndex: number,
+): { left: number; top: number } => {
+  const styles = window.getComputedStyle(editor);
+  const lineHeight = Number.parseFloat(styles.lineHeight) || 20;
+  const fontSize = Number.parseFloat(styles.fontSize) || 13;
+  const paddingLeft = Number.parseFloat(styles.paddingLeft) || 0;
+  const paddingTop = Number.parseFloat(styles.paddingTop) || 0;
+  const textBeforeCaret = editor.value.slice(0, caretIndex);
+  const lines = textBeforeCaret.split("\n");
+  const lineIndex = Math.max(lines.length - 1, 0);
+  const columnIndex = lines[lineIndex]?.length ?? 0;
+  const characterWidth = fontSize * 0.62;
+  const maxLeft = Math.max(editor.clientWidth - 560, 0);
+
+  return {
+    left: Math.min(paddingLeft + columnIndex * characterWidth, maxLeft),
+    top: paddingTop + (lineIndex + 1) * lineHeight + 6 - editor.scrollTop,
+  };
 };
 
 type MetadataWorkspaceProps = {

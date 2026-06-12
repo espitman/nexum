@@ -3420,7 +3420,9 @@ button {
 }
 
 .manual-query-menu {
+  left: var(--manual-query-menu-left, 0);
   max-width: min(560px, calc(100vw - 80px));
+  top: var(--manual-query-menu-top, calc(100% + 7px));
 }
 
 .options-button {
